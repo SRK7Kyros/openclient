@@ -102,6 +102,57 @@ final class OpenCodeAPIClientTests: XCTestCase {
         XCTAssertEqual(part.source?.end, 12)
     }
 
+    func testUpdateProjectEncodesIconPreferences() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/project/proj_123")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.httpMethod, "PATCH")
+
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["name"] as? String, "Project")
+            let icon = try XCTUnwrap(json["icon"] as? [String: Any])
+            XCTAssertEqual(icon["color"] as? String, "purple")
+            XCTAssertEqual(icon["override"] as? String, "data:image/png;base64,AAA")
+            expectation.fulfill()
+
+            let data = """
+            {
+              "id": "proj_123",
+              "worktree": "/tmp/project",
+              "name": "Project",
+              "icon": { "color": "purple", "override": "data:image/png;base64,AAA" }
+            }
+            """.data(using: .utf8)!
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let project = try await client.updateProject(
+            projectID: "proj_123",
+            directory: "/tmp/project",
+            name: "Project",
+            icon: OpenCodeProject.Icon(override: "data:image/png;base64,AAA", color: "purple")
+        )
+        XCTAssertEqual(project.icon?.color, "purple")
+        XCTAssertEqual(project.icon?.override, "data:image/png;base64,AAA")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     private static func requestBodyData(_ request: URLRequest) -> Data? {
         if let body = request.httpBody { return body }
         guard let stream = request.httpBodyStream else { return nil }

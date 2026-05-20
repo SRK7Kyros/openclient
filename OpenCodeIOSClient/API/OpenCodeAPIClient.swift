@@ -94,9 +94,9 @@ struct OpenCodeAPIClient: Sendable {
         try await send(path: "/project/current", method: "GET", queryItems: [URLQueryItem(name: "directory", value: directory)])
     }
 
-    func updateProject(projectID: String, directory: String? = nil, name: String? = nil) async throws -> OpenCodeProject {
+    func updateProject(projectID: String, directory: String? = nil, name: String? = nil, icon: OpenCodeProject.Icon? = nil) async throws -> OpenCodeProject {
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
-        return try await send(path: "/project/\(projectID)", method: "PATCH", queryItems: queryItems, body: UpdateProjectRequest(name: name))
+        return try await send(path: "/project/\(projectID)", method: "PATCH", queryItems: queryItems, body: UpdateProjectRequest(name: name, icon: icon))
     }
 
     func listWorktrees(directory: String) async throws -> [String] {
@@ -719,6 +719,7 @@ struct OpenCodeAPIClient: Sendable {
 
 private struct UpdateProjectRequest: Encodable {
     let name: String?
+    let icon: OpenCodeProject.Icon?
 }
 
 private struct WorktreeCreateRequest: Encodable {

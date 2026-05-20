@@ -94,6 +94,23 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertTrue(update.shouldReload)
     }
 
+    func testTypedProjectUpdatedEventDecodesIconPreferences() throws {
+        let payload = try decodeEvent(
+            #"{"type":"project.updated","properties":{"id":"proj_123","worktree":"/tmp/project","name":"Project","icon":{"color":"cyan","url":"https://example.test/icon.png","override":"data:image/png;base64,AAA"},"sandboxes":["/tmp/project-wt"],"time":{"created":1,"updated":2}}}"#
+        )
+
+        guard case let .projectUpdated(project) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected project.updated")
+        }
+
+        XCTAssertEqual(project.id, "proj_123")
+        XCTAssertEqual(project.worktree, "/tmp/project")
+        XCTAssertEqual(project.icon?.color, "cyan")
+        XCTAssertEqual(project.icon?.url, "https://example.test/icon.png")
+        XCTAssertEqual(project.icon?.override, "data:image/png;base64,AAA")
+        XCTAssertEqual(project.sandboxes, ["/tmp/project-wt"])
+    }
+
     func testReducerIgnoresOtherSessions() throws {
         let payload = try decodeEvent(
             #"{"type":"message.updated","properties":{"sessionID":"ses_other","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_other"}}}"#

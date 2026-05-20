@@ -118,7 +118,15 @@ struct PendingOpenCodeActionRun: Identifiable, Equatable, Sendable {
 
 struct OpenCodeProject: Codable, Identifiable, Hashable, Sendable {
     struct Icon: Codable, Hashable, Sendable {
+        let url: String?
+        let override: String?
         let color: String?
+
+        init(url: String? = nil, override: String? = nil, color: String? = nil) {
+            self.url = url
+            self.override = override
+            self.color = color
+        }
     }
 
     struct Time: Codable, Hashable, Sendable {
@@ -1864,6 +1872,12 @@ enum OpenCodeTypedEvent: Sendable {
 }
 
 struct OpenCodeEventProperties: Codable, Sendable {
+    let worktree: String?
+    let vcs: String?
+    let name: String?
+    let sandboxes: [String]?
+    let icon: OpenCodeProject.Icon?
+    let time: OpenCodeProject.Time?
     let sessionID: String?
     let info: OpenCodeEventInfo?
     let part: OpenCodePart?
@@ -1894,6 +1908,12 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let file: String?
 
     init(
+        worktree: String? = nil,
+        vcs: String? = nil,
+        name: String? = nil,
+        sandboxes: [String]? = nil,
+        icon: OpenCodeProject.Icon? = nil,
+        time: OpenCodeProject.Time? = nil,
         sessionID: String? = nil,
         info: OpenCodeEventInfo? = nil,
         part: OpenCodePart? = nil,
@@ -1923,6 +1943,12 @@ struct OpenCodeEventProperties: Codable, Sendable {
         branch: String? = nil,
         file: String? = nil
     ) {
+        self.worktree = worktree
+        self.vcs = vcs
+        self.name = name
+        self.sandboxes = sandboxes
+        self.icon = icon
+        self.time = time
         self.sessionID = sessionID
         self.info = info
         self.part = part
@@ -1954,6 +1980,12 @@ struct OpenCodeEventProperties: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case worktree
+        case vcs
+        case name
+        case sandboxes
+        case icon
+        case time
         case sessionID
         case info
         case part

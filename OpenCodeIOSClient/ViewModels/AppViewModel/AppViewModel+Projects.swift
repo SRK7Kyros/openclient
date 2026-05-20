@@ -1,6 +1,17 @@
 import Foundation
 import SwiftUI
 
+struct ProjectImageCandidate: Identifiable, Hashable {
+    let path: String
+    let displayPath: String
+
+    var id: String { path }
+
+    var filename: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+}
+
 extension AppViewModel {
     func prepareDirectorySelection(_ directory: String?) {
         preserveCurrentMessageDraftForNavigation()
@@ -140,6 +151,78 @@ extension AppViewModel {
         }
     }
 
+    func canEditProjectPreferences(_ project: OpenCodeProject) -> Bool {
+        project.id != "global" && !project.id.hasPrefix("local:") && !project.worktree.isEmpty
+    }
+
+    func setProjectColor(_ color: String, for project: OpenCodeProject) async {
+        guard canEditProjectPreferences(project) else { return }
+        let icon = OpenCodeProject.Icon(
+            url: project.icon?.url,
+            override: project.icon?.override,
+            color: color
+        )
+        await updateProjectPreferences(project, icon: icon)
+    }
+
+    func setProjectImageOverride(_ dataURL: String?, for project: OpenCodeProject) async {
+        guard canEditProjectPreferences(project) else { return }
+        let icon = OpenCodeProject.Icon(
+            url: project.icon?.url,
+            override: dataURL ?? "",
+            color: project.icon?.color
+        )
+        await updateProjectPreferences(project, icon: icon)
+    }
+
+    func discoverProjectImageCandidates(for project: OpenCodeProject) async -> [ProjectImageCandidate] {
+        guard canEditProjectPreferences(project) else { return [] }
+
+        var paths = Set<String>()
+        for query in ["png", "jpg", "jpeg"] {
+            do {
+                let results = try await client.findFiles(query: query, directory: project.worktree)
+                for result in results where isSupportedProjectImagePath(result) {
+                    paths.insert(result)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        return paths
+            .sorted { lhs, rhs in
+                let lhsName = URL(fileURLWithPath: lhs).lastPathComponent
+                let rhsName = URL(fileURLWithPath: rhs).lastPathComponent
+                let nameOrder = lhsName.localizedCaseInsensitiveCompare(rhsName)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+            }
+            .prefix(96)
+            .map { path in
+                ProjectImageCandidate(
+                    path: path,
+                    displayPath: displayPath(forProjectImagePath: path, directory: project.worktree)
+                )
+            }
+    }
+
+    func projectImageDataURL(for candidate: ProjectImageCandidate, project: OpenCodeProject) async -> String? {
+        guard canEditProjectPreferences(project) else { return nil }
+        do {
+            let content = try await client.readFileContent(
+                directory: project.worktree,
+                path: requestPath(forProjectImagePath: candidate.path, directory: project.worktree)
+            )
+            guard content.encoding == "base64" || content.type == "binary" else { return nil }
+            let mime = content.mimeType ?? mimeType(forProjectImagePath: candidate.path)
+            return "data:\(mime);base64,\(content.content)"
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func selectDirectory(_ directory: String?) async {
         prepareDirectorySelection(directory)
         do {
@@ -157,6 +240,57 @@ extension AppViewModel {
         } catch {
             isLoadingSessions = false
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func updateProjectPreferences(_ project: OpenCodeProject, icon: OpenCodeProject.Icon) async {
+        do {
+            let updated = try await client.updateProject(
+                projectID: project.id,
+                directory: project.worktree,
+                name: project.name,
+                icon: icon
+            )
+            applyUpdatedProject(updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applyUpdatedProject(_ project: OpenCodeProject) {
+        if let index = projects.firstIndex(where: { $0.id == project.id }) {
+            projects[index] = project
+        } else {
+            projects.append(project)
+        }
+        if currentProject?.id == project.id {
+            currentProject = project
+        }
+    }
+
+    private func isSupportedProjectImagePath(_ path: String) -> Bool {
+        let lowercased = path.lowercased()
+        return lowercased.hasSuffix(".png") || lowercased.hasSuffix(".jpg") || lowercased.hasSuffix(".jpeg")
+    }
+
+    private func requestPath(forProjectImagePath path: String, directory: String) -> String {
+        if path == directory { return "" }
+        if path.hasPrefix(directory + "/") {
+            return String(path.dropFirst(directory.count + 1))
+        }
+        return path
+    }
+
+    private func displayPath(forProjectImagePath path: String, directory: String) -> String {
+        requestPath(forProjectImagePath: path, directory: directory)
+    }
+
+    private func mimeType(forProjectImagePath path: String) -> String {
+        switch URL(fileURLWithPath: path).pathExtension.lowercased() {
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        default:
+            return "image/png"
         }
     }
 
