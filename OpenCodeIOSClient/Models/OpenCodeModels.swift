@@ -322,12 +322,32 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
     }
 
     func applyingDelta(partID: String, field: String, delta: String) -> OpenCodeMessageEnvelope {
-        guard field == "text",
-              let index = parts.firstIndex(where: { $0.id == partID }) else {
+        guard field == "text" else {
             return self
         }
 
         var copy = self
+
+        guard let index = copy.parts.firstIndex(where: { $0.id == partID }) else {
+            copy.parts.append(
+                OpenCodePart(
+                    id: partID,
+                    messageID: info.id,
+                    sessionID: info.sessionID,
+                    type: "text",
+                    mime: nil,
+                    filename: nil,
+                    url: nil,
+                    reason: nil,
+                    tool: nil,
+                    callID: nil,
+                    state: nil,
+                    text: delta
+                )
+            )
+            return copy
+        }
+
         var part = copy.parts[index]
         part.text = (part.text ?? "") + delta
         copy.parts[index] = part

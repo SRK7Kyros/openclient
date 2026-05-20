@@ -85,6 +85,25 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(messages[0].parts.first?.text, "Hello world")
     }
 
+    func testReducerCreatesTextPartWhenDeltaArrivesBeforePartUpdate() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let delta = try decodeEvent(
+            #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_text","field":"text","delta":"Hello"}}"#
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: delta, selectedSessionID: sessionID, messages: messages).messages
+
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.count, 1)
+        XCTAssertEqual(messages[0].parts[0].id, "prt_text")
+        XCTAssertEqual(messages[0].parts[0].text, "Hello")
+    }
+
     func testReducerMarksSessionIdleForReload() throws {
         let payload = try decodeEvent(
             #"{"type":"session.idle","properties":{"sessionID":"ses_test"}}"#
