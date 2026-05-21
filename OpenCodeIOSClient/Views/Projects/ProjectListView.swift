@@ -70,6 +70,7 @@ struct ProjectListView: View {
                         title: "Find the Place",
                         subtitle: "Guess a secret city from live weather clues",
                         systemImage: "map.fill",
+                        usesSystemImageFallback: true,
                         isSelected: false
                     )
                     .contentShape(Rectangle())
@@ -81,6 +82,7 @@ struct ProjectListView: View {
                         title: "Find the Bug",
                         subtitle: "Spot the hidden bug in a generated code snippet",
                         systemImage: "ladybug.fill",
+                        usesSystemImageFallback: true,
                         isSelected: false
                     )
                     .contentShape(Rectangle())

@@ -10,11 +10,12 @@ struct ProjectRow: View {
     let subtitle: String
     let systemImage: String
     var icon: OpenCodeProject.Icon? = nil
+    var usesSystemImageFallback = false
     let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            ProjectAvatar(title: title, systemImage: systemImage, icon: icon, isSelected: isSelected)
+            ProjectAvatar(title: title, systemImage: systemImage, icon: icon, usesSystemImageFallback: usesSystemImageFallback, isSelected: isSelected)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -40,6 +41,7 @@ private struct ProjectAvatar: View {
     let title: String
     let systemImage: String
     let icon: OpenCodeProject.Icon?
+    let usesSystemImageFallback: Bool
     let isSelected: Bool
 
     var body: some View {
@@ -68,7 +70,7 @@ private struct ProjectAvatar: View {
         let colors = ProjectAvatarColors.colors(for: icon?.color)
         return ZStack {
             colors.background
-            if title == "Global" {
+            if usesSystemImageFallback || title == "Global" {
                 Image(systemName: systemImage)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(colors.foreground)
