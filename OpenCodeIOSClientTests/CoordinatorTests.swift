@@ -205,6 +205,7 @@ final class CoordinatorTests: XCTestCase {
             sessions: [],
             selectedSession: nil,
             sessionStatuses: [:],
+            syncState: OpenCodeDirectorySyncState(),
             messages: [],
             todos: [],
             permissions: [],
@@ -225,10 +226,15 @@ final class CoordinatorTests: XCTestCase {
     func testEventSyncCoordinatorCountsMessageApplications() {
         let coordinator = EventSyncCoordinator()
         let selected = makeSession(id: "ses_selected", directory: "/tmp/project")
+        let part = OpenCodePart(id: "part_1", messageID: "msg_1", sessionID: "ses_selected", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
+        var syncState = OpenCodeDirectorySyncState()
+        _ = syncState.applyMessageUpdated(OpenCodeMessage(id: "msg_1", role: "assistant", sessionID: "ses_selected", time: nil, agent: nil, model: nil))
+        _ = syncState.applyPartUpdated(part)
         let state = EventSyncCoordinator.DirectoryEventState(
             sessions: [selected],
             selectedSession: selected,
             sessionStatuses: [:],
+            syncState: syncState,
             messages: [],
             todos: [],
             permissions: [],
@@ -242,6 +248,148 @@ final class CoordinatorTests: XCTestCase {
 
         XCTAssertEqual(application.messageApplyCount, 2)
         XCTAssertEqual(application.state.messages.first?.parts.first?.text, "Hello world")
+    }
+
+    func testEventSyncCoordinatorDoesNotNeedVisibleMessagesToApplySelectedDelta() {
+        let coordinator = EventSyncCoordinator()
+        let selected = makeSession(id: "ses_selected", directory: "/tmp/project")
+        let message = OpenCodeMessage(id: "msg_1", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)
+        let part = OpenCodePart(id: "part_1", messageID: "msg_1", sessionID: selected.id, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
+        var syncState = OpenCodeDirectorySyncState()
+        _ = syncState.applyMessageUpdated(message)
+        _ = syncState.applyPartUpdated(part)
+
+        let staleVisibleMessage = OpenCodeMessageEnvelope.local(
+            role: "assistant",
+            text: ".",
+            messageID: "stale_msg",
+            sessionID: selected.id,
+            partID: "stale_part"
+        )
+        let state = EventSyncCoordinator.DirectoryEventState(
+            sessions: [selected],
+            selectedSession: selected,
+            sessionStatuses: [:],
+            syncState: syncState,
+            messages: [staleVisibleMessage],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let application = coordinator.applyDirectoryEvents([
+            .messagePartDelta(sessionID: selected.id, messageID: "msg_1", partID: "part_1", field: "text", delta: "Live text"),
+        ],
+            to: state
+        )
+
+        XCTAssertEqual(application.state.messages.map(\.id), ["msg_1"])
+        XCTAssertEqual(application.state.messages.first?.parts.first?.text, "Live text")
+    }
+
+    func testEventSyncCoordinatorProjectsSelectedPartWhenShellIsMissing() {
+        let coordinator = EventSyncCoordinator()
+        let selected = makeSession(id: "ses_selected", directory: "/tmp/project")
+        let user = OpenCodeMessageEnvelope.local(
+            role: "user",
+            text: "Start",
+            messageID: "msg_user",
+            sessionID: selected.id,
+            partID: "part_user"
+        )
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([user], forSessionID: selected.id)
+
+        let part = OpenCodePart(
+            id: "part_reasoning",
+            messageID: "msg_assistant",
+            sessionID: selected.id,
+            type: "reasoning",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: ""
+        )
+        let state = EventSyncCoordinator.DirectoryEventState(
+            sessions: [selected],
+            selectedSession: selected,
+            sessionStatuses: [selected.id: "busy"],
+            syncState: syncState,
+            messages: [user],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let application = coordinator.applyDirectoryEvents([
+            .messagePartUpdated(part),
+            .messagePartDelta(sessionID: selected.id, messageID: "msg_assistant", partID: "part_reasoning", field: "text", delta: "Thinking"),
+        ], to: state)
+
+        XCTAssertEqual(Set(application.state.messages.map(\.id)), Set(["msg_user", "msg_assistant"]))
+        let projectedAssistant = application.state.messages.first { $0.id == "msg_assistant" }
+        XCTAssertEqual(projectedAssistant?.info.role, "assistant")
+        XCTAssertEqual(projectedAssistant?.info.parentID, "msg_user")
+        XCTAssertEqual(projectedAssistant?.parts.first?.text, "Thinking")
+        XCTAssertEqual(application.state.syncState.partsByMessageID["msg_assistant"]?.first?.type, "reasoning")
+        XCTAssertEqual(application.state.syncState.partsByMessageID["msg_assistant"]?.first?.text, "Thinking")
+
+        let withShell = coordinator.applyDirectoryEvents([
+            .messageUpdated(OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)),
+        ], to: application.state)
+        XCTAssertEqual(withShell.state.messages.map(\.id), ["msg_assistant", "msg_user"])
+        let assistant = withShell.state.messages.first { $0.id == "msg_assistant" }
+        XCTAssertEqual(assistant?.parts.first?.type, "reasoning")
+        XCTAssertEqual(assistant?.parts.first?.text, "Thinking")
+    }
+
+    func testEventSyncCoordinatorStoresSelectedToolPartUntilMessageShellArrives() {
+        let coordinator = EventSyncCoordinator()
+        let selected = makeSession(id: "ses_selected", directory: "/tmp/project")
+        let toolPart = OpenCodePart(
+            id: "part_tool",
+            messageID: "msg_assistant",
+            sessionID: selected.id,
+            type: "tool",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "bash",
+            callID: "call_1",
+            state: nil,
+            text: nil
+        )
+        let state = EventSyncCoordinator.DirectoryEventState(
+            sessions: [selected],
+            selectedSession: selected,
+            sessionStatuses: [selected.id: "busy"],
+            syncState: OpenCodeDirectorySyncState(),
+            messages: [],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let application = coordinator.applyDirectoryEvents([
+            .messagePartUpdated(toolPart),
+        ], to: state)
+
+        XCTAssertEqual(application.state.messages.map(\.id), ["msg_assistant"])
+        XCTAssertEqual(application.state.messages.first?.parts.first?.type, "tool")
+        XCTAssertEqual(application.state.syncState.partsByMessageID["msg_assistant"]?.first?.type, "tool")
+        XCTAssertEqual(application.state.syncState.partsByMessageID["msg_assistant"]?.first?.tool, "bash")
+
+        let withShell = coordinator.applyDirectoryEvents([
+            .messageUpdated(OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)),
+        ], to: application.state)
+        XCTAssertEqual(withShell.state.messages.map(\.id), ["msg_assistant"])
+        XCTAssertEqual(withShell.state.messages.first?.parts.first?.type, "tool")
+        XCTAssertEqual(withShell.state.messages.first?.parts.first?.tool, "bash")
     }
 
     func testSessionCoordinatorCreateSessionTrimsTitleAndUsesDirectoryScope() async throws {

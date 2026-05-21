@@ -52,6 +52,9 @@ struct ModelToolbarMenu: View {
             }
             .opencodeToolbarGlassID("model-toolbar", in: glassNamespace)
         }
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
     private var reasoningSubtitle: String? {

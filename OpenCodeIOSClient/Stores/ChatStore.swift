@@ -14,58 +14,57 @@ final class ChatStore: ObservableObject {
     @Published var cachedMessagesBySessionID: [String: [OpenCodeMessageEnvelope]]
     @Published var toolMessageDetails: [String: OpenCodeMessageEnvelope]
     @Published var isLoadingSelectedSession: Bool
-    var liveRefreshTask: Task<Void, Never>?
-    var liveRefreshGeneration: Int
-    var lastFallbackMessageCount: Int
-    var lastFallbackAssistantLength: Int
     var inFlightToolMessageDetailIDs: Set<String>
     var nextStreamPartHapticAllowedAt: Date
     var pendingTranscriptEvents: [OpenCodePendingTranscriptEvent]
     var streamDeltaFlushTask: Task<Void, Never>?
+    var streamDeltaFlushGeneration: Int
     var streamDeltaLastFlushAt: Date?
+    var streamDeltaScheduledIntervalMS: Int?
+    var streamDeltaScheduledActiveTextLength: Int
+    var streamDeltaScheduledPendingCharacterCount: Int
 
     init(
         messages: [OpenCodeMessageEnvelope] = [],
         cachedMessagesBySessionID: [String: [OpenCodeMessageEnvelope]] = [:],
         toolMessageDetails: [String: OpenCodeMessageEnvelope] = [:],
         isLoadingSelectedSession: Bool = false,
-        liveRefreshTask: Task<Void, Never>? = nil,
-        liveRefreshGeneration: Int = 0,
-        lastFallbackMessageCount: Int = 0,
-        lastFallbackAssistantLength: Int = 0,
         inFlightToolMessageDetailIDs: Set<String> = [],
         nextStreamPartHapticAllowedAt: Date = .distantPast,
         pendingTranscriptEvents: [OpenCodePendingTranscriptEvent] = [],
         streamDeltaFlushTask: Task<Void, Never>? = nil,
-        streamDeltaLastFlushAt: Date? = nil
+        streamDeltaFlushGeneration: Int = 0,
+        streamDeltaLastFlushAt: Date? = nil,
+        streamDeltaScheduledIntervalMS: Int? = nil,
+        streamDeltaScheduledActiveTextLength: Int = 0,
+        streamDeltaScheduledPendingCharacterCount: Int = 0
     ) {
         self.messages = messages
         self.cachedMessagesBySessionID = cachedMessagesBySessionID
         self.toolMessageDetails = toolMessageDetails
         self.isLoadingSelectedSession = isLoadingSelectedSession
-        self.liveRefreshTask = liveRefreshTask
-        self.liveRefreshGeneration = liveRefreshGeneration
-        self.lastFallbackMessageCount = lastFallbackMessageCount
-        self.lastFallbackAssistantLength = lastFallbackAssistantLength
         self.inFlightToolMessageDetailIDs = inFlightToolMessageDetailIDs
         self.nextStreamPartHapticAllowedAt = nextStreamPartHapticAllowedAt
         self.pendingTranscriptEvents = pendingTranscriptEvents
         self.streamDeltaFlushTask = streamDeltaFlushTask
+        self.streamDeltaFlushGeneration = streamDeltaFlushGeneration
         self.streamDeltaLastFlushAt = streamDeltaLastFlushAt
+        self.streamDeltaScheduledIntervalMS = streamDeltaScheduledIntervalMS
+        self.streamDeltaScheduledActiveTextLength = streamDeltaScheduledActiveTextLength
+        self.streamDeltaScheduledPendingCharacterCount = streamDeltaScheduledPendingCharacterCount
     }
 
     func resetActiveSession() {
         messages = []
         isLoadingSelectedSession = false
-        liveRefreshGeneration += 1
-        liveRefreshTask?.cancel()
-        liveRefreshTask = nil
-        lastFallbackMessageCount = 0
-        lastFallbackAssistantLength = 0
         pendingTranscriptEvents = []
         streamDeltaFlushTask?.cancel()
         streamDeltaFlushTask = nil
+        streamDeltaFlushGeneration &+= 1
         streamDeltaLastFlushAt = nil
+        streamDeltaScheduledIntervalMS = nil
+        streamDeltaScheduledActiveTextLength = 0
+        streamDeltaScheduledPendingCharacterCount = 0
     }
 
     func beginSelectingSession(cachedMessages: [OpenCodeMessageEnvelope]) {
@@ -147,14 +146,14 @@ final class ChatStore: ObservableObject {
         messages.append(fallbackMessage())
     }
 
-    func replaceActiveMessagesWithMergedCanonical(_ loadedMessages: [OpenCodeMessageEnvelope]) {
-        messages = Self.mergeMessagesPreservingStreamProgress(existing: messages, loaded: loadedMessages)
+    func replaceActiveMessagesWithCanonical(_ loadedMessages: [OpenCodeMessageEnvelope]) {
+        messages = loadedMessages
     }
 
     func applyCanonicalMessages(_ loadedMessages: [OpenCodeMessageEnvelope], forSessionID sessionID: String, isActiveSession: Bool) {
         cacheMessages(loadedMessages, forSessionID: sessionID)
         guard isActiveSession else { return }
-        replaceActiveMessagesWithMergedCanonical(loadedMessages)
+        replaceActiveMessagesWithCanonical(loadedMessages)
         finishLoadingSelectedSession()
     }
 
@@ -222,8 +221,16 @@ final class ChatStore: ObservableObject {
         !pendingTranscriptEvents.isEmpty
     }
 
+    var pendingTranscriptEventCount: Int {
+        pendingTranscriptEvents.count
+    }
+
     var pendingTranscriptCharacterCount: Int {
         pendingTranscriptEvents.reduce(0) { $0 + $1.deltaCharacterCount }
+    }
+
+    var pendingTranscriptOldestEnqueuedAt: Date? {
+        pendingTranscriptEvents.map(\.enqueuedAt).min()
     }
 
     var currentAssistantTextLength: Int {
@@ -231,13 +238,14 @@ final class ChatStore: ObservableObject {
     }
 
     func streamDeltaCoalescingInterval(
+        syncState: OpenCodeDirectorySyncState,
         short: Duration,
         medium: Duration,
         long: Duration,
         veryLong: Duration
     ) -> Duration {
         Self.streamDeltaCoalescingInterval(
-            currentAssistantTextLength: currentAssistantTextLength,
+            currentAssistantTextLength: Self.activePendingTranscriptTextLength(pendingTranscriptEvents, in: syncState),
             pendingTranscriptCharacterCount: pendingTranscriptCharacterCount,
             short: short,
             medium: medium,
@@ -246,24 +254,11 @@ final class ChatStore: ObservableObject {
         )
     }
 
-    func beginFallbackRefreshTracking() {
-        lastFallbackMessageCount = messages.count
-        lastFallbackAssistantLength = currentAssistantTextLength
-    }
-
-    func fallbackRefreshSummary(reason: String) -> String {
-        let compact = Self.compactAssistantText(in: messages)
-        let messageDelta = messages.count - lastFallbackMessageCount
-        let assistantLength = compact.count
-        let lengthDelta = assistantLength - lastFallbackAssistantLength
-        lastFallbackMessageCount = messages.count
-        lastFallbackAssistantLength = assistantLength
-
-        if compact.isEmpty {
-            return "fallback \(reason) m=\(messages.count) dm=\(messageDelta) len=0 dlen=\(lengthDelta) a=empty"
-        }
-
-        return "fallback \(reason) m=\(messages.count) dm=\(messageDelta) len=\(assistantLength) dlen=\(lengthDelta) a=\(String(compact.prefix(24)))"
+    func streamDeltaCoalescingInputLengths(syncState: OpenCodeDirectorySyncState) -> (activeTextLength: Int, pendingCharacterCount: Int) {
+        (
+            Self.activePendingTranscriptTextLength(pendingTranscriptEvents, in: syncState),
+            pendingTranscriptCharacterCount
+        )
     }
 
     func enqueuePendingTranscriptEvent(_ event: OpenCodePendingTranscriptEvent) {
@@ -277,17 +272,35 @@ final class ChatStore: ObservableObject {
         return (events, Self.coalescedTranscriptEvents(events))
     }
 
+    func drainPendingTranscriptEvents(
+        holding shouldHold: (OpenCodePendingTranscriptEvent) -> Bool
+    ) -> (events: [OpenCodePendingTranscriptEvent], coalescedEvents: [OpenCodePendingTranscriptEvent])? {
+        guard !pendingTranscriptEvents.isEmpty else { return nil }
+
+        var drained: [OpenCodePendingTranscriptEvent] = []
+        var held: [OpenCodePendingTranscriptEvent] = []
+        for event in pendingTranscriptEvents {
+            if shouldHold(event) {
+                held.append(event)
+            } else {
+                drained.append(event)
+            }
+        }
+        pendingTranscriptEvents = held
+        guard !drained.isEmpty else { return nil }
+        return (drained, Self.coalescedTranscriptEvents(drained))
+    }
+
     nonisolated static func shouldBufferTranscriptEvent(
         _ event: OpenCodeTypedEvent,
         selectedSessionID: String?,
         activeChatSessionID: String?
     ) -> Bool {
-        guard let selectedSessionID else { return false }
-        guard activeChatSessionID == selectedSessionID else { return false }
+        guard let selectedSessionID, activeChatSessionID == selectedSessionID else { return false }
 
         switch event {
-        case let .messagePartDelta(sessionID, _, _, _, _):
-            return sessionID == selectedSessionID
+        case let .messagePartDelta(sessionID, _, _, field, _):
+            return sessionID == selectedSessionID && field == "text"
         default:
             return false
         }
@@ -344,9 +357,25 @@ final class ChatStore: ObservableObject {
         compactAssistantText(in: messages).count
     }
 
+    nonisolated static func activePendingTranscriptTextLength(
+        _ events: [OpenCodePendingTranscriptEvent],
+        in syncState: OpenCodeDirectorySyncState
+    ) -> Int {
+        guard let target = events.reversed().first(where: { $0.messageID != nil && $0.partID != nil }),
+              let messageID = target.messageID,
+              let partID = target.partID else {
+            return 0
+        }
+
+        return syncState.partsByMessageID[messageID]?
+            .first(where: { $0.id == partID })?
+            .text?
+            .count ?? 0
+    }
+
     nonisolated static func compactAssistantText(in messages: [OpenCodeMessageEnvelope]) -> String {
         let assistantText = messages
-            .last(where: { ($0.info.role ?? "").lowercased() == "assistant" })?
+            .last(where: { ($0.info.role ?? "").lowercased() == "assistant" && $0.info.time?.completed == nil })?
             .parts
             .compactMap(\.text)
             .joined(separator: " ") ?? ""
@@ -380,32 +409,28 @@ final class ChatStore: ObservableObject {
 
     nonisolated static func coalescedTranscriptEvents(_ events: [OpenCodePendingTranscriptEvent]) -> [OpenCodePendingTranscriptEvent] {
         var result: [OpenCodePendingTranscriptEvent] = []
-        var order: [TranscriptDeltaKey] = []
-        var accumulated: [TranscriptDeltaKey: (event: OpenCodePendingTranscriptEvent, delta: String, characterCount: Int, enqueuedAt: Date)] = [:]
+        var accumulated: (key: TranscriptDeltaKey, event: OpenCodePendingTranscriptEvent, delta: String, characterCount: Int, enqueuedAt: Date)?
 
         func flushAccumulated() {
-            for key in order {
-                guard let item = accumulated[key] else { continue }
-                result.append(
-                    OpenCodePendingTranscriptEvent(
-                        typedEvent: .messagePartDelta(
-                            sessionID: key.sessionID,
-                            messageID: key.messageID,
-                            partID: key.partID,
-                            field: key.field,
-                            delta: item.delta
-                        ),
-                        eventType: item.event.eventType,
-                        sessionID: key.sessionID,
-                        messageID: key.messageID,
-                        partID: key.partID,
-                        deltaCharacterCount: item.characterCount,
-                        enqueuedAt: item.enqueuedAt
-                    )
+            guard let item = accumulated else { return }
+            result.append(
+                OpenCodePendingTranscriptEvent(
+                    typedEvent: .messagePartDelta(
+                        sessionID: item.key.sessionID,
+                        messageID: item.key.messageID,
+                        partID: item.key.partID,
+                        field: item.key.field,
+                        delta: item.delta
+                    ),
+                    eventType: item.event.eventType,
+                    sessionID: item.key.sessionID,
+                    messageID: item.key.messageID,
+                    partID: item.key.partID,
+                    deltaCharacterCount: item.characterCount,
+                    enqueuedAt: item.enqueuedAt
                 )
-            }
-            order.removeAll(keepingCapacity: true)
-            accumulated.removeAll(keepingCapacity: true)
+            )
+            accumulated = nil
         }
 
         for event in events {
@@ -416,33 +441,18 @@ final class ChatStore: ObservableObject {
             }
 
             let key = TranscriptDeltaKey(sessionID: sessionID, messageID: messageID, partID: partID, field: field)
-            if var item = accumulated[key] {
+            if var item = accumulated, item.key == key {
                 item.delta += delta
                 item.characterCount += event.deltaCharacterCount
                 item.enqueuedAt = min(item.enqueuedAt, event.enqueuedAt)
-                accumulated[key] = item
+                accumulated = item
             } else {
-                order.append(key)
-                accumulated[key] = (event, delta, event.deltaCharacterCount, event.enqueuedAt)
+                flushAccumulated()
+                accumulated = (key, event, delta, event.deltaCharacterCount, event.enqueuedAt)
             }
         }
 
         flushAccumulated()
         return result
-    }
-
-    static func mergeMessagesPreservingStreamProgress(
-        existing: [OpenCodeMessageEnvelope],
-        loaded: [OpenCodeMessageEnvelope]
-    ) -> [OpenCodeMessageEnvelope] {
-        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-
-        return loaded.map { message in
-            guard let existingMessage = existingByID[message.id] else {
-                return message
-            }
-
-            return existingMessage.mergedWithCanonical(message)
-        }
     }
 }

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", "OPENCODE_WEB_UI_PARITY.md"],
+  "permission": {
+    "external_directory": {
+      "~/opencode/**": "allow"
+    },
+    "edit": {
+      "~/opencode/**": "deny"
+    }
+  }
+}

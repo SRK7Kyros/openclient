@@ -62,6 +62,8 @@ struct OpenCodeSSEParser {
 }
 
 enum OpenCodeEventStream {
+    private static let streamYieldInterval: TimeInterval = 0.008
+
     static func consume(
         client: OpenCodeAPIClient,
         url: URL,
@@ -102,6 +104,7 @@ enum OpenCodeEventStream {
             await onStatus("stream open \(url.lastPathComponent)")
 
             var parser = OpenCodeSSEParser()
+            var lastYieldAt = Date.now
 
             for try await line in bytes.lines {
                 if Task.isCancelled {
@@ -114,6 +117,10 @@ enum OpenCodeEventStream {
 
                 for event in parser.process(line: line) {
                     await onEvent(event)
+                    if Date.now.timeIntervalSince(lastYieldAt) >= Self.streamYieldInterval {
+                        lastYieldAt = Date.now
+                        await Task.yield()
+                    }
                 }
             }
         } catch {

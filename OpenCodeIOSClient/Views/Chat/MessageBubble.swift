@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum MessageBubbleSpacing {
+    static let part: CGFloat = 10
+}
+
 private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
@@ -120,14 +124,14 @@ struct MessageBubble: View {
     }
 
     private var messageContent: some View {
-        VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
+        VStack(alignment: isUser ? .trailing : .leading, spacing: MessageBubbleSpacing.part) {
             ForEach(displayEntries, id: \.id) { entry in
                 switch entry {
                 case let .part(indexed):
-                    partView(indexed.part, index: indexed.index)
+                    revealWrappedPartView(indexed.part, index: indexed.index)
                         .transition(.identity)
                 case let .context(group):
-                    contextGroupView(group)
+                    revealWrappedContextGroupView(group)
                         .transition(.identity)
                 }
             }
@@ -137,7 +141,21 @@ struct MessageBubble: View {
                     .transition(.identity)
             }
         }
+        .overlay(alignment: .bottom) {
+            if showsStreamingTurnGradient {
+                StreamingTurnBottomGradient(tint: streamingActivityTint)
+                    .allowsHitTesting(false)
+            }
+        }
         .contextMenu { messageContextMenu }
+    }
+
+    private var showsStreamingTurnGradient: Bool {
+        isStreamingMessage && !isUser
+    }
+
+    private var streamingActivityTint: Color {
+        OpenCodeActivityTint.color(forAgent: effectiveMessage.info.agent)
     }
 
     @ViewBuilder
@@ -263,34 +281,21 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func partView(_ part: OpenCodePart, index: Int) -> some View {
+    private func revealWrappedPartView(_ part: OpenCodePart, index: Int) -> some View {
+        partView(part, index: index, isActiveRevealPart: isActiveRevealPart(at: index, part: part))
+    }
+
+    @ViewBuilder
+    private func revealWrappedContextGroupView(_ group: ContextGroup) -> some View {
+        contextGroupView(group, isActiveRevealPart: false)
+    }
+
+    @ViewBuilder
+    private func partView(_ part: OpenCodePart, index: Int, isActiveRevealPart: Bool) -> some View {
         if hidesReasoningBlocks, textStyle(for: part) == .reasoning {
             EmptyView()
         } else if let attachment = attachment(for: part) {
             AttachmentBubblePart(attachment: attachment, isUser: isUser)
-        } else if let text = renderableText(for: part) {
-            if textStyle(for: part) == .reasoning {
-                let content = ReasoningBlock(
-                    text: text,
-                    isExpanded: isReasoningExpanded(part: part, index: index),
-                    isRunning: isReasoningRunning(part),
-                    onToggle: { toggleReasoning(part: part, index: index) }
-                )
-
-                if isUser {
-                    bubbleWrapped(content)
-                } else {
-                    content
-                }
-            } else {
-                let content = MarkdownMessageText(text: text, isUser: isUser, style: textStyle(for: part), isStreaming: isStreamingMessage, animatesStreamingText: animatesStreamingText)
-
-                if isUser {
-                    bubbleWrapped(content)
-                } else {
-                    content
-                }
-            }
         } else if let activity = activityStyle(for: part) {
             let content = Button {
                 handleActivityTap(for: part)
@@ -304,17 +309,93 @@ struct MessageBubble: View {
             } else {
                 content
             }
+        } else if let text = renderableText(for: part), shouldRenderText(for: part) {
+            if textStyle(for: part) == .reasoning {
+                let content = ReasoningBlock(
+                    text: text,
+                    isExpanded: isReasoningExpanded(part: part, index: index),
+                    isRunning: isReasoningRunning(part),
+                    isActiveRevealPart: isActiveRevealPart,
+                    onToggle: { toggleReasoning(part: part, index: index) }
+                )
+
+                if isUser {
+                    bubbleWrapped(content)
+                } else {
+                    content
+                }
+            } else {
+                let content = MarkdownMessageText(
+                    text: text,
+                    isUser: isUser,
+                    style: textStyle(for: part),
+                    isStreaming: isStreamingTextPart(part, index: index),
+                    animatesStreamingText: animatesStreamingText
+                )
+
+                if isUser {
+                    bubbleWrapped(content)
+                } else {
+                    content
+                }
+            }
+        } else if shouldShowUnknownStreamingPartPlaceholder(part) {
+            ActivityRow(style: unknownStreamingPartStyle)
         }
     }
 
-    private func contextGroupView(_ group: ContextGroup) -> some View {
+    private func shouldRenderText(for part: OpenCodePart) -> Bool {
+        isUser || part.type == "text" || part.type == "reasoning"
+    }
+
+    private func shouldShowUnknownStreamingPartPlaceholder(_ part: OpenCodePart) -> Bool {
+        guard isStreamingMessage, !isUser else { return false }
+        return !knownSilentStreamingPartTypes.contains(part.type)
+    }
+
+    private var unknownStreamingPartStyle: ActivityStyle {
+        ActivityStyle(
+            title: "Thinking",
+            subtitle: nil,
+            icon: "sparkles",
+            tint: .secondary,
+            isRunning: true,
+            showsDisclosure: false,
+            shimmerTitle: false
+        )
+    }
+
+    private var knownSilentStreamingPartTypes: Set<String> {
+        ["", "text", "reasoning", "step-start", "step-finish"]
+    }
+
+    private func isStreamingTextPart(_ part: OpenCodePart, index: Int) -> Bool {
+        guard isStreamingMessage, !isUser, textStyle(for: part) == .standard else {
+            return false
+        }
+
+        return index == latestRenderableStandardTextPartIndex
+    }
+
+    private func isActiveRevealPart(at index: Int, part: OpenCodePart) -> Bool {
+        isStreamingTextPart(part, index: index)
+    }
+
+    private var latestRenderableStandardTextPartIndex: Int? {
+        effectiveMessage.parts.indices.last { index in
+            let part = effectiveMessage.parts[index]
+            return textStyle(for: part) == .standard && renderableText(for: part) != nil
+        }
+    }
+
+    private func contextGroupView(_ group: ContextGroup, isActiveRevealPart: Bool) -> some View {
         let isExpanded = expandedContextGroupIDs.contains(group.id)
         let summary = contextSummary(for: group.parts)
         let running = isStreamingMessage || group.parts.contains { isRunning($0.part) }
         let title = running ? "Exploring" : "Explored"
         let subtitle = contextSummaryText(summary)
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: MessageBubbleSpacing.part) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
                     toggleContextGroup(group.id)
@@ -336,7 +417,7 @@ struct MessageBubble: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: MessageBubbleSpacing.part) {
                     ForEach(group.parts, id: \.id) { indexed in
                         if let style = activityStyle(for: indexed.part) {
                             Button {
@@ -348,7 +429,7 @@ struct MessageBubble: View {
                         }
                     }
                 }
-                .padding(.leading, 10)
+            .padding(.leading, 8)
                 .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
             }
         }
@@ -420,10 +501,19 @@ struct MessageBubble: View {
     }
 
     private func textStyle(for part: OpenCodePart) -> MarkdownMessageText.Style {
-        if !isUser, part.type == "reasoning" {
+        if !isUser, isReasoningPart(part) {
             return .reasoning
         }
         return .standard
+    }
+
+    private func isReasoningPart(_ part: OpenCodePart) -> Bool {
+        if part.type == "reasoning" {
+            return true
+        }
+
+        let lowerReason = part.reason?.lowercased() ?? ""
+        return part.type == "text" && lowerReason.contains("reasoning")
     }
 
     private func attachment(for part: OpenCodePart) -> OpenCodeComposerAttachment? {
@@ -494,6 +584,8 @@ struct MessageBubble: View {
         }
 
         for (index, part) in parts.enumerated() {
+            guard shouldIncludePartInDisplayPlan(part) else { continue }
+
             if shouldGroupInContext(part) {
                 contextIndices.append(index)
             } else {
@@ -504,6 +596,13 @@ struct MessageBubble: View {
 
         flushContextParts()
         return result
+    }
+
+    private func shouldIncludePartInDisplayPlan(_ part: OpenCodePart) -> Bool {
+        if renderableText(for: part) != nil { return true }
+        if activityStyle(for: part) != nil { return true }
+        if shouldShowUnknownStreamingPartPlaceholder(part) { return true }
+        return false
     }
 
     private func materializeDisplayEntryPlan(_ plan: [MessageBubbleDisplayEntryPlan], parts: [OpenCodePart]) -> [DisplayEntry] {
@@ -557,7 +656,7 @@ struct MessageBubble: View {
                 tint: .blue,
                 isRunning: running,
                 showsDisclosure: true,
-                shimmerTitle: running
+                shimmerTitle: false
             )
         case "bash":
             return ActivityStyle(
@@ -567,7 +666,7 @@ struct MessageBubble: View {
                 tint: .green,
                 isRunning: running,
                 showsDisclosure: true,
-                shimmerTitle: running
+                shimmerTitle: false
             )
         case "read":
             return ActivityStyle(
@@ -617,7 +716,7 @@ struct MessageBubble: View {
                 tint: .teal,
                 isRunning: running,
                 showsDisclosure: true,
-                shimmerTitle: running
+                shimmerTitle: false
             )
         case "websearch":
             return ActivityStyle(
@@ -958,6 +1057,138 @@ private enum DisplayEntry: Identifiable {
     }
 }
 
+private struct StreamingTurnBottomGradient: View {
+    let tint: Color
+
+    private let height: CGFloat = 52
+    private let bottomBleed: CGFloat = 10
+    private let visualWidth: CGFloat = 4096
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(
+                stops: [
+                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0), location: 0),
+                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.78), location: 0.48),
+                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.98), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            StreamingTurnGradientHighlight(tint: tint)
+        }
+        .frame(height: height)
+        .frame(width: visualWidth)
+        .offset(y: bottomBleed)
+    }
+}
+
+private struct StreamingTurnGradientHighlight: View {
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+                let width = max(geometry.size.width, 1)
+                let height = max(geometry.size.height, 1)
+                let duration = shimmerDuration(forWidth: width)
+                let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: duration) / duration
+                let bandWidth = min(max(width * 0.36, 86), 220)
+                let travel = width + bandWidth * 2
+                let centerX = -bandWidth + CGFloat(phase) * travel
+
+                LinearGradient(
+                    stops: [
+                        .init(color: tint.opacity(0), location: 0),
+                        .init(color: tint.opacity(0.10), location: 0.28),
+                        .init(color: tint.opacity(0.24), location: 0.50),
+                        .init(color: tint.opacity(0.10), location: 0.72),
+                        .init(color: tint.opacity(0), location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: bandWidth, height: height)
+                .position(x: centerX, y: height / 2)
+                .blendMode(.plusLighter)
+                .mask(StreamingTurnGradientOpacityMask())
+            }
+        }
+        .compositingGroup()
+    }
+
+    private func shimmerDuration(forWidth width: CGFloat) -> TimeInterval {
+        let paced = max(1.2, min(3.2, Double(max(width, 360) * 2.0 / 900.0)))
+        return paced
+    }
+}
+
+private struct StreamingTurnGradientOpacityMask: View {
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black.opacity(0.78), location: 0.42),
+                .init(color: .black, location: 0.66),
+                .init(color: .black.opacity(0.72), location: 0.84),
+                .init(color: .clear, location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+private enum OpenCodeActivityTint {
+    private static let fallbackPalette: [Color] = [
+        agentAsk,
+        agentBuild,
+        agentDocs,
+        agentPlan,
+        Color(hue: 0.53, saturation: 0.34, brightness: 0.88),
+        Color(hue: 0.36, saturation: 0.34, brightness: 0.86),
+        Color(hue: 0.10, saturation: 0.38, brightness: 0.92),
+        Color(hue: 0.56, saturation: 0.34, brightness: 0.88),
+        Color(hue: 0.09, saturation: 0.34, brightness: 0.90),
+        Color(hue: 0.39, saturation: 0.32, brightness: 0.86),
+        Color(hue: 0.98, saturation: 0.34, brightness: 0.88),
+        Color(hue: 0.11, saturation: 0.38, brightness: 0.92)
+    ]
+
+    private static let agentAsk = Color(hue: 0.59, saturation: 0.36, brightness: 0.92)
+    private static let agentBuild = Color(hue: 0.08, saturation: 0.38, brightness: 0.94)
+    private static let agentDocs = Color(hue: 0.12, saturation: 0.38, brightness: 0.92)
+    private static let agentPlan = Color(hue: 0.53, saturation: 0.34, brightness: 0.90)
+
+    static func color(forAgent agent: String?) -> Color {
+        guard let normalized = agent?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !normalized.isEmpty else {
+            return agentBuild
+        }
+
+        switch normalized {
+        case "ask":
+            return agentAsk
+        case "build":
+            return agentBuild
+        case "docs":
+            return agentDocs
+        case "plan", "planner":
+            return agentPlan
+        default:
+            return fallbackPalette[stableIndex(for: normalized, count: fallbackPalette.count)]
+        }
+    }
+
+    private static func stableIndex(for value: String, count: Int) -> Int {
+        var hash: UInt32 = 0
+        for scalar in value.unicodeScalars {
+            hash = hash &* 31 &+ UInt32(scalar.value)
+        }
+        return Int(hash % UInt32(count))
+    }
+}
+
 private struct ContextToolGroupCard: View {
     let style: ActivityStyle
     let expanded: Bool
@@ -991,7 +1222,7 @@ private struct ContextToolGroupCard: View {
             }
         }
         .padding(.trailing, 6)
-        .padding(.bottom, 8)
+        .padding(.bottom, 0)
     }
 }
 

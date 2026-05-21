@@ -159,6 +159,10 @@ extension AppViewModel {
         findPlaceGame(for: sessionID) != nil || findBugGame(for: sessionID) != nil
     }
 
+    func isKnownFunAndGamesSession(_ sessionID: String) -> Bool {
+        findPlaceSessionsByID[sessionID] != nil || findBugSessionsByID[sessionID] != nil
+    }
+
     func shouldMeterPrompts(for sessionID: String) -> Bool {
         !isFunAndGamesSession(sessionID)
     }

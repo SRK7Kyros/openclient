@@ -33,15 +33,13 @@ struct MarkdownMessageText: View {
     let style: Style
     var isStreaming = false
     var animatesStreamingText = true
-
-    @State private var hasRenderedStreaming = false
-    @State private var richContentOpacity = 1.0
+    var onStreamingRevealCompleted: (() -> Void)? = nil
 
     var body: some View {
         switch style {
         case .standard:
             content
-                .padding(.vertical, isUser ? 0 : 10)
+                .padding(.vertical, 0)
         case .reasoning:
             content
         }
@@ -50,89 +48,71 @@ struct MarkdownMessageText: View {
     private var content: some View {
         Group {
             if isStreaming {
-                streamingTextView
+                streamingRichMarkdownContent
             } else {
                 richMarkdownContent
-                    .opacity(richContentOpacity)
             }
         }
         .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
         .modifier(ConditionalTextSelectionModifier(isEnabled: !isStreaming))
-        .onAppear {
-            hasRenderedStreaming = isStreaming
-        }
-        .onChange(of: isStreaming) { oldValue, newValue in
-            if newValue {
-                hasRenderedStreaming = true
-                richContentOpacity = 1
-            } else if oldValue || hasRenderedStreaming {
-                richContentOpacity = 0
-                withAnimation(.easeOut(duration: 0.22)) {
-                    richContentOpacity = 1
-                }
-                hasRenderedStreaming = false
-            }
-        }
     }
 
     private var richMarkdownContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(blocks) { block in
-                switch block {
-                case let .text(_, value):
-                    styledText(markdownText(value))
-                        .padding(.bottom, textBlockBottomPadding(for: value))
-                case let .heading(_, level, value):
-                    styledHeading(markdownText(value), level: level)
-                case let .blockQuote(_, value):
-                    styledBlockQuote(markdownText(value))
-                case let .listItem(_, marker, value):
-                    styledListItem(markdownText(value), marker: marker)
-                case let .table(_, headers, rows):
-                    styledTable(headers: headers, rows: rows)
-                case let .codeBlock(_, language, value):
-                    HighlightedCodeBlock(code: value, language: language)
-                        .padding(.vertical, codeBlockOuterPadding)
-                }
+                markdownBlockView(block)
             }
         }
     }
 
     @ViewBuilder
-    private var streamingTextView: some View {
-#if canImport(UIKit)
-        NativeStreamingTextLabel(
-            text: text,
-            isUser: isUser,
-            style: style,
-            lineSpacing: textLineSpacing,
-            animatesTextReveal: shouldUseNativeStreamingTextReveal
-        )
-#else
-        if shouldUseStreamingTextFade {
-            StreamingTextFade(
-                text: text,
-                font: textFont,
-                foregroundColor: textForegroundStyle,
-                lineSpacing: textLineSpacing
-            )
-        } else {
-            StreamingPlainText(
-                text: text,
-                font: textFont,
-                foregroundColor: textForegroundStyle,
-                lineSpacing: textLineSpacing
-            )
+    private var streamingRichMarkdownContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(blocks) { block in
+                markdownBlockView(block)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func markdownBlockView(_ block: MarkdownBlock) -> some View {
+        Group {
+            switch block {
+            case let .text(_, value):
+                if shouldUseNativeStreamingChunkText {
+#if canImport(UIKit)
+                    NativeStreamingChunkTextLabel(
+                        text: value,
+                        isUser: isUser,
+                        style: style,
+                        lineSpacing: textLineSpacing
+                    )
+                    .padding(.bottom, textBlockBottomPadding(for: value))
+#else
+                    styledText(markdownText(value))
+                        .padding(.bottom, textBlockBottomPadding(for: value))
 #endif
+                } else {
+                    styledText(markdownText(value))
+                        .padding(.bottom, textBlockBottomPadding(for: value))
+                }
+            case let .heading(_, level, value):
+                styledHeading(markdownText(value), level: level)
+            case let .blockQuote(_, value):
+                styledBlockQuote(markdownText(value))
+            case let .listItem(_, marker, value):
+                styledListItem(markdownText(value), marker: marker)
+            case let .table(_, headers, rows):
+                styledTable(headers: headers, rows: rows)
+            case let .codeBlock(_, language, value):
+                HighlightedCodeBlock(code: value, language: language)
+                    .padding(.vertical, codeBlockOuterPadding)
+            }
+        }
     }
 
-    private var shouldUseStreamingTextFade: Bool {
-        animatesStreamingText && !isUser
-    }
-
-    private var shouldUseNativeStreamingTextReveal: Bool {
-        animatesStreamingText && !isUser && text.utf16.count <= 1_200
+    private var shouldUseNativeStreamingChunkText: Bool {
+        isStreaming && animatesStreamingText && !isUser && style == .standard
     }
 
     private func styledText(_ text: Text) -> some View {
@@ -197,7 +177,9 @@ struct MarkdownMessageText: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(tableBorderStyle, lineWidth: 1)
             }
+            .padding(.horizontal, tableHorizontalScrollBleed)
         }
+        .padding(.horizontal, -tableHorizontalScrollBleed)
         .padding(.vertical, tableOuterPadding)
     }
 
@@ -712,6 +694,10 @@ struct MarkdownMessageText: View {
         }
     }
 
+    private var tableHorizontalScrollBleed: CGFloat {
+        isUser ? 0 : 16
+    }
+
     private var codeBlockOuterPadding: CGFloat {
         switch style {
         case .standard:
@@ -781,15 +767,14 @@ private struct ConditionalTextSelectionModifier: ViewModifier {
 }
 
 #if canImport(UIKit)
-private struct NativeStreamingTextLabel: UIViewRepresentable {
+private struct NativeStreamingChunkTextLabel: UIViewRepresentable {
     let text: String
     let isUser: Bool
     let style: MarkdownMessageText.Style
     let lineSpacing: CGFloat
-    let animatesTextReveal: Bool
 
-    func makeUIView(context: Context) -> StreamingTextUILabel {
-        let label = StreamingTextUILabel()
+    func makeUIView(context: Context) -> StreamingChunkUILabel {
+        let label = StreamingChunkUILabel()
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
         label.backgroundColor = .clear
@@ -799,18 +784,17 @@ private struct NativeStreamingTextLabel: UIViewRepresentable {
         return label
     }
 
-    func updateUIView(_ label: StreamingTextUILabel, context: Context) {
-        label.configure(
-            text: text,
-            font: uiFont,
-            textColor: uiTextColor,
-            lineSpacing: lineSpacing,
-            animatesTextReveal: animatesTextReveal
-        )
+    func updateUIView(_ label: StreamingChunkUILabel, context: Context) {
+        label.configure(text: text, font: uiFont, textColor: uiTextColor, lineSpacing: lineSpacing)
     }
 
-    static func dismantleUIView(_ label: StreamingTextUILabel, coordinator: ()) {
-        label.stopStreaming()
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView label: StreamingChunkUILabel, context: Context) -> CGSize? {
+        guard let width = proposal.width else { return nil }
+        return label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    }
+
+    static func dismantleUIView(_ label: StreamingChunkUILabel, coordinator: ()) {
+        label.stopAnimatingSuffix()
     }
 
     private var uiFont: UIFont {
@@ -823,9 +807,7 @@ private struct NativeStreamingTextLabel: UIViewRepresentable {
     }
 
     private var uiTextColor: UIColor {
-        if isUser {
-            return .white
-        }
+        if isUser { return .white }
 
         switch style {
         case .standard:
@@ -836,147 +818,95 @@ private struct NativeStreamingTextLabel: UIViewRepresentable {
     }
 }
 
-private final class StreamingTextUILabel: UILabel {
+private final class StreamingChunkUILabel: UILabel {
     private var configuredText = ""
     private var configuredFont: UIFont?
     private var configuredTextColor: UIColor?
     private var configuredLineSpacing: CGFloat = 0
-    private var configuredAnimatesTextReveal = false
+    private var suffixStartIndex: Int?
+    private var suffixAnimationStartedAt: CFTimeInterval = 0
     private var displayLink: CADisplayLink?
-    private var displayedCharacterCount: Double = 0
-    private var lastFrameTime = Date.timeIntervalSinceReferenceDate
 
-    private let revealCharactersPerSecond: Double = 96
-    private let fadeWindowCharacterCount = 18
+    private let suffixFadeDuration: CFTimeInterval = 0.28
+    private let suffixMinimumOpacity: CGFloat = 0.08
 
-    func configure(text: String, font: UIFont, textColor: UIColor, lineSpacing: CGFloat, animatesTextReveal: Bool) {
-        guard configuredText != text || configuredFont != font || configuredTextColor != textColor || configuredLineSpacing != lineSpacing || configuredAnimatesTextReveal != animatesTextReveal else {
+    func configure(text: String, font: UIFont, textColor: UIColor, lineSpacing: CGFloat) {
+        guard configuredText != text || configuredFont != font || configuredTextColor != textColor || configuredLineSpacing != lineSpacing else {
             return
         }
 
-        let previousCharacterCount: Int
-        let newCharacterCount: Int
-        let shouldReveal: Bool
-        if animatesTextReveal {
-            previousCharacterCount = configuredText.count
-            newCharacterCount = text.count
-            shouldReveal = text.hasPrefix(configuredText) && newCharacterCount > previousCharacterCount
-        } else {
-            previousCharacterCount = 0
-            newCharacterCount = 0
-            shouldReveal = false
-        }
+        let previousText = configuredText
+        let canAnimateSuffix = !previousText.isEmpty && text.hasPrefix(previousText) && text.count > previousText.count
         configuredText = text
         configuredFont = font
         configuredTextColor = textColor
         configuredLineSpacing = lineSpacing
-        configuredAnimatesTextReveal = animatesTextReveal
 
-        if shouldReveal {
-            displayedCharacterCount = min(displayedCharacterCount, Double(newCharacterCount))
-            renderDisplayedText()
+        if canAnimateSuffix {
+            suffixStartIndex = previousText.count
+            suffixAnimationStartedAt = CACurrentMediaTime()
+            renderText(suffixOpacity: suffixMinimumOpacity)
             startDisplayLink()
         } else {
-            displayedCharacterCount = animatesTextReveal ? Double(newCharacterCount) : .greatestFiniteMagnitude
-            renderDisplayedText()
-            stopDisplayLink()
+            suffixStartIndex = nil
+            renderText(suffixOpacity: 1)
+            stopAnimatingSuffix()
         }
     }
 
-    func stopStreaming() {
-        stopDisplayLink()
+    func stopAnimatingSuffix() {
+        displayLink?.invalidate()
+        displayLink = nil
     }
 
-    private func renderDisplayedText() {
+    private func renderText(suffixOpacity: CGFloat) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = configuredLineSpacing
         paragraph.lineBreakMode = .byWordWrapping
-        let attributes: [NSAttributedString.Key: Any] = [
+        let color = configuredTextColor ?? .label
+        let baseAttributes: [NSAttributedString.Key: Any] = [
             .font: configuredFont ?? UIFont.preferredFont(forTextStyle: .body),
-            .foregroundColor: configuredTextColor ?? UIColor.label,
+            .foregroundColor: color,
             .paragraphStyle: paragraph
         ]
 
-        guard configuredAnimatesTextReveal else {
-            attributedText = NSAttributedString(string: configuredText, attributes: attributes)
+        guard let suffixStartIndex, suffixStartIndex < configuredText.count else {
+            attributedText = NSAttributedString(string: configuredText, attributes: baseAttributes)
             return
         }
 
-        let characterCount = configuredText.count
-        let solidCount = min(characterCount, max(0, Int(floor(displayedCharacterCount))))
-        guard solidCount < characterCount else {
-            attributedText = NSAttributedString(string: configuredText, attributes: attributes)
-            return
-        }
-
-        let solidEnd = configuredText.index(
-            configuredText.startIndex,
-            offsetBy: solidCount,
-            limitedBy: configuredText.endIndex
-        ) ?? configuredText.endIndex
-        let attributed = NSMutableAttributedString(
-            string: String(configuredText[..<solidEnd]),
-            attributes: attributes
-        )
-
-        let fadeEnd = min(characterCount, solidCount + fadeWindowCharacterCount)
-        if solidCount < fadeEnd {
-            var characterIndex = solidCount
-            var textIndex = solidEnd
-            while characterIndex < fadeEnd, textIndex < configuredText.endIndex {
-                let nextIndex = configuredText.index(after: textIndex)
-                let opacity = opacity(forCharacterAt: characterIndex)
-                attributed.append(NSAttributedString(
-                    string: String(configuredText[textIndex..<nextIndex]),
-                    attributes: [
-                        .font: configuredFont ?? UIFont.preferredFont(forTextStyle: .body),
-                        .foregroundColor: (configuredTextColor ?? UIColor.label).withAlphaComponent(opacity),
-                        .paragraphStyle: paragraph
-                    ]
-                ))
-                characterIndex += 1
-                textIndex = nextIndex
-            }
-        }
-
+        let suffixStart = configuredText.index(configuredText.startIndex, offsetBy: suffixStartIndex)
+        let attributed = NSMutableAttributedString(string: String(configuredText[..<suffixStart]), attributes: baseAttributes)
+        attributed.append(NSAttributedString(
+            string: String(configuredText[suffixStart...]),
+            attributes: [
+                .font: configuredFont ?? UIFont.preferredFont(forTextStyle: .body),
+                .foregroundColor: color.withAlphaComponent(suffixOpacity),
+                .paragraphStyle: paragraph
+            ]
+        ))
         attributedText = attributed
-    }
-
-    private func opacity(forCharacterAt index: Int) -> CGFloat {
-        let distance = Double(index + 1) - displayedCharacterCount
-        let opacity = 1 - (distance / Double(fadeWindowCharacterCount))
-        return CGFloat(min(1, max(0.12, opacity)))
     }
 
     private func startDisplayLink() {
         guard displayLink == nil else { return }
-        lastFrameTime = Date.timeIntervalSinceReferenceDate
         let link = CADisplayLink(target: self, selector: #selector(displayLinkDidTick))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 30)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
-    private func stopDisplayLink() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
-
     @objc private func displayLinkDidTick() {
-        let now = Date.timeIntervalSinceReferenceDate
-        let elapsed = max(0, now - lastFrameTime)
-        lastFrameTime = now
+        let elapsed = max(0, CACurrentMediaTime() - suffixAnimationStartedAt)
+        let linear = min(1, elapsed / suffixFadeDuration)
+        let eased = 1 - pow(1 - linear, 2.2)
+        renderText(suffixOpacity: suffixMinimumOpacity + (1 - suffixMinimumOpacity) * CGFloat(eased))
 
-        let targetCount = Double(configuredText.count)
-        guard displayedCharacterCount < targetCount else {
-            displayedCharacterCount = targetCount
-            renderDisplayedText()
-            stopDisplayLink()
-            return
+        if linear >= 1 {
+            suffixStartIndex = nil
+            renderText(suffixOpacity: 1)
+            stopAnimatingSuffix()
         }
-
-        displayedCharacterCount = min(targetCount, displayedCharacterCount + elapsed * revealCharactersPerSecond)
-        renderDisplayedText()
     }
 
     override func layoutSubviews() {
@@ -991,259 +921,10 @@ private final class StreamingTextUILabel: UILabel {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window == nil {
-            stopDisplayLink()
-        } else if displayedCharacterCount < Double(configuredText.count) {
+            stopAnimatingSuffix()
+        } else if suffixStartIndex != nil {
             startDisplayLink()
         }
     }
 }
 #endif
-
-private struct StreamingPlainText: View {
-    private struct Chunk: Identifiable {
-        let id: Int
-        let value: String
-    }
-
-    let text: String
-    let font: Font
-    let foregroundColor: Color
-    let lineSpacing: CGFloat
-
-    @State private var frozenChunks: [Chunk] = []
-    @State private var liveText = ""
-    @State private var lastText = ""
-    @State private var committedCharacterCount = 0
-    @State private var nextChunkID = 0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(frozenChunks) { chunk in
-                streamingText(chunk.value)
-            }
-
-            if !liveText.isEmpty {
-                streamingText(liveText)
-            }
-        }
-        .onAppear {
-            updateText(text)
-        }
-        .onChange(of: text) { _, newText in
-            updateText(newText)
-        }
-    }
-
-    private func streamingText(_ value: String) -> some View {
-        Text(verbatim: value)
-            .font(font)
-            .foregroundStyle(foregroundColor)
-            .lineSpacing(lineSpacing)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func updateText(_ newText: String) {
-        guard newText != lastText else { return }
-
-        guard newText.hasPrefix(lastText) else {
-            rebuild(from: newText)
-            return
-        }
-
-        lastText = newText
-        refreshLiveText(from: newText)
-    }
-
-    private func rebuild(from newText: String) {
-        frozenChunks = []
-        liveText = ""
-        lastText = newText
-        committedCharacterCount = 0
-        nextChunkID = 0
-        refreshLiveText(from: newText)
-    }
-
-    private func refreshLiveText(from fullText: String) {
-        let committedIndex = fullText.index(
-            fullText.startIndex,
-            offsetBy: committedCharacterCount,
-            limitedBy: fullText.endIndex
-        ) ?? fullText.endIndex
-        var tail = String(fullText[committedIndex...])
-
-        while let boundary = commitBoundary(in: tail) {
-            let frozen = String(tail[..<boundary])
-            appendFrozenChunk(frozen)
-            committedCharacterCount += frozen.count
-            tail = String(tail[boundary...])
-        }
-
-        liveText = tail
-    }
-
-    private func appendFrozenChunk(_ value: String) {
-        guard !value.isEmpty else { return }
-        frozenChunks.append(Chunk(id: nextChunkID, value: value))
-        nextChunkID += 1
-    }
-
-    private func commitBoundary(in text: String) -> String.Index? {
-        if let paragraphRange = text.range(of: "\n\n") {
-            return paragraphRange.upperBound
-        }
-
-        guard text.count > softChunkCharacterLimit else {
-            return nil
-        }
-
-        let preferredLimit = text.index(
-            text.startIndex,
-            offsetBy: softChunkCharacterLimit,
-            limitedBy: text.endIndex
-        ) ?? text.endIndex
-
-        if let newline = text[..<preferredLimit].lastIndex(of: "\n") {
-            return text.index(after: newline)
-        }
-
-        guard text.count > hardChunkCharacterLimit else {
-            return nil
-        }
-
-        let hardLimit = text.index(
-            text.startIndex,
-            offsetBy: hardChunkCharacterLimit,
-            limitedBy: text.endIndex
-        ) ?? text.endIndex
-
-        guard let newline = text[..<hardLimit].lastIndex(of: "\n") else {
-            return nil
-        }
-
-        return text.index(after: newline)
-    }
-
-    private var softChunkCharacterLimit: Int { 1_200 }
-    private var hardChunkCharacterLimit: Int { 2_400 }
-}
-
-private struct StreamingTextFade: View {
-    let text: String
-    let font: Font
-    let foregroundColor: Color
-    let lineSpacing: CGFloat
-
-    @State private var targetText = ""
-    @State private var revealProgress = 0.0
-    @State private var writerTask: Task<Void, Never>?
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            layoutText
-                .opacity(0)
-                .accessibilityHidden(true)
-
-            renderedText
-        }
-        .font(font)
-        .lineSpacing(lineSpacing)
-        .multilineTextAlignment(.leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .onAppear {
-            updateTarget(text, animatingInitialText: true)
-        }
-        .onChange(of: text) { _, newText in
-            updateTarget(newText, animatingInitialText: false)
-        }
-        .onDisappear {
-            writerTask?.cancel()
-            writerTask = nil
-        }
-    }
-
-    private var layoutText: Text {
-        Text(verbatim: targetText.isEmpty ? text : targetText)
-            .foregroundColor(foregroundColor)
-    }
-
-    private var renderedText: Text {
-        let characters = Array(targetText.isEmpty ? text : targetText)
-        let solidCount = min(characters.count, max(0, Int(floor(revealProgress))))
-        var attributed = AttributedString(String(characters.prefix(solidCount)))
-        attributed.foregroundColor = foregroundColor
-
-        let fadeEnd = min(characters.count, solidCount + fadeWindowCharacterCount)
-        for index in solidCount ..< fadeEnd {
-            var character = AttributedString(String(characters[index]))
-            character.foregroundColor = foregroundColor.opacity(opacity(forCharacterAt: index))
-            attributed += character
-        }
-
-        return Text(attributed)
-    }
-
-    private func updateTarget(_ newText: String, animatingInitialText: Bool) {
-        guard newText != targetText else { return }
-
-        guard targetText.isEmpty || newText.hasPrefix(targetText) || newText.count >= Int(revealProgress) else {
-            targetText = newText
-            revealProgress = Double(newText.count)
-            return
-        }
-
-        targetText = newText
-        if animatingInitialText, revealProgress == 0 {
-            revealProgress = max(0, Double(newText.count) - 18)
-        } else {
-            revealProgress = min(revealProgress, Double(newText.count))
-        }
-        startWriterIfNeeded()
-    }
-
-    private func startWriterIfNeeded() {
-        guard writerTask == nil else { return }
-
-        writerTask = Task { @MainActor in
-            defer { writerTask = nil }
-            while !Task.isCancelled {
-                let remaining = Double(targetText.count) - revealProgress
-                guard remaining > 0.01 else {
-                    revealProgress = Double(targetText.count)
-                    return
-                }
-
-                revealProgress = min(Double(targetText.count), revealProgress + revealStep(forRemainingCharacters: remaining))
-                try? await Task.sleep(for: .milliseconds(writerTickMilliseconds(forRemainingCharacters: remaining)))
-            }
-        }
-    }
-
-    private func opacity(forCharacterAt index: Int) -> Double {
-        let distance = Double(index + 1) - revealProgress
-        let opacity = 1 - (distance / Double(fadeWindowCharacterCount))
-        return min(1, max(0.12, opacity))
-    }
-
-    private func revealStep(forRemainingCharacters remaining: Double) -> Double {
-        if remaining < 10 {
-            return 1.1
-        }
-
-        if remaining < 45 {
-            return min(4.5, max(1.6, remaining / 9))
-        }
-
-        if remaining < 180 {
-            return min(14, max(5, remaining / 7))
-        }
-
-        return min(32, max(16, remaining / 5))
-    }
-
-    private func writerTickMilliseconds(forRemainingCharacters remaining: Double) -> Int {
-        remaining > 120 ? 18 : 26
-    }
-
-    private var fadeWindowCharacterCount: Int { 18 }
-}

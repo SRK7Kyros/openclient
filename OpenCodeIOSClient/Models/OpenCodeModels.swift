@@ -276,44 +276,12 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
         return copy
     }
 
-    func mergedWithCanonical(_ incoming: OpenCodeMessageEnvelope) -> OpenCodeMessageEnvelope {
-        var merged = incoming
-
-        for existingPart in parts {
-            guard let existingPartID = existingPart.id,
-                  let incomingIndex = merged.parts.firstIndex(where: { $0.id == existingPartID }) else {
-                continue
-            }
-
-            var incomingPart = merged.parts[incomingIndex]
-
-            if shouldPreserveStreamedText(existing: existingPart.text, incoming: incomingPart.text) {
-                incomingPart.text = existingPart.text
-            }
-
-            merged.parts[incomingIndex] = incomingPart
-        }
-
-        return merged
-    }
-
     func upsertingPart(_ part: OpenCodePart) -> OpenCodeMessageEnvelope {
         var copy = self
 
         if let partID = part.id,
            let index = copy.parts.firstIndex(where: { $0.id == partID }) {
-            var merged = part
-            let existing = copy.parts[index]
-
-            // OpenCode can emit a later part update with empty text after many deltas.
-            // Preserve the accumulated streamed text instead of wiping it out.
-            if (merged.text == nil || merged.text?.isEmpty == true),
-               let existingText = existing.text,
-               !existingText.isEmpty {
-                merged.text = existingText
-            }
-
-            copy.parts[index] = merged
+            copy.parts[index] = part
             return copy
         }
 
@@ -329,22 +297,6 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
         var copy = self
 
         guard let index = copy.parts.firstIndex(where: { $0.id == partID }) else {
-            copy.parts.append(
-                OpenCodePart(
-                    id: partID,
-                    messageID: info.id,
-                    sessionID: info.sessionID,
-                    type: "text",
-                    mime: nil,
-                    filename: nil,
-                    url: nil,
-                    reason: nil,
-                    tool: nil,
-                    callID: nil,
-                    state: nil,
-                    text: delta
-                )
-            )
             return copy
         }
 
@@ -358,15 +310,6 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
         var copy = self
         copy.parts.removeAll { $0.id == partID }
         return copy
-    }
-
-    private func shouldPreserveStreamedText(existing: String?, incoming: String?) -> Bool {
-        guard let existing, !existing.isEmpty else { return false }
-
-        guard let incoming else { return true }
-        if incoming.isEmpty { return true }
-
-        return existing.count > incoming.count && existing.hasPrefix(incoming)
     }
 
     func debugJSONString() -> String? {
@@ -390,6 +333,178 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
         let text = segments.joined(separator: "\n\n")
 
         return text.isEmpty ? nil : text
+    }
+}
+
+struct OpenCodeDirectorySyncState: Equatable, Sendable {
+    private static let skippedPartTypes: Set<String> = ["patch", "step-start", "step-finish"]
+
+    var messagesBySessionID: [String: [OpenCodeMessage]] = [:]
+    var partsByMessageID: [String: [OpenCodePart]] = [:]
+    var todosBySessionID: [String: [OpenCodeTodo]] = [:]
+    var permissionsBySessionID: [String: [OpenCodePermission]] = [:]
+    var questionsBySessionID: [String: [OpenCodeQuestionRequest]] = [:]
+    var sessionStatusesBySessionID: [String: String] = [:]
+
+    mutating func replaceMessages(_ envelopes: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
+        messagesBySessionID[sessionID] = envelopes.map(\.info).sorted { $0.id < $1.id }
+        for envelope in envelopes {
+            let parts = envelope.parts
+                .filter { !Self.skippedPartTypes.contains($0.type) }
+            if !parts.isEmpty {
+                partsByMessageID[envelope.info.id] = parts
+            }
+        }
+    }
+
+    mutating func appendMessageEnvelope(_ envelope: OpenCodeMessageEnvelope, forSessionID sessionID: String) {
+        var messages = messagesBySessionID[sessionID] ?? []
+        if let index = messages.firstIndex(where: { $0.id == envelope.info.id }) {
+            messages[index] = envelope.info
+        } else {
+            messages.append(envelope.info)
+        }
+        messagesBySessionID[sessionID] = messages
+
+        let parts = envelope.parts.filter { !Self.skippedPartTypes.contains($0.type) }
+        if !parts.isEmpty {
+            partsByMessageID[envelope.info.id] = parts
+        }
+    }
+
+    mutating func removeMessages(forSessionID sessionID: String) {
+        for message in messagesBySessionID[sessionID] ?? [] {
+            partsByMessageID[message.id] = nil
+        }
+        messagesBySessionID[sessionID] = nil
+    }
+
+    func messageEnvelopes(forSessionID sessionID: String) -> [OpenCodeMessageEnvelope] {
+        let messages = messagesBySessionID[sessionID] ?? []
+        return envelopes(from: messages)
+    }
+
+    func messageCount(forSessionID sessionID: String) -> Int {
+        messagesBySessionID[sessionID]?.count ?? 0
+    }
+
+    func messageEnvelopes(forSessionID sessionID: String, suffix count: Int) -> [OpenCodeMessageEnvelope] {
+        guard count > 0 else { return [] }
+        let messages = messagesBySessionID[sessionID] ?? []
+        return envelopes(from: messages.suffix(count))
+    }
+
+    private func envelopes(from messages: some Sequence<OpenCodeMessage>) -> [OpenCodeMessageEnvelope] {
+        messages.map { message in
+            OpenCodeMessageEnvelope(info: message, parts: partsByMessageID[message.id] ?? [])
+        }
+    }
+
+    mutating func applyMessageUpdated(_ message: OpenCodeMessage) -> Bool {
+        guard let sessionID = message.sessionID else { return false }
+        var messages = messagesBySessionID[sessionID] ?? []
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[index] = message
+        } else {
+            messages.append(message)
+        }
+        messagesBySessionID[sessionID] = messages.sorted { $0.id < $1.id }
+        return true
+    }
+
+    mutating func applyPartUpdated(_ rawPart: OpenCodePart) -> Bool {
+        guard !Self.skippedPartTypes.contains(rawPart.type) else { return false }
+        guard let messageID = rawPart.messageID else { return false }
+
+        var parts = partsByMessageID[messageID] ?? []
+        if let partID = rawPart.id,
+           let index = parts.firstIndex(where: { $0.id == partID }) {
+            parts[index] = mergedPartUpdate(rawPart, existing: parts[index])
+        } else {
+            parts.append(rawPart)
+        }
+        partsByMessageID[messageID] = parts
+        materializeAssistantShellIfNeeded(for: rawPart)
+        return true
+    }
+
+    private func mergedPartUpdate(_ rawPart: OpenCodePart, existing: OpenCodePart) -> OpenCodePart {
+        guard let existingText = existing.text,
+              !existingText.isEmpty else {
+            return rawPart
+        }
+
+        guard let updatedText = rawPart.text,
+              !updatedText.isEmpty else {
+            var merged = rawPart
+            merged.text = existingText
+            return merged
+        }
+
+        guard existingText.hasPrefix(updatedText) else {
+            return rawPart
+        }
+
+        var merged = rawPart
+        merged.text = existingText
+        return merged
+    }
+
+    mutating func applyPartDelta(messageID: String, partID: String, field: String, delta: String) -> Bool {
+        guard field == "text" else { return false }
+        guard var parts = partsByMessageID[messageID],
+              let index = parts.firstIndex(where: { $0.id == partID }) else {
+            return false
+        }
+
+        var part = parts[index]
+        part.text = (part.text ?? "") + delta
+        parts[index] = part
+        partsByMessageID[messageID] = parts
+        materializeAssistantShellIfNeeded(for: part)
+        return true
+    }
+
+    private mutating func materializeAssistantShellIfNeeded(for part: OpenCodePart) {
+        guard let sessionID = part.sessionID,
+              let messageID = part.messageID else { return }
+
+        var messages = messagesBySessionID[sessionID] ?? []
+        guard !messages.contains(where: { $0.id == messageID }) else { return }
+
+        let parentID = messages
+            .filter { ($0.role ?? "").lowercased() == "user" }
+            .max { $0.id < $1.id }?
+            .id
+        messages.append(
+            OpenCodeMessage(
+                id: messageID,
+                role: "assistant",
+                sessionID: sessionID,
+                time: nil,
+                agent: nil,
+                model: nil,
+                parentID: parentID
+            )
+        )
+        messagesBySessionID[sessionID] = messages.sorted { $0.id < $1.id }
+    }
+
+    mutating func removeMessage(sessionID: String, messageID: String) -> Bool {
+        guard var messages = messagesBySessionID[sessionID] else { return false }
+        messages.removeAll { $0.id == messageID }
+        messagesBySessionID[sessionID] = messages
+        partsByMessageID[messageID] = nil
+        return true
+    }
+
+    mutating func removePart(messageID: String, partID: String) -> Bool {
+        guard var parts = partsByMessageID[messageID] else { return false }
+        let oldCount = parts.count
+        parts.removeAll { $0.id == partID }
+        guard parts.count != oldCount else { return false }
+        partsByMessageID[messageID] = parts.isEmpty ? nil : parts
+        return true
     }
 }
 
@@ -1342,6 +1457,28 @@ struct OpenCodePermission: Decodable, Hashable, Identifiable, Sendable {
 struct OpenCodePermissionTool: Codable, Hashable, Sendable {
     let messageID: String?
     let callID: String?
+    let name: String?
+
+    init(messageID: String?, callID: String?, name: String? = nil) {
+        self.messageID = messageID
+        self.callID = callID
+        self.name = name
+    }
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            messageID = try container.decodeIfPresent(String.self, forKey: .messageID)
+            callID = try container.decodeIfPresent(String.self, forKey: .callID)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+            return
+        }
+
+        // Some message part events use a top-level `tool` string. Preserve it
+        // so live tool cards can render before canonical message hydration.
+        name = try? decoder.singleValueContainer().decode(String.self)
+        messageID = nil
+        callID = nil
+    }
 }
 
 struct OpenCodePermissionReplyEvent: Codable, Hashable, Sendable {
@@ -1566,6 +1703,30 @@ struct OpenCodePart: Codable, Hashable, Sendable {
         self.auto = auto
         self.overflow = overflow
         self.tailStartID = tailStartID
+    }
+
+    func applyingEventFallbacks(sessionID: String?, messageID: String?, partID: String?) -> OpenCodePart {
+        let isToolLikeTextPart = type == "text" && (tool != nil || callID != nil || state != nil)
+        let isReasoningLikeTextPart = type == "text" && reason?.lowercased().contains("reasoning") == true
+        return OpenCodePart(
+            id: id ?? partID,
+            messageID: self.messageID ?? messageID,
+            sessionID: self.sessionID ?? sessionID,
+            type: isToolLikeTextPart ? "tool" : (isReasoningLikeTextPart ? "reasoning" : type),
+            mime: mime,
+            filename: filename,
+            name: name,
+            url: url,
+            source: source,
+            reason: reason,
+            tool: tool,
+            callID: callID,
+            state: state,
+            text: isToolLikeTextPart ? nil : text,
+            auto: auto,
+            overflow: overflow,
+            tailStartID: tailStartID
+        )
     }
 
     var isCompaction: Bool {
@@ -1839,8 +2000,14 @@ enum OpenCodeTypedEvent: Sendable {
                   let messageID = envelope.properties.messageID else { return nil }
             self = .messageRemoved(sessionID: sessionID, messageID: messageID)
         case "message.part.updated":
-            guard let part = envelope.properties.part else { return nil }
-            self = .messagePartUpdated(part)
+            guard let part = envelope.properties.part ?? envelope.properties.reconstructedPartFromFlatEvent() else { return nil }
+            self = .messagePartUpdated(
+                part.applyingEventFallbacks(
+                    sessionID: envelope.properties.sessionID,
+                    messageID: envelope.properties.messageID,
+                    partID: envelope.properties.partID
+                )
+            )
         case "message.part.removed":
             guard let messageID = envelope.properties.messageID,
                   let partID = envelope.properties.partID else { return nil }
@@ -1901,6 +2068,13 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let sessionID: String?
     let info: OpenCodeEventInfo?
     let part: OpenCodePart?
+    let state: OpenCodeToolState?
+    let text: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
+    let source: OpenCodePartSource?
+    let reason: String?
     let status: OpenCodeSessionStatus?
     let todos: [OpenCodeTodo]?
     let messageID: String?
@@ -1937,6 +2111,13 @@ struct OpenCodeEventProperties: Codable, Sendable {
         sessionID: String? = nil,
         info: OpenCodeEventInfo? = nil,
         part: OpenCodePart? = nil,
+        state: OpenCodeToolState? = nil,
+        text: String? = nil,
+        mime: String? = nil,
+        filename: String? = nil,
+        url: String? = nil,
+        source: OpenCodePartSource? = nil,
+        reason: String? = nil,
         status: OpenCodeSessionStatus? = nil,
         todos: [OpenCodeTodo]? = nil,
         messageID: String? = nil,
@@ -1972,6 +2153,13 @@ struct OpenCodeEventProperties: Codable, Sendable {
         self.sessionID = sessionID
         self.info = info
         self.part = part
+        self.state = state
+        self.text = text
+        self.mime = mime
+        self.filename = filename
+        self.url = url
+        self.source = source
+        self.reason = reason
         self.status = status
         self.todos = todos
         self.messageID = messageID
@@ -2009,6 +2197,13 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case sessionID
         case info
         case part
+        case state
+        case text
+        case mime
+        case filename
+        case url
+        case source
+        case reason
         case status
         case todos
         case messageID
@@ -2034,6 +2229,42 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case error
         case branch
         case file
+    }
+
+    func reconstructedPartFromFlatEvent() -> OpenCodePart? {
+        let toolName = tool?.name
+        let inferredType: String?
+        if let permissionType, !permissionType.isEmpty {
+            inferredType = permissionType
+        } else if toolName != nil || callID != nil || tool?.callID != nil || state != nil {
+            inferredType = "tool"
+        } else if text != nil {
+            inferredType = "text"
+        } else {
+            inferredType = nil
+        }
+
+        guard let type = inferredType else { return nil }
+
+        return OpenCodePart(
+            id: partID ?? id,
+            messageID: messageID ?? tool?.messageID,
+            sessionID: sessionID,
+            type: type,
+            mime: mime,
+            filename: filename,
+            name: name,
+            url: url,
+            source: source,
+            reason: reason,
+            tool: toolName,
+            callID: callID ?? tool?.callID,
+            state: state,
+            text: text,
+            auto: nil,
+            overflow: nil,
+            tailStartID: nil
+        )
     }
 }
 
@@ -2439,8 +2670,18 @@ enum OpenCodeStreamReducer {
             result.applied = true
             result.reason = "message updated"
         case "message.part.updated":
-            guard let part = payload.properties.part,
-                  let messageID = part.messageID else {
+            guard let rawPart = payload.properties.part else {
+                result.reason = "missing part/message id"
+                return result
+            }
+
+            let part = rawPart.applyingEventFallbacks(
+                sessionID: payload.properties.sessionID,
+                messageID: payload.properties.messageID,
+                partID: payload.properties.partID
+            )
+
+            guard let messageID = part.messageID else {
                 result.reason = "missing part/message id"
                 return result
             }
@@ -2462,15 +2703,12 @@ enum OpenCodeStreamReducer {
             }
 
             guard let index = result.messages.firstIndex(where: { $0.info.id == messageID }) else {
-                if let sessionID = payload.properties.sessionID {
-                    let placeholder = OpenCodeMessage(id: messageID, role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil)
-                    let placeholderPart = OpenCodePart(id: partID, messageID: messageID, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: delta)
-                    result.messages.append(OpenCodeMessageEnvelope(info: placeholder, parts: [placeholderPart]))
-                    result.applied = true
-                    result.reason = "delta placeholder created"
-                } else {
-                    result.reason = "missing delta target"
-                }
+                result.reason = "missing delta target"
+                return result
+            }
+
+            guard result.messages[index].parts.contains(where: { $0.id == partID }) else {
+                result.reason = "missing delta part"
                 return result
             }
 

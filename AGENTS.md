@@ -143,10 +143,10 @@ Important streaming findings:
 
 - The client now receives raw SSE payloads correctly
 - On-device event framing required parser adjustments beyond naive blank-line assumptions
-- Upstream reducer behavior for `message.part.delta` is simple append-to-field
-- iOS client keeps two practical guards on top:
-  - create placeholder assistant message if deltas arrive before shell objects exist
-  - preserve text when later empty `part.updated` would otherwise wipe it
+- Upstream reducer behavior for `message.part.delta` is simple append-to-field on an existing typed part
+- Reasoning vs answer text should be determined by the server-provided part `type` (`reasoning` vs `text`), not by parsing streamed text content
+- Deltas that arrive before the corresponding `message.part.updated` should be ignored rather than creating a placeholder `text` part, so reasoning streams are never misclassified as answer text
+- iOS still preserves accumulated text when a later empty `part.updated` would otherwise wipe it
 - Typed-event decode failures used to fail silently at the SSE boundary; the event manager now logs dropped events into the existing debug log.
 
 ### Typed Event Decode Failures
@@ -300,9 +300,8 @@ The current refactor should continue in this order.
   - `message.removed`
   - `message.part.removed`
   - permission/question lifecycle cleanup
-- Preserve the existing iOS stream guards unless upstream behavior proves they are unnecessary:
-  - create placeholder assistant messages when deltas arrive early
-  - avoid wiping text on later empty `part.updated`
+- Preserve upstream streaming semantics where full `message.part.updated` payloads establish canonical part identity/type and `message.part.delta` only appends to existing parts.
+- Keep the iOS guard that avoids wiping text on later empty `part.updated` unless upstream behavior proves it is unnecessary.
 
 4. Align bootstrap to upstream phases
 - Phase 1: global bootstrap

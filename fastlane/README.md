@@ -39,6 +39,14 @@ Build a release archive for device distribution
 
 Upload the current build to TestFlight
 
+### ios latest_testflight_build
+
+```sh
+[bundle exec] fastlane ios latest_testflight_build
+```
+
+Print the latest TestFlight build number for a version
+
 ### ios release
 
 ```sh

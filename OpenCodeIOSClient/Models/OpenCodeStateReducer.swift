@@ -30,6 +30,7 @@ enum OpenCodeStateReducer {
         sessions: inout [OpenCodeSession],
         selectedSession: inout OpenCodeSession?,
         sessionStatuses: inout [String: String],
+        syncState: inout OpenCodeDirectorySyncState,
         messages: inout [OpenCodeMessageEnvelope],
         todos: inout [OpenCodeTodo],
         permissions: inout [OpenCodePermission],
@@ -48,6 +49,11 @@ enum OpenCodeStateReducer {
         case let .sessionDeleted(session):
             sessions.removeAll { $0.id == session.id }
             sessionStatuses[session.id] = nil
+            syncState.sessionStatusesBySessionID[session.id] = nil
+            syncState.todosBySessionID[session.id] = nil
+            syncState.permissionsBySessionID[session.id] = nil
+            syncState.questionsBySessionID[session.id] = nil
+            syncState.removeMessages(forSessionID: session.id)
             if selectedSession?.id == session.id {
                 selectedSession = nil
                 messages = []
@@ -56,80 +62,100 @@ enum OpenCodeStateReducer {
             return .sessionChanged
         case let .sessionStatus(sessionID, status):
             sessionStatuses[sessionID] = status
+            syncState.sessionStatusesBySessionID[sessionID] = status
             return status == "idle" && selectedSession?.id == sessionID ? .idle : .statusChanged
         case let .sessionIdle(sessionID):
             sessionStatuses[sessionID] = "idle"
+            syncState.sessionStatusesBySessionID[sessionID] = "idle"
             return selectedSession?.id == sessionID ? .idle : .statusChanged
         case let .todoUpdated(sessionID, updatedTodos):
-            guard sessionID == selectedSession?.id else {
-                return .ignored("session mismatch")
+            syncState.todosBySessionID[sessionID] = updatedTodos
+            if sessionID == selectedSession?.id {
+                todos = updatedTodos
             }
-            todos = updatedTodos
             return .todoChanged
         case let .messageUpdated(info):
-            guard let selectedSessionID = selectedSession?.id,
-                  info.sessionID == selectedSessionID else {
-                return .ignored("session mismatch")
+            guard syncState.applyMessageUpdated(info) else { return .ignored("missing session") }
+            if info.sessionID == selectedSession?.id, let sessionID = info.sessionID {
+                messages = syncState.messageEnvelopes(forSessionID: sessionID)
             }
-            let payload = OpenCodeEventEnvelope(type: "message.updated", properties: .init(sessionID: info.sessionID, info: OpenCodeEventInfo(message: info), part: nil, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
-            let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: messages)
-            messages = update.messages
-            return .message(update.reason)
+            return .message("message updated")
         case let .messagePartUpdated(part):
-            guard let selectedSessionID = selectedSession?.id,
-                  part.sessionID == selectedSessionID else {
-                return .ignored("session mismatch")
+            guard syncState.applyPartUpdated(part) else { return .ignored("missing part/message id") }
+            if part.sessionID == selectedSession?.id, let sessionID = part.sessionID {
+                messages = syncState.messageEnvelopes(forSessionID: sessionID)
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(sessionID: part.sessionID, info: nil, part: part, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
-            let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: messages)
-            messages = update.messages
-            return .message(update.reason)
+            return .message("part updated")
         case let .messagePartDelta(sessionID, messageID, partID, field, delta):
-            guard let selectedSessionID = selectedSession?.id,
-                  sessionID == selectedSessionID else {
-                return .ignored("session mismatch")
+            guard syncState.applyPartDelta(messageID: messageID, partID: partID, field: field, delta: delta) else {
+                return .ignored("missing delta part")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.delta", properties: .init(sessionID: sessionID, info: nil, part: nil, status: nil, todos: nil, messageID: messageID, partID: partID, field: field, delta: delta, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
-            let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: messages)
-            messages = update.messages
-            return .message(update.reason)
+            if sessionID == selectedSession?.id {
+                messages = syncState.messageEnvelopes(forSessionID: sessionID)
+            }
+            return .message("delta applied")
         case let .messageRemoved(sessionID, messageID):
-            guard sessionID == selectedSession?.id else {
-                return .ignored("session mismatch")
-            }
-            messages.removeAll { $0.info.id == messageID }
-            return .message("message removed")
-        case let .messagePartRemoved(messageID, partID):
-            guard let index = messages.firstIndex(where: { $0.info.id == messageID }) else {
+            guard syncState.removeMessage(sessionID: sessionID, messageID: messageID) else {
                 return .ignored("message missing")
             }
-            messages[index] = messages[index].removingPart(partID: partID)
+            if sessionID == selectedSession?.id {
+                messages = syncState.messageEnvelopes(forSessionID: sessionID)
+            }
+            return .message("message removed")
+        case let .messagePartRemoved(messageID, partID):
+            guard syncState.removePart(messageID: messageID, partID: partID) else {
+                return .ignored("part missing")
+            }
+            if let selectedSessionID = selectedSession?.id,
+               syncState.messagesBySessionID[selectedSessionID]?.contains(where: { $0.id == messageID }) == true {
+                messages = syncState.messageEnvelopes(forSessionID: selectedSessionID)
+            }
             return .message("part removed")
         case let .permissionAsked(permission):
-            if let index = permissions.firstIndex(where: { $0.id == permission.id }) {
-                permissions[index] = permission
+            var sessionPermissions = syncState.permissionsBySessionID[permission.sessionID] ?? []
+            if let index = sessionPermissions.firstIndex(where: { $0.id == permission.id }) {
+                sessionPermissions[index] = permission
             } else {
-                permissions.append(permission)
+                sessionPermissions.append(permission)
+            }
+            syncState.permissionsBySessionID[permission.sessionID] = sessionPermissions
+            if permission.sessionID == selectedSession?.id {
+                if let index = permissions.firstIndex(where: { $0.id == permission.id }) {
+                    permissions[index] = permission
+                } else {
+                    permissions.append(permission)
+                }
             }
             return .permissionChanged
         case let .permissionReplied(sessionID, requestID, _):
-            permissions.removeAll { $0.id == requestID }
+            syncState.permissionsBySessionID[sessionID]?.removeAll { $0.id == requestID }
             if selectedSession?.id != sessionID {
                 return .statusChanged
             }
+            permissions.removeAll { $0.id == requestID }
             return .permissionChanged
         case let .questionAsked(question):
-            if let index = questions.firstIndex(where: { $0.id == question.id }) {
-                questions[index] = question
+            var sessionQuestions = syncState.questionsBySessionID[question.sessionID] ?? []
+            if let index = sessionQuestions.firstIndex(where: { $0.id == question.id }) {
+                sessionQuestions[index] = question
             } else {
-                questions.append(question)
+                sessionQuestions.append(question)
+            }
+            syncState.questionsBySessionID[question.sessionID] = sessionQuestions
+            if question.sessionID == selectedSession?.id {
+                if let index = questions.firstIndex(where: { $0.id == question.id }) {
+                    questions[index] = question
+                } else {
+                    questions.append(question)
+                }
             }
             return .questionChanged
         case let .questionReplied(sessionID, requestID), let .questionRejected(sessionID, requestID):
-            questions.removeAll { $0.id == requestID }
+            syncState.questionsBySessionID[sessionID]?.removeAll { $0.id == requestID }
             if selectedSession?.id != sessionID {
                 return .statusChanged
             }
+            questions.removeAll { $0.id == requestID }
             return .questionChanged
         default:
             return .ignored("unhandled")

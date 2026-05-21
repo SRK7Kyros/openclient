@@ -1,5 +1,19 @@
 import Foundation
 
+private extension ContinuousClock.Instant {
+    var elapsedMilliseconds: Double {
+        let duration = self.duration(to: ContinuousClock.now)
+        return Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15
+    }
+}
+
+private extension Duration {
+    var elapsedMilliseconds: Int {
+        let components = self.components
+        return Int(Double(components.seconds) * 1_000 + Double(components.attoseconds) / 1e15)
+    }
+}
+
 final class OpenCodeEventInterestSnapshot: @unchecked Sendable {
     private struct Snapshot {
         var selectedSessionID: String?
@@ -54,10 +68,15 @@ final class OpenCodeEventInterestSnapshot: @unchecked Sendable {
 }
 
 extension AppViewModel {
-    private static let shortStreamDeltaCoalescingInterval: Duration = .milliseconds(140)
-    private static let mediumStreamDeltaCoalescingInterval: Duration = .milliseconds(220)
-    private static let longStreamDeltaCoalescingInterval: Duration = .milliseconds(340)
-    private static let veryLongStreamDeltaCoalescingInterval: Duration = .milliseconds(480)
+    private static let shortStreamDeltaCoalescingInterval: Duration = .milliseconds(80)
+    private static let mediumStreamDeltaCoalescingInterval: Duration = .milliseconds(120)
+    private static let longStreamDeltaCoalescingInterval: Duration = .milliseconds(180)
+    private static let veryLongStreamDeltaCoalescingInterval: Duration = .milliseconds(260)
+    private static let burstFlushEventCount = 8
+    private static let burstFlushCharacterCount = 64
+    private static let immediateBurstFlushEventCount = 16
+    private static let immediateBurstFlushCharacterCount = 128
+    private static let burstFlushMinimumAgeMS = 40
 
     var isCapturingStreamingDiagnostics: Bool {
         isShowingDebugProbe || isRunningDebugProbe
@@ -89,8 +108,6 @@ extension AppViewModel {
         stopDebugProbeStreams()
         debugProbeLog = []
         isRunningDebugProbe = true
-        lastFallbackMessageCount = messages.count
-        lastFallbackAssistantLength = currentAssistantTextLength()
         appendDebugLog("probe started for \(selectedSession.id)")
         stopEventStream()
         startEventStream()
@@ -129,7 +146,6 @@ extension AppViewModel {
                 }
             },
             onEvent: { [weak self] managed in
-                guard self?.eventInterestSnapshot.shouldDeliverToMainActor(managed) != false else { return }
                 await MainActor.run {
                     guard let self else { return }
                     if self.shouldLogEventDetails(for: managed.envelope.type) {
@@ -145,8 +161,6 @@ extension AppViewModel {
         flushPendingTranscriptEvents(reason: "stream stop")
         reloadTask?.cancel()
         reloadTask = nil
-        liveRefreshTask?.cancel()
-        liveRefreshTask = nil
         eventManager.stop()
         eventStreamRestartTask?.cancel()
         eventStreamRestartTask = nil
@@ -213,10 +227,6 @@ extension AppViewModel {
             return
         }
 
-        if shouldSkipInactiveLiveMessageEvent(managed) {
-            return
-        }
-
         guard shouldApplyDirectoryEvent(from: managed) else {
             appendDebugLog("drop \(managed.envelope.type): scope mismatch \(managed.directory) selected=\(debugDirectoryLabel(effectiveSelectedDirectory)) stream=\(debugDirectoryLabel(streamDirectory)) session=\(debugSessionLabel(selectedSession))")
             return
@@ -239,8 +249,9 @@ extension AppViewModel {
             return
         }
 
+        let heldPendingDeltasForPartUpdate = shouldHoldPendingTranscriptDeltas(for: managed)
         if shouldFlushPendingTranscriptEvents(before: managed) {
-            flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)")
+            flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)", holdingForPartUpdate: heldPendingDeltasForPartUpdate ? managed : nil)
         }
 
         if case let .sessionError(sessionID, message) = managed.typed {
@@ -252,7 +263,7 @@ extension AppViewModel {
             }
             debugLastEventSummary = message.map { "session error: \($0)" } ?? "session error"
             appendDebugLog(debugLastEventSummary)
-            stopFallbackRefresh()
+            stopStreamingDiagnostics()
             return
         }
 
@@ -263,7 +274,10 @@ extension AppViewModel {
         updateCachedMessagesForLiveActivityIfNeeded(payload: payload, sessionID: eventSessionID, selectedSessionID: currentSelectedSession?.id)
 
         let application = eventSyncCoordinator.applyDirectoryEvent(managed, to: directoryEventState())
-        applyDirectoryEventState(application.state)
+        applyDirectoryEventState(application.state, updatesSelectedMessages: payload.type != "message.part.delta")
+        if heldPendingDeltasForPartUpdate {
+            flushPendingTranscriptEvents(reason: "after \(managed.envelope.type)")
+        }
         let result = application.result
 
         switch result {
@@ -285,7 +299,7 @@ extension AppViewModel {
             if payload.type == "message.part.updated",
                payload.properties.part?.type == "step-finish" {
                 appendDebugLog("step finish")
-                stopFallbackRefresh()
+                stopStreamingDiagnostics()
             }
 
             triggerStreamPartHapticIfNeeded(for: managed)
@@ -302,7 +316,7 @@ extension AppViewModel {
         case .idle:
             appendDebugLog("session idle")
             markChatBreadcrumb("session idle", sessionID: eventSessionID)
-            stopFallbackRefresh()
+            stopStreamingDiagnostics()
             if activeLiveActivitySessionIDs.contains(eventSessionID ?? "") {
                 scheduleLiveActivityPreviewRefreshIfNeeded(for: eventSessionID)
             }
@@ -410,11 +424,13 @@ extension AppViewModel {
         )
         triggerStreamPartHapticIfNeeded(for: managed)
         scheduleStreamDeltaFlush()
+        flushBurstPendingTranscriptEventsIfNeeded()
+        flushOverduePendingTranscriptEventsIfNeeded()
         return true
     }
 
     private func shouldBufferTranscriptEvent(_ managed: OpenCodeManagedEvent) -> Bool {
-        ChatStore.shouldBufferTranscriptEvent(
+        return ChatStore.shouldBufferTranscriptEvent(
             managed.typed,
             selectedSessionID: selectedSession?.id,
             activeChatSessionID: activeChatSessionID
@@ -422,7 +438,15 @@ extension AppViewModel {
     }
 
     private func shouldFlushPendingTranscriptEvents(before managed: OpenCodeManagedEvent) -> Bool {
-        chatStore.hasPendingTranscriptEvents
+        return chatStore.hasPendingTranscriptEvents
+    }
+
+    private func shouldHoldPendingTranscriptDeltas(for managed: OpenCodeManagedEvent) -> Bool {
+        guard case let .messagePartUpdated(part) = managed.typed,
+              let messageID = part.messageID,
+              let partID = part.id else { return false }
+
+        return directoryStore.syncState.partsByMessageID[messageID]?.contains(where: { $0.id == partID }) != true
     }
 
     private func transcriptDeltaCharacterCount(for managed: OpenCodeManagedEvent) -> Int {
@@ -438,16 +462,24 @@ extension AppViewModel {
 
         guard streamDeltaFlushTask == nil else { return }
 
-        streamDeltaFlushTask = Task { @MainActor [weak self] in
-            let interval = self?.streamDeltaCoalescingInterval() ?? Self.shortStreamDeltaCoalescingInterval
+        let interval = streamDeltaCoalescingInterval()
+        let inputs = chatStore.streamDeltaCoalescingInputLengths(syncState: directoryStore.syncState)
+        streamDeltaScheduledIntervalMS = interval.elapsedMilliseconds
+        streamDeltaScheduledActiveTextLength = inputs.activeTextLength
+        streamDeltaScheduledPendingCharacterCount = inputs.pendingCharacterCount
+        streamDeltaFlushGeneration &+= 1
+        let generation = streamDeltaFlushGeneration
+
+        streamDeltaFlushTask = Task.detached(priority: .userInitiated) { [weak self] in
             try? await Task.sleep(for: interval)
             guard !Task.isCancelled else { return }
-            self?.flushPendingTranscriptEvents(reason: "timer")
+            await self?.flushPendingTranscriptEventsIfCurrentTimer(generation: generation)
         }
     }
 
     private func streamDeltaCoalescingInterval() -> Duration {
         chatStore.streamDeltaCoalescingInterval(
+            syncState: directoryStore.syncState,
             short: Self.shortStreamDeltaCoalescingInterval,
             medium: Self.mediumStreamDeltaCoalescingInterval,
             long: Self.longStreamDeltaCoalescingInterval,
@@ -455,29 +487,92 @@ extension AppViewModel {
         )
     }
 
-    private func flushPendingTranscriptEvents(reason: String) {
+    private func flushOverduePendingTranscriptEventsIfNeeded() {
+        guard let oldest = chatStore.pendingTranscriptOldestEnqueuedAt else { return }
+        let intervalMS = streamDeltaScheduledIntervalMS ?? streamDeltaCoalescingInterval().elapsedMilliseconds
+        guard intervalMS > 0 else { return }
+        let waitMS = Int(Date().timeIntervalSince(oldest) * 1_000)
+        guard waitMS >= intervalMS else { return }
+
+        flushPendingTranscriptEvents(reason: "overdue")
+    }
+
+    private func flushBurstPendingTranscriptEventsIfNeeded() {
+        let pendingEventCount = chatStore.pendingTranscriptEventCount
+        let pendingCharacterCount = chatStore.pendingTranscriptCharacterCount
+        guard pendingEventCount >= Self.burstFlushEventCount ||
+            pendingCharacterCount >= Self.burstFlushCharacterCount else {
+            return
+        }
+
+        if pendingEventCount < Self.immediateBurstFlushEventCount,
+           pendingCharacterCount < Self.immediateBurstFlushCharacterCount,
+           let oldest = chatStore.pendingTranscriptOldestEnqueuedAt {
+            let waitMS = Int(Date().timeIntervalSince(oldest) * 1_000)
+            guard waitMS >= Self.burstFlushMinimumAgeMS else { return }
+        }
+
+        flushPendingTranscriptEvents(reason: "burst")
+    }
+
+    private func flushPendingTranscriptEventsIfCurrentTimer(generation: Int) {
+        guard streamDeltaFlushGeneration == generation else { return }
+        flushPendingTranscriptEvents(reason: "timer")
+    }
+
+    private func flushPendingTranscriptEvents(reason: String, holdingForPartUpdate managed: OpenCodeManagedEvent? = nil) {
         streamDeltaFlushTask?.cancel()
         streamDeltaFlushTask = nil
+        streamDeltaFlushGeneration &+= 1
 
         let now = Date()
-        guard let pending = chatStore.drainPendingTranscriptEvents() else { return }
+        let pending: (events: [OpenCodePendingTranscriptEvent], coalescedEvents: [OpenCodePendingTranscriptEvent])?
+        if let managed,
+           case let .messagePartUpdated(part) = managed.typed,
+           let messageID = part.messageID,
+           let partID = part.id {
+            pending = chatStore.drainPendingTranscriptEvents { event in
+                event.messageID == messageID && event.partID == partID
+            }
+        } else {
+            pending = chatStore.drainPendingTranscriptEvents()
+        }
+        guard let pending else { return }
         let events = pending.events
         let reducerEvents = pending.coalescedEvents
+        guard !reducerEvents.isEmpty else {
+            logStreamDeltaFlush(reason: reason, events: events, appliedCount: 0, coalescedCount: 0, flushedAt: now)
+            return
+        }
+
+        let reduceStart = ContinuousClock.now
         let application = eventSyncCoordinator.applyDirectoryEvents(reducerEvents.map(\.typedEvent), to: directoryEventState())
-        applyDirectoryEventState(application.state)
+        let reduceElapsedMS = reduceStart.elapsedMilliseconds
+        let publishStart = ContinuousClock.now
+        applyDirectoryEventState(application.state, updatesSelectedMessages: false)
+        let publishElapsedMS = publishStart.elapsedMilliseconds
 
         for sessionID in Set(events.compactMap(\.sessionID)) {
             refreshLiveActivityIfNeeded(for: sessionID)
         }
 
-        logStreamDeltaFlush(reason: reason, events: events, appliedCount: application.messageApplyCount, coalescedCount: reducerEvents.count, flushedAt: now)
+        logStreamDeltaFlush(
+            reason: reason,
+            events: events,
+            appliedCount: application.messageApplyCount,
+            coalescedCount: reducerEvents.count,
+            flushedAt: now,
+            reduceElapsedMS: reduceElapsedMS,
+            publishElapsedMS: publishElapsedMS
+        )
     }
 
     private func directoryEventState() -> EventSyncCoordinator.DirectoryEventState {
-        EventSyncCoordinator.DirectoryEventState(
+        return EventSyncCoordinator.DirectoryEventState(
             sessions: allSessions,
             selectedSession: selectedSession,
             sessionStatuses: sessionStatuses,
+            syncState: directoryStore.syncState,
             messages: messages,
             todos: todos,
             permissions: permissions,
@@ -485,7 +580,10 @@ extension AppViewModel {
         )
     }
 
-    private func applyDirectoryEventState(_ state: EventSyncCoordinator.DirectoryEventState) {
+    private func applyDirectoryEventState(
+        _ state: EventSyncCoordinator.DirectoryEventState,
+        updatesSelectedMessages: Bool = true
+    ) {
         let scopedSessions = sessionListStore.sessions(state.sessions, scopedTo: effectiveSelectedDirectory)
         if scopedSessions != allSessions {
             allSessions = scopedSessions
@@ -496,8 +594,21 @@ extension AppViewModel {
         if state.sessionStatuses != sessionStatuses {
             sessionStatuses = state.sessionStatuses
         }
-        if state.messages != messages {
-            messages = state.messages
+        if state.syncState != directoryStore.syncState {
+            objectWillChange.send()
+            directoryStore.syncState = state.syncState
+        }
+        if updatesSelectedMessages {
+            let projectedMessages: [OpenCodeMessageEnvelope]
+            if let selectedSessionID = state.selectedSession?.id,
+               state.syncState.messagesBySessionID[selectedSessionID] != nil {
+                projectedMessages = state.syncState.messageEnvelopes(forSessionID: selectedSessionID)
+            } else {
+                projectedMessages = state.messages
+            }
+            if projectedMessages != messages {
+                messages = projectedMessages
+            }
         }
         if state.todos != todos {
             objectWillChange.send()
@@ -513,24 +624,16 @@ extension AppViewModel {
         }
     }
 
-    private func logStreamDeltaFlush(reason: String, events: [OpenCodePendingTranscriptEvent], appliedCount: Int, coalescedCount: Int, flushedAt now: Date) {
-        guard isCapturingStreamingDiagnostics else {
-            streamDeltaLastFlushAt = now
-            return
-        }
-
-        let oldest = events.map(\.enqueuedAt).min() ?? now
-        let waitMS = Int(now.timeIntervalSince(oldest) * 1000)
-        let cadence = streamDeltaLastFlushAt
-            .map { "\(Int(now.timeIntervalSince($0) * 1000))ms" } ?? "first"
-        let chars = events.reduce(0) { $0 + $1.deltaCharacterCount }
-        let types = Set(events.map(\.eventType)).sorted().joined(separator: ",")
-        let target = "140ms+"
+    private func logStreamDeltaFlush(
+        reason: String,
+        events: [OpenCodePendingTranscriptEvent],
+        appliedCount: Int,
+        coalescedCount: Int,
+        flushedAt now: Date,
+        reduceElapsedMS: Double? = nil,
+        publishElapsedMS: Double? = nil
+    ) {
         streamDeltaLastFlushAt = now
-
-        appendDebugLog(
-            "transcript flush reason=\(reason) count=\(events.count) coalesced=\(coalescedCount) applied=\(appliedCount) chars=\(chars) wait=\(waitMS)ms cadence=\(cadence) target=\(target) focused=\(isComposerStreamingFocused) types=\(types)"
-        )
     }
 
     nonisolated static func shouldProcessLiveMessageEvent(
@@ -556,19 +659,6 @@ extension AppViewModel {
         }
 
         return false
-    }
-
-    private func shouldSkipInactiveLiveMessageEvent(_ managed: OpenCodeManagedEvent) -> Bool {
-        let eventSessionID = managedEventSessionID(for: managed)
-        let affectsSelectedTranscript = eventSessionID == nil ? eventAffectsActiveSession(managed) : false
-        return !eventSyncCoordinator.shouldProcessLiveMessageEvent(
-            eventType: managed.envelope.type,
-            eventSessionID: eventSessionID,
-            selectedSessionID: selectedSession?.id,
-            activeChatSessionID: activeChatSessionID,
-            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs,
-            affectsSelectedTranscript: affectsSelectedTranscript
-        )
     }
 
     private func isLiveActivityMessageEvent(_ type: String) -> Bool {
@@ -682,42 +772,7 @@ extension AppViewModel {
         }
     }
 
-    func startLiveRefresh(for session: OpenCodeSession, reason: String) {
-        liveRefreshGeneration += 1
-        let generation = liveRefreshGeneration
-        chatStore.beginFallbackRefreshTracking()
-        liveRefreshTask?.cancel()
-        liveRefreshTask = Task { [weak self] in
-            let delays: [Duration] = [
-                .milliseconds(1_500), .seconds(3), .seconds(5),
-            ]
-
-            for delay in delays {
-                try? await Task.sleep(for: delay)
-                guard let self, self.isConnected, self.selectedSession?.id == session.id else { return }
-                guard self.liveRefreshGeneration == generation else { return }
-                guard Date.now.timeIntervalSince(self.lastStreamEventAt) >= 1.25 else { continue }
-
-                do {
-                    self.markChatBreadcrumb("fallback refresh start \(reason)", sessionID: session.id)
-                    try await self.loadMessages(for: session, prefetchToolDetails: false, refreshTodos: false)
-                    self.debugLastEventSummary = self.fallbackRefreshSummary(reason: reason)
-                    self.appendDebugLog(self.debugLastEventSummary)
-                    self.markChatBreadcrumb("fallback refresh finish \(reason)", sessionID: session.id)
-                } catch {
-                    self.appendDebugLog("fallback error: \(error.localizedDescription)")
-                    self.markChatBreadcrumb("fallback refresh error \(reason)", sessionID: session.id)
-                    self.errorMessage = error.localizedDescription
-                    return
-                }
-            }
-        }
-    }
-
-    func stopFallbackRefresh() {
-        liveRefreshGeneration += 1
-        liveRefreshTask?.cancel()
-        liveRefreshTask = nil
+    func stopStreamingDiagnostics() {
         isRunningDebugProbe = false
         stopDebugProbeStreams()
     }
@@ -734,10 +789,6 @@ extension AppViewModel {
         default:
             return payload.type
         }
-    }
-
-    func fallbackRefreshSummary(reason: String) -> String {
-        chatStore.fallbackRefreshSummary(reason: reason)
     }
 
     func currentAssistantTextLength() -> Int {

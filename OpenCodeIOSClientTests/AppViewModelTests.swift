@@ -902,7 +902,7 @@ final class AppViewModelTests: XCTestCase {
             )
         )
 
-        XCTAssertNil(viewModel.liveRefreshTask)
+        XCTAssertEqual(viewModel.messages.map(\.id), ["msg_assistant"])
     }
 
     func testActiveLiveActivityMessageEventBypassesSelectedDirectoryGateAndUpdatesCache() {

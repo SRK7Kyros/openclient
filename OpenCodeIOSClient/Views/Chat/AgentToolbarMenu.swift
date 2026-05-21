@@ -17,5 +17,8 @@ struct AgentToolbarMenu: View {
                 .font(.caption)
                 .opencodeToolbarGlassID("agent-toolbar", in: glassNamespace)
         }
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 }

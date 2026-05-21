@@ -315,11 +315,28 @@ extension AppViewModel {
     }
 
     func agentToolbarTitle(for session: OpenCodeSession) -> String {
-        effectiveAgentName(for: session) ?? "Agent"
+        toolbarAgentName(for: session) ?? "Agent"
     }
 
     func modelToolbarTitle(for session: OpenCodeSession) -> String {
-        effectiveModel(for: session)?.name ?? "Model"
+        toolbarModelTitle(for: session) ?? "Model"
+    }
+
+    func isAgentToolbarLoading(for session: OpenCodeSession) -> Bool {
+        guard !isFunAndGamesSession(session.id) else { return false }
+        guard selectedSession?.id == session.id else { return false }
+        guard chatStore.isLoadingSelectedSession else { return false }
+        return selectedAgentName(for: session) == nil && lastUserMessage(for: session)?.info.agent == nil
+    }
+
+    func isModelToolbarLoading(for session: OpenCodeSession) -> Bool {
+        guard selectedSession?.id == session.id else { return false }
+        guard chatStore.isLoadingSelectedSession else { return false }
+        return selectedModelReference(for: session) == nil && lastUserMessage(for: session)?.info.model == nil
+    }
+
+    func isChatToolbarConfigurationLoading(for session: OpenCodeSession) -> Bool {
+        isAgentToolbarLoading(for: session) || isModelToolbarLoading(for: session)
     }
 
     func selectedAgentName(for session: OpenCodeSession) -> String? {
@@ -335,7 +352,7 @@ extension AppViewModel {
     }
 
     func effectiveAgentName(for session: OpenCodeSession) -> String? {
-        if isFunAndGamesSession(session.id) {
+        if isKnownFunAndGamesSession(session.id) {
             return "plan"
         }
 
@@ -352,6 +369,45 @@ extension AppViewModel {
 
     func effectiveModel(for session: OpenCodeSession) -> OpenCodeModel? {
         modelConfigurationStore.effectiveModel(for: session.id)
+    }
+
+    private func toolbarAgentName(for session: OpenCodeSession) -> String? {
+        if isKnownFunAndGamesSession(session.id) {
+            return "plan"
+        }
+
+        if let selected = selectedAgentName(for: session) {
+            return selected
+        }
+
+        if let agent = lastUserMessage(for: session)?.info.agent?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !agent.isEmpty {
+            return agent
+        }
+
+        guard !isAgentToolbarLoading(for: session) else { return nil }
+        return effectiveAgentName(for: session)
+    }
+
+    private func toolbarModelTitle(for session: OpenCodeSession) -> String? {
+        if let selected = selectedModel(for: session) {
+            return selected.name
+        }
+
+        if let messageModel = lastUserMessage(for: session)?.info.model {
+            let reference = OpenCodeModelReference(providerID: messageModel.providerID, modelID: messageModel.modelID)
+            return model(for: reference)?.name ?? messageModel.modelID
+        }
+
+        guard !isModelToolbarLoading(for: session) else { return nil }
+        return effectiveModel(for: session)?.name
+    }
+
+    private func lastUserMessage(for session: OpenCodeSession) -> OpenCodeMessageEnvelope? {
+        let source = selectedSession?.id == session.id ? messages : (cachedMessagesBySessionID[session.id] ?? [])
+        return source.reversed().first { message in
+            message.info.sessionID == session.id && (message.info.role ?? "").lowercased() == "user"
+        }
     }
 
     func reasoningVariants(for session: OpenCodeSession) -> [String] {

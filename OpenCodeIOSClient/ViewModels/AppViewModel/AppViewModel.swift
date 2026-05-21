@@ -278,10 +278,12 @@ final class AppViewModel: ObservableObject {
         set {
             objectWillChange.send()
             directoryStore.sessionStatuses = newValue
+            directoryStore.syncState.sessionStatusesBySessionID = newValue
         }
         _modify {
             objectWillChange.send()
             yield &directoryStore.sessionStatuses
+            directoryStore.syncState.sessionStatusesBySessionID = directoryStore.sessionStatuses
         }
     }
     let chatStore = ChatStore()
@@ -716,22 +718,6 @@ final class AppViewModel: ObservableObject {
     var uiTestDirectory: String?
     var lastStreamEventAt = Date.distantPast
     var streamDirectory: String?
-    var liveRefreshTask: Task<Void, Never>? {
-        get { chatStore.liveRefreshTask }
-        set { chatStore.liveRefreshTask = newValue }
-    }
-    var liveRefreshGeneration: Int {
-        get { chatStore.liveRefreshGeneration }
-        set { chatStore.liveRefreshGeneration = newValue }
-    }
-    var lastFallbackMessageCount: Int {
-        get { chatStore.lastFallbackMessageCount }
-        set { chatStore.lastFallbackMessageCount = newValue }
-    }
-    var lastFallbackAssistantLength: Int {
-        get { chatStore.lastFallbackAssistantLength }
-        set { chatStore.lastFallbackAssistantLength = newValue }
-    }
     var nextStreamPartHapticAllowedAt: Date {
         get { chatStore.nextStreamPartHapticAllowedAt }
         set { chatStore.nextStreamPartHapticAllowedAt = newValue }
@@ -746,9 +732,25 @@ final class AppViewModel: ObservableObject {
         get { chatStore.streamDeltaFlushTask }
         set { chatStore.streamDeltaFlushTask = newValue }
     }
+    var streamDeltaFlushGeneration: Int {
+        get { chatStore.streamDeltaFlushGeneration }
+        set { chatStore.streamDeltaFlushGeneration = newValue }
+    }
     var streamDeltaLastFlushAt: Date? {
         get { chatStore.streamDeltaLastFlushAt }
         set { chatStore.streamDeltaLastFlushAt = newValue }
+    }
+    var streamDeltaScheduledIntervalMS: Int? {
+        get { chatStore.streamDeltaScheduledIntervalMS }
+        set { chatStore.streamDeltaScheduledIntervalMS = newValue }
+    }
+    var streamDeltaScheduledActiveTextLength: Int {
+        get { chatStore.streamDeltaScheduledActiveTextLength }
+        set { chatStore.streamDeltaScheduledActiveTextLength = newValue }
+    }
+    var streamDeltaScheduledPendingCharacterCount: Int {
+        get { chatStore.streamDeltaScheduledPendingCharacterCount }
+        set { chatStore.streamDeltaScheduledPendingCharacterCount = newValue }
     }
     var storeObservationCancellables: Set<AnyCancellable> = []
     var isComposerStreamingFocused: Bool {
@@ -877,10 +879,16 @@ final class AppViewModel: ObservableObject {
         set {
             objectWillChange.send()
             chatStore.messages = newValue
+            if let selectedSessionID = selectedSession?.id {
+                directoryStore.syncState.replaceMessages(newValue, forSessionID: selectedSessionID)
+            }
         }
         _modify {
             objectWillChange.send()
             yield &chatStore.messages
+            if let selectedSessionID = selectedSession?.id {
+                directoryStore.syncState.replaceMessages(chatStore.messages, forSessionID: selectedSessionID)
+            }
         }
     }
     var commands: [OpenCodeCommand] {

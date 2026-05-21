@@ -85,7 +85,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(messages[0].parts.first?.text, "Hello world")
     }
 
-    func testReducerCreatesTextPartWhenDeltaArrivesBeforePartUpdate() throws {
+    func testReducerIgnoresDeltaWhenPartUpdateHasNotArrived() throws {
         let sessionID = "ses_test"
         let info = try decodeEvent(
             #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
@@ -99,9 +99,380 @@ final class OpenCodeStreamingTests: XCTestCase {
         messages = OpenCodeStreamReducer.apply(payload: delta, selectedSessionID: sessionID, messages: messages).messages
 
         XCTAssertEqual(messages.count, 1)
+        XCTAssertTrue(messages[0].parts.isEmpty)
+    }
+
+    func testReducerDoesNotCreateProvisionalTextPartForUnknownDelta() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let delta = try decodeEvent(
+            #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_text","field":"text","delta":"Hello"}}"#
+        )
+        let partUpdated = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","part":{"id":"prt_text","messageID":"msg_assistant","sessionID":"ses_test","type":"text","text":""}}}"#
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: delta, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: partUpdated, selectedSessionID: sessionID, messages: messages).messages
+
+        XCTAssertEqual(messages.count, 1)
         XCTAssertEqual(messages[0].parts.count, 1)
-        XCTAssertEqual(messages[0].parts[0].id, "prt_text")
-        XCTAssertEqual(messages[0].parts[0].text, "Hello")
+        XCTAssertEqual(messages[0].parts[0].type, "text")
+        XCTAssertEqual(messages[0].parts[0].text, "")
+    }
+
+    func testUnknownReasoningDeltaDoesNotRenderAsTextPart() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let delta = try decodeEvent(
+            #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_reasoning","field":"text","delta":"Thinking"}}"#
+        )
+        let reasoningPart = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","part":{"id":"prt_reasoning","messageID":"msg_assistant","sessionID":"ses_test","type":"reasoning","text":""}}}"#
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: delta, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: reasoningPart, selectedSessionID: sessionID, messages: messages).messages
+
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.count, 1)
+        XCTAssertEqual(messages[0].parts[0].type, "reasoning")
+        XCTAssertEqual(messages[0].parts[0].text, "")
+    }
+
+    func testReducerUsesPartTypeNotDeltaTextForReasoning() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let earlyReasoningDelta = try decodeEvent(
+            #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_reasoning","field":"text","delta":"Thinking before typed part"}}"#
+        )
+        let reasoningPart = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","part":{"id":"prt_reasoning","messageID":"msg_assistant","sessionID":"ses_test","type":"reasoning","text":""}}}"#
+        )
+        let reasoningDelta = try decodeEvent(
+            #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_reasoning","field":"text","delta":"Typed reasoning"}}"#
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: earlyReasoningDelta, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: reasoningPart, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: reasoningDelta, selectedSessionID: sessionID, messages: messages).messages
+
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.count, 1)
+        XCTAssertEqual(messages[0].parts[0].type, "reasoning")
+        XCTAssertEqual(messages[0].parts[0].text, "Typed reasoning")
+    }
+
+    func testBufferedDeltaReplaysAfterPartUpdateEstablishesTypedPart() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let partUpdated = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","part":{"id":"prt_text","messageID":"msg_assistant","sessionID":"ses_test","type":"text","text":""}}}"#
+        )
+        let bufferedDelta = OpenCodePendingTranscriptEvent(
+            typedEvent: .messagePartDelta(sessionID: sessionID, messageID: "msg_assistant", partID: "prt_text", field: "text", delta: "Buffered text"),
+            eventType: "message.part.delta",
+            sessionID: sessionID,
+            messageID: "msg_assistant",
+            partID: "prt_text",
+            deltaCharacterCount: "Buffered text".count,
+            enqueuedAt: Date()
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: partUpdated, selectedSessionID: sessionID, messages: messages).messages
+        for event in ChatStore.coalescedTranscriptEvents([bufferedDelta]) {
+            guard case let .messagePartDelta(sessionID, messageID, partID, field, delta) = event.typedEvent else { continue }
+            let payload = OpenCodeEventEnvelope(
+                type: "message.part.delta",
+                properties: .init(sessionID: sessionID, messageID: messageID, partID: partID, field: field, delta: delta)
+            )
+            messages = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: sessionID, messages: messages).messages
+        }
+
+        XCTAssertEqual(messages[0].parts[0].type, "text")
+        XCTAssertEqual(messages[0].parts[0].text, "Buffered text")
+    }
+
+    func testBufferedReasoningDeltaReplaysAfterPartUpdateWithoutBecomingText() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let partUpdated = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","part":{"id":"prt_reasoning","messageID":"msg_assistant","sessionID":"ses_test","type":"reasoning","text":""}}}"#
+        )
+        let bufferedDelta = OpenCodePendingTranscriptEvent(
+            typedEvent: .messagePartDelta(sessionID: sessionID, messageID: "msg_assistant", partID: "prt_reasoning", field: "text", delta: "Buffered reasoning"),
+            eventType: "message.part.delta",
+            sessionID: sessionID,
+            messageID: "msg_assistant",
+            partID: "prt_reasoning",
+            deltaCharacterCount: "Buffered reasoning".count,
+            enqueuedAt: Date()
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: partUpdated, selectedSessionID: sessionID, messages: messages).messages
+        for event in ChatStore.coalescedTranscriptEvents([bufferedDelta]) {
+            guard case let .messagePartDelta(sessionID, messageID, partID, field, delta) = event.typedEvent else { continue }
+            let payload = OpenCodeEventEnvelope(
+                type: "message.part.delta",
+                properties: .init(sessionID: sessionID, messageID: messageID, partID: partID, field: field, delta: delta)
+            )
+            messages = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: sessionID, messages: messages).messages
+        }
+
+        XCTAssertEqual(messages[0].parts[0].type, "reasoning")
+        XCTAssertEqual(messages[0].parts[0].text, "Buffered reasoning")
+    }
+
+    func testReducerAppliesToolPartUpdatedWithEnvelopeMessageMetadata() throws {
+        let sessionID = "ses_test"
+        let info = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"}}}"#
+        )
+        let toolPart = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","part":{"id":"prt_tool","type":"tool","tool":"bash"}}}"#
+        )
+
+        var messages: [OpenCodeMessageEnvelope] = []
+        messages = OpenCodeStreamReducer.apply(payload: info, selectedSessionID: sessionID, messages: messages).messages
+        messages = OpenCodeStreamReducer.apply(payload: toolPart, selectedSessionID: sessionID, messages: messages).messages
+
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.count, 1)
+        XCTAssertEqual(messages[0].parts[0].id, "prt_tool")
+        XCTAssertEqual(messages[0].parts[0].messageID, "msg_assistant")
+        XCTAssertEqual(messages[0].parts[0].sessionID, "ses_test")
+        XCTAssertEqual(messages[0].parts[0].tool, "bash")
+    }
+
+    func testTypedPartUpdatedPreservesEnvelopeMessageMetadata() throws {
+        let payload = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","part":{"type":"tool","tool":"bash"}}}"#
+        )
+
+        guard case let .messagePartUpdated(part) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected message.part.updated")
+        }
+
+        XCTAssertEqual(part.id, "prt_tool")
+        XCTAssertEqual(part.messageID, "msg_assistant")
+        XCTAssertEqual(part.sessionID, "ses_test")
+        XCTAssertEqual(part.tool, "bash")
+    }
+
+    func testMessagePartUpdatedToleratesTopLevelToolString() throws {
+        let payload = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","tool":"bash","part":{"type":"tool","tool":"bash"}}}"#
+        )
+
+        guard case let .messagePartUpdated(part) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected message.part.updated")
+        }
+
+        XCTAssertEqual(part.id, "prt_tool")
+        XCTAssertEqual(part.messageID, "msg_assistant")
+        XCTAssertEqual(part.sessionID, "ses_test")
+        XCTAssertEqual(part.tool, "bash")
+    }
+
+    func testManagedEventDecodeRecoversPartUpdatedWhenNestedPartShapeIsInvalid() throws {
+        let raw = #"{"directory":"/tmp/project","payload":{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_text","part":{"id":"prt_text","messageID":"msg_assistant","sessionID":"ses_test","type":"text","source":"unexpected"}}}}"#
+
+        guard case let .event(managed) = OpenCodeEventManager.decodeManagedEvent(from: raw) else {
+            return XCTFail("Expected recovered managed event")
+        }
+        guard case let .messagePartUpdated(part) = managed.typed else {
+            return XCTFail("Expected recovered message.part.updated")
+        }
+
+        XCTAssertEqual(managed.directory, "/tmp/project")
+        XCTAssertEqual(part.id, "prt_text")
+        XCTAssertEqual(part.messageID, "msg_assistant")
+        XCTAssertEqual(part.sessionID, "ses_test")
+        XCTAssertEqual(part.type, "text")
+    }
+
+    func testToolLikeTextPartUpdatedNormalizesToToolPart() throws {
+        let payload = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","part":{"id":"prt_tool","messageID":"msg_assistant","sessionID":"ses_test","type":"text","tool":"bash","callID":"call_1","text":"bash"}}}"#
+        )
+
+        guard case let .messagePartUpdated(part) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected message.part.updated")
+        }
+
+        XCTAssertEqual(part.type, "tool")
+        XCTAssertEqual(part.tool, "bash")
+        XCTAssertEqual(part.callID, "call_1")
+        XCTAssertNil(part.text)
+    }
+
+    func testDirectorySyncStoresNonSelectedSessionMessagesForLaterSelection() {
+        let selectedSession = OpenCodeSession(id: "ses_selected", title: nil, workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        let otherSession = OpenCodeSession(id: "ses_other", title: nil, workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        let message = OpenCodeMessage(id: "msg_other", role: "assistant", sessionID: "ses_other", time: nil, agent: nil, model: nil)
+        let part = OpenCodePart(id: "prt_other", messageID: "msg_other", sessionID: "ses_other", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
+
+        var sessions = [selectedSession, otherSession]
+        var currentSelection: OpenCodeSession? = selectedSession
+        var statuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        var visibleMessages: [OpenCodeMessageEnvelope] = []
+        var todos: [OpenCodeTodo] = []
+        var permissions: [OpenCodePermission] = []
+        var questions: [OpenCodeQuestionRequest] = []
+
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .messageUpdated(message),
+            sessions: &sessions,
+            selectedSession: &currentSelection,
+            sessionStatuses: &statuses,
+            syncState: &syncState,
+            messages: &visibleMessages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .messagePartUpdated(part),
+            sessions: &sessions,
+            selectedSession: &currentSelection,
+            sessionStatuses: &statuses,
+            syncState: &syncState,
+            messages: &visibleMessages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .messagePartDelta(sessionID: "ses_other", messageID: "msg_other", partID: "prt_other", field: "text", delta: "Hello other"),
+            sessions: &sessions,
+            selectedSession: &currentSelection,
+            sessionStatuses: &statuses,
+            syncState: &syncState,
+            messages: &visibleMessages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        XCTAssertTrue(visibleMessages.isEmpty)
+        let derived = syncState.messageEnvelopes(forSessionID: "ses_other")
+        XCTAssertEqual(derived.count, 1)
+        XCTAssertEqual(derived[0].parts.first?.text, "Hello other")
+    }
+
+    func testDirectorySyncIgnoresDeltaBeforeTypedPart() {
+        var syncState = OpenCodeDirectorySyncState()
+        let message = OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil)
+
+        XCTAssertTrue(syncState.applyMessageUpdated(message))
+        XCTAssertFalse(syncState.applyPartDelta(messageID: "msg_assistant", partID: "prt_text", field: "text", delta: "ignored"))
+        XCTAssertTrue(syncState.messageEnvelopes(forSessionID: "ses_test")[0].parts.isEmpty)
+    }
+
+    func testDirectorySyncSkipsUpstreamSkippedPartTypes() {
+        var syncState = OpenCodeDirectorySyncState()
+        let message = OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil)
+        let stepStart = OpenCodePart(id: "prt_step", messageID: "msg_assistant", sessionID: "ses_test", type: "step-start", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: nil)
+
+        XCTAssertTrue(syncState.applyMessageUpdated(message))
+        XCTAssertFalse(syncState.applyPartUpdated(stepStart))
+        XCTAssertTrue(syncState.messageEnvelopes(forSessionID: "ses_test")[0].parts.isEmpty)
+    }
+
+    func testDirectorySyncMaterializesAssistantShellWhenPartArrivesFirst() {
+        var syncState = OpenCodeDirectorySyncState()
+        let sessionID = "ses_test"
+        let userID = "msg_user"
+        let messageID = "msg_assistant"
+        let user = OpenCodeMessageEnvelope.local(role: "user", text: "Start", messageID: userID, sessionID: sessionID, partID: "prt_user")
+        let reasoning = OpenCodePart(id: "prt_reasoning", messageID: messageID, sessionID: sessionID, type: "reasoning", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
+        let text = OpenCodePart(id: "prt_text", messageID: messageID, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
+        let tool = OpenCodePart(id: "prt_tool", messageID: messageID, sessionID: sessionID, type: "tool", mime: nil, filename: nil, url: nil, reason: nil, tool: "bash", callID: "call_1", state: OpenCodeToolState(status: "running", title: nil, error: nil, input: nil, output: nil, metadata: nil), text: nil)
+
+        syncState.replaceMessages([user], forSessionID: sessionID)
+        XCTAssertTrue(syncState.applyPartUpdated(reasoning))
+        XCTAssertTrue(syncState.applyPartDelta(messageID: messageID, partID: "prt_reasoning", field: "text", delta: "Thinking"))
+        XCTAssertTrue(syncState.applyPartUpdated(text))
+        XCTAssertTrue(syncState.applyPartDelta(messageID: messageID, partID: "prt_text", field: "text", delta: "Answer"))
+        XCTAssertTrue(syncState.applyPartUpdated(tool))
+
+        let messages = syncState.messageEnvelopes(forSessionID: sessionID)
+        XCTAssertEqual(messages.count, 2)
+        let assistant = messages.first { $0.id == messageID }
+        XCTAssertEqual(assistant?.info.role, "assistant")
+        XCTAssertEqual(assistant?.info.parentID, userID)
+        XCTAssertEqual(assistant?.parts.map(\.id), ["prt_reasoning", "prt_text", "prt_tool"])
+        XCTAssertEqual(assistant?.parts[0].text, "Thinking")
+        XCTAssertEqual(assistant?.parts[1].text, "Answer")
+        XCTAssertEqual(assistant?.parts[2].tool, "bash")
+    }
+
+    func testDirectorySyncCanonicalReplaceUsesLoadedParts() {
+        var syncState = OpenCodeDirectorySyncState()
+        let sessionID = "ses_test"
+        let messageID = "msg_assistant"
+        let live = OpenCodeMessageEnvelope(
+            info: OpenCodeMessage(id: messageID, role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            parts: [
+                OpenCodePart(id: "prt_reasoning", messageID: messageID, sessionID: sessionID, type: "reasoning", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Thinking"),
+                OpenCodePart(id: "prt_text", messageID: messageID, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Answer"),
+                OpenCodePart(id: "prt_tool", messageID: messageID, sessionID: sessionID, type: "tool", mime: nil, filename: nil, url: nil, reason: nil, tool: "bash", callID: "call_1", state: nil, text: nil),
+            ]
+        )
+        let staleCanonical = OpenCodeMessageEnvelope(
+            info: OpenCodeMessage(id: messageID, role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            parts: [
+                OpenCodePart(id: "prt_reasoning", messageID: messageID, sessionID: sessionID, type: "reasoning", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Thinking")
+            ]
+        )
+
+        syncState.replaceMessages([live], forSessionID: sessionID)
+        syncState.replaceMessages([staleCanonical], forSessionID: sessionID)
+
+        let messages = syncState.messageEnvelopes(forSessionID: sessionID)
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.map(\.id), ["prt_reasoning"])
+        XCTAssertEqual(messages[0].parts[0].text, "Thinking")
+    }
+
+    func testFlatToolPartUpdatedReconstructsToolPart() throws {
+        let payload = try decodeEvent(
+            #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","type":"tool","tool":"bash","callID":"call_1","state":{"status":"running","title":"Shell"}}}"#
+        )
+
+        guard case let .messagePartUpdated(part) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected message.part.updated")
+        }
+
+        XCTAssertEqual(part.id, "prt_tool")
+        XCTAssertEqual(part.messageID, "msg_assistant")
+        XCTAssertEqual(part.sessionID, "ses_test")
+        XCTAssertEqual(part.type, "tool")
+        XCTAssertEqual(part.tool, "bash")
+        XCTAssertEqual(part.callID, "call_1")
+        XCTAssertEqual(part.state?.status, "running")
+        XCTAssertEqual(part.state?.title, "Shell")
     }
 
     func testReducerMarksSessionIdleForReload() throws {
@@ -167,44 +538,6 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertTrue(sawReload)
     }
 
-    func testCanonicalMergePreservesLongerStreamedText() throws {
-        let streamed = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
-            parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
-            ]
-        )
-        let canonical = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
-            parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
-            ]
-        )
-
-        let merged = streamed.mergedWithCanonical(canonical)
-
-        XCTAssertEqual(merged.parts.first?.text, "Hello world")
-    }
-
-    func testCanonicalMergeAcceptsNewerCompletedText() throws {
-        let streamed = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
-            parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
-            ]
-        )
-        let canonical = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
-            parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
-            ]
-        )
-
-        let merged = streamed.mergedWithCanonical(canonical)
-
-        XCTAssertEqual(merged.parts.first?.text, "Hello world")
-    }
-
     func testSessionUpdatedPreservesExistingDirectoryWhenEventIsPartial() {
         let existingSession = OpenCodeSession(
             id: "ses_test",
@@ -225,6 +558,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         var sessions = [existingSession]
         var selectedSession: OpenCodeSession? = existingSession
         var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
         var messages: [OpenCodeMessageEnvelope] = []
         var todos: [OpenCodeTodo] = []
         var permissions: [OpenCodePermission] = []
@@ -235,6 +569,7 @@ final class OpenCodeStreamingTests: XCTestCase {
             sessions: &sessions,
             selectedSession: &selectedSession,
             sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
             messages: &messages,
             todos: &todos,
             permissions: &permissions,
@@ -277,6 +612,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         var sessions: [OpenCodeSession] = []
         var selectedSession: OpenCodeSession? = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: "/tmp/project", projectID: nil, parentID: nil)
         var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
         var messages: [OpenCodeMessageEnvelope] = []
         var todos: [OpenCodeTodo] = []
         var permissions: [OpenCodePermission] = []
@@ -287,6 +623,7 @@ final class OpenCodeStreamingTests: XCTestCase {
             sessions: &sessions,
             selectedSession: &selectedSession,
             sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
             messages: &messages,
             todos: &todos,
             permissions: &permissions,
@@ -409,18 +746,16 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(question.id, "q_1")
     }
 
-    func testReducerCreatesPlaceholderWhenDeltaArrivesBeforeMessageShell() throws {
+    func testReducerIgnoresDeltaWhenMessageShellHasNotArrived() throws {
         let payload = try decodeEvent(
             #"{"type":"message.part.delta","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_text","field":"text","delta":"Hello"}}"#
         )
 
         let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: "ses_test", messages: [])
 
-        XCTAssertEqual(update.messages.count, 1)
-        XCTAssertEqual(update.messages[0].info.id, "msg_assistant")
-        XCTAssertEqual(update.messages[0].info.role, "assistant")
-        XCTAssertEqual(update.messages[0].parts.first?.id, "prt_text")
-        XCTAssertEqual(update.messages[0].parts.first?.text, "Hello")
+        XCTAssertTrue(update.messages.isEmpty)
+        XCTAssertFalse(update.applied)
+        XCTAssertEqual(update.reason, "missing delta target")
     }
 
     func testReducerIgnoresDeltaMissingPartID() throws {
@@ -450,6 +785,55 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(messages.count, 1)
         XCTAssertEqual(messages[0].parts.count, 1)
         XCTAssertEqual(messages[0].parts.first?.text, "Hello world")
+    }
+
+    func testDirectorySyncPreservesAccumulatedTextWhenPartUpdateIsStale() {
+        var syncState = OpenCodeDirectorySyncState()
+        let initial = OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
+        let stale = OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
+
+        XCTAssertTrue(syncState.applyPartUpdated(initial))
+        XCTAssertTrue(syncState.applyPartDelta(messageID: "msg_assistant", partID: "prt_text", field: "text", delta: " world"))
+        XCTAssertTrue(syncState.applyPartUpdated(stale))
+
+        XCTAssertEqual(syncState.partsByMessageID["msg_assistant"]?.first?.text, "Hello world")
+    }
+
+    func testDirectorySyncPreservesPartArrivalOrder() {
+        var syncState = OpenCodeDirectorySyncState()
+        let laterIDFirst = OpenCodePart(id: "prt_z", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "first ")
+        let earlierIDSecond = OpenCodePart(id: "prt_a", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "second")
+
+        XCTAssertTrue(syncState.applyPartUpdated(laterIDFirst))
+        XCTAssertTrue(syncState.applyPartUpdated(earlierIDSecond))
+
+        XCTAssertEqual(syncState.partsByMessageID["msg_assistant"]?.map(\.id), ["prt_z", "prt_a"])
+        XCTAssertEqual(syncState.messageEnvelopes(forSessionID: "ses_test").first?.parts.compactMap(\.text).joined(), "first second")
+    }
+
+    func testDirectorySyncAppendsOptimisticEnvelopeWithoutReplacingSessionSnapshot() {
+        let sessionID = "ses_test"
+        var syncState = OpenCodeDirectorySyncState()
+        let existing = OpenCodeMessageEnvelope.local(role: "user", text: "old", messageID: "msg_old", sessionID: sessionID, partID: "prt_old")
+        let optimistic = OpenCodeMessageEnvelope.local(role: "user", text: "new", messageID: "msg_new", sessionID: sessionID, partID: "prt_new")
+
+        syncState.replaceMessages([existing], forSessionID: sessionID)
+        syncState.appendMessageEnvelope(optimistic, forSessionID: sessionID)
+
+        XCTAssertEqual(syncState.messagesBySessionID[sessionID]?.map(\.id), ["msg_old", "msg_new"])
+        XCTAssertEqual(syncState.partsByMessageID["msg_old"]?.first?.text, "old")
+        XCTAssertEqual(syncState.partsByMessageID["msg_new"]?.first?.text, "new")
+    }
+
+    func testDirectorySyncAcceptsNewerFullPartUpdate() {
+        var syncState = OpenCodeDirectorySyncState()
+        let initial = OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
+        let newer = OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
+
+        XCTAssertTrue(syncState.applyPartUpdated(initial))
+        XCTAssertTrue(syncState.applyPartUpdated(newer))
+
+        XCTAssertEqual(syncState.partsByMessageID["msg_assistant"]?.first?.text, "Hello world")
     }
 
     func testLiveMessageEventGateDropsInactiveTranscriptEvents() {
@@ -488,7 +872,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         ))
     }
 
-    func testChatStoreBuffersOnlySelectedActiveTranscriptDeltas() {
+    func testChatStoreBuffersSelectedActiveTranscriptDeltas() {
         let event = OpenCodeTypedEvent.messagePartDelta(
             sessionID: "ses_current",
             messageID: "msg_assistant",
@@ -513,6 +897,18 @@ final class OpenCodeStreamingTests: XCTestCase {
             event,
             selectedSessionID: "ses_other",
             activeChatSessionID: "ses_other"
+        ))
+
+        XCTAssertFalse(ChatStore.shouldBufferTranscriptEvent(
+            OpenCodeTypedEvent.messagePartDelta(
+                sessionID: "ses_current",
+                messageID: "msg_assistant",
+                partID: "part_msg_assistant",
+                field: "metadata",
+                delta: "{}"
+            ),
+            selectedSessionID: "ses_current",
+            activeChatSessionID: "ses_current"
         ))
     }
 
@@ -603,6 +999,15 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(ChatStore.assistantTextLength(in: messages), "new assistant text".count)
     }
 
+    func testChatStoreAssistantTextLengthIgnoresCompletedAssistantMessage() {
+        let messages = [
+            completedMessage(id: "msg_old_assistant", role: "assistant", text: String(repeating: "x", count: 12_000)),
+            message(id: "msg_user", role: "user", text: "user text"),
+        ]
+
+        XCTAssertEqual(ChatStore.assistantTextLength(in: messages), 0)
+    }
+
     func testChatStoreStreamDeltaCoalescingIntervalUsesProjectedLengthThresholds() {
         let short: Duration = .milliseconds(50)
         let medium: Duration = .milliseconds(90)
@@ -615,34 +1020,17 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(ChatStore.streamDeltaCoalescingInterval(currentAssistantTextLength: 11_999, pendingTranscriptCharacterCount: 1, short: short, medium: medium, long: long, veryLong: veryLong), veryLong)
     }
 
-    @MainActor
-    func testChatStoreFallbackRefreshSummaryReportsAndAdvancesDeltas() {
-        let store = ChatStore(messages: [message(id: "msg_user", role: "user", text: "hello")])
-        store.beginFallbackRefreshTracking()
+    func testChatStoreActivePendingTranscriptLengthUsesPendingTargetPart() {
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([
+            completedMessage(id: "msg_old_assistant", role: "assistant", text: String(repeating: "x", count: 12_000)),
+            message(id: "msg_active_assistant", role: "assistant", text: "active text"),
+        ], forSessionID: "ses_test")
+        let events = [
+            pendingDelta(messageID: "msg_active_assistant", partID: "part_msg_active_assistant", delta: " more"),
+        ]
 
-        store.messages.append(message(id: "msg_assistant", role: "assistant", text: "First line\nSecond line"))
-        let first = store.fallbackRefreshSummary(reason: "send")
-
-        XCTAssertEqual(first, "fallback send m=2 dm=1 len=22 dlen=22 a=First line Second line")
-        XCTAssertEqual(store.lastFallbackMessageCount, 2)
-        XCTAssertEqual(store.lastFallbackAssistantLength, 22)
-
-        store.messages[1] = message(id: "msg_assistant", role: "assistant", text: "First line\nSecond line plus more")
-        let second = store.fallbackRefreshSummary(reason: "send")
-
-        XCTAssertEqual(second, "fallback send m=2 dm=0 len=32 dlen=10 a=First line Second line p")
-        XCTAssertEqual(store.lastFallbackMessageCount, 2)
-        XCTAssertEqual(store.lastFallbackAssistantLength, 32)
-    }
-
-    @MainActor
-    func testChatStoreFallbackRefreshSummaryHandlesEmptyAssistantText() {
-        let store = ChatStore(messages: [])
-        store.beginFallbackRefreshTracking()
-
-        let summary = store.fallbackRefreshSummary(reason: "assistant")
-
-        XCTAssertEqual(summary, "fallback assistant m=0 dm=0 len=0 dlen=0 a=empty")
+        XCTAssertEqual(ChatStore.activePendingTranscriptTextLength(events, in: syncState), "active text".count)
     }
 
     func testTranscriptCoalescingCombinesConsecutiveDeltasForSamePart() {
@@ -660,7 +1048,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(coalesced[0].enqueuedAt, Date(timeIntervalSince1970: 2))
     }
 
-    func testTranscriptCoalescingPreservesSeparateTargetsInFirstSeenOrder() {
+    func testTranscriptCoalescingPreservesInterleavedTargetOrder() {
         let events = [
             pendingDelta(messageID: "msg_a", partID: "part_a", delta: "A1"),
             pendingDelta(messageID: "msg_b", partID: "part_b", delta: "B1"),
@@ -669,11 +1057,13 @@ final class OpenCodeStreamingTests: XCTestCase {
 
         let coalesced = ChatStore.coalescedTranscriptEvents(events)
 
-        XCTAssertEqual(coalesced.count, 2)
+        XCTAssertEqual(coalesced.count, 3)
         XCTAssertEqual(coalesced[0].messageID, "msg_a")
-        XCTAssertEqual(deltaText(coalesced[0]), "A1A2")
+        XCTAssertEqual(deltaText(coalesced[0]), "A1")
         XCTAssertEqual(coalesced[1].messageID, "msg_b")
         XCTAssertEqual(deltaText(coalesced[1]), "B1")
+        XCTAssertEqual(coalesced[2].messageID, "msg_a")
+        XCTAssertEqual(deltaText(coalesced[2]), "A2")
     }
 
     func testTranscriptCoalescingFlushesBeforeNonDeltaEvents() {
@@ -728,6 +1118,24 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertNil(store.drainPendingTranscriptEvents())
     }
 
+    @MainActor
+    func testChatStoreDrainPendingTranscriptEventsCanHoldMatchingPartDeltas() {
+        let store = ChatStore()
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_a", delta: "held"))
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_b", partID: "part_b", delta: "drained"))
+
+        let drained = store.drainPendingTranscriptEvents { event in
+            event.messageID == "msg_a" && event.partID == "part_a"
+        }
+
+        XCTAssertEqual(drained?.events.count, 1)
+        XCTAssertEqual(drained?.events.first?.messageID, "msg_b")
+        XCTAssertTrue(store.hasPendingTranscriptEvents)
+        XCTAssertEqual(store.pendingTranscriptEventCount, 1)
+        XCTAssertEqual(store.drainPendingTranscriptEvents()?.events.first?.messageID, "msg_a")
+        XCTAssertFalse(store.hasPendingTranscriptEvents)
+    }
+
     func testLiveActivityRefreshSchedulingThrottlesInsteadOfDebouncing() {
         XCTAssertTrue(AppViewModel.shouldScheduleLiveActivityRefresh(
             pendingRefreshExists: false,
@@ -780,6 +1188,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         var sessions: [OpenCodeSession] = []
         var selectedSession: OpenCodeSession? = selected
         var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
         var messages: [OpenCodeMessageEnvelope] = [.local(role: "assistant", text: "Keep me", messageID: "msg_keep", sessionID: selected.id, partID: "prt_keep")]
         var todos: [OpenCodeTodo] = []
         var permissions: [OpenCodePermission] = []
@@ -790,6 +1199,7 @@ final class OpenCodeStreamingTests: XCTestCase {
             sessions: &sessions,
             selectedSession: &selectedSession,
             sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
             messages: &messages,
             todos: &todos,
             permissions: &permissions,
@@ -1054,6 +1464,15 @@ This appended section simulates more streamed text arriving after some chunks ha
         )
     }
 
+    private func completedMessage(id: String, role: String, text: String, sessionID: String = "ses_test") -> OpenCodeMessageEnvelope {
+        OpenCodeMessageEnvelope(
+            info: OpenCodeMessage(id: id, role: role, sessionID: sessionID, time: OpenCodeMessageTime(created: 1, completed: 2), agent: nil, model: nil),
+            parts: [
+                OpenCodePart(id: "part_\(id)", messageID: id, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: text),
+            ]
+        )
+    }
+
     private static func performanceSessionMessage(text: String) -> OpenCodeMessageEnvelope {
         let messageID = "msg_dde1491d8001Kl4SJDttx88s3j"
         let sessionID = "ses_221eb7f4cffepRCHpKa51GEnbY"
@@ -1074,7 +1493,8 @@ This appended section simulates more streamed text arriving after some chunks ha
         messageID: String,
         sessionID: String = "ses_221eb7f4cffepRCHpKa51GEnbY",
         type: String,
-        text: String?
+        text: String?,
+        tool: String? = nil
     ) -> OpenCodePart {
         OpenCodePart(
             id: id,
@@ -1085,7 +1505,7 @@ This appended section simulates more streamed text arriving after some chunks ha
             filename: nil,
             url: nil,
             reason: nil,
-            tool: nil,
+            tool: tool,
             callID: nil,
             state: nil,
             text: text

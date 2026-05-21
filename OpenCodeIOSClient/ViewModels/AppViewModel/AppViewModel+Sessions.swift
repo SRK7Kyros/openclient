@@ -70,13 +70,19 @@ extension AppViewModel {
     }
 
     func prepareSessionSelection(_ session: OpenCodeSession) {
-        let cachedMessages = cachedMessagesBySessionID[session.id] ?? []
+        let syncedMessages = directoryStore.syncState.messageEnvelopes(forSessionID: session.id)
+        let cachedMessages = syncedMessages.isEmpty ? (cachedMessagesBySessionID[session.id] ?? []) : syncedMessages
+        if syncedMessages.isEmpty, !cachedMessages.isEmpty {
+            directoryStore.syncState.replaceMessages(cachedMessages, forSessionID: session.id)
+        }
         preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .sessions
             selectedSession = session
             chatStore.beginSelectingSession(cachedMessages: cachedMessages)
-            sessionInteractionStore.reset()
+            sessionInteractionStore.replaceTodos(directoryStore.syncState.todosBySessionID[session.id] ?? [])
+            sessionInteractionStore.replacePermissions(directoryStore.syncState.permissionsBySessionID[session.id] ?? [])
+            sessionInteractionStore.replaceQuestions(directoryStore.syncState.questionsBySessionID[session.id] ?? [])
             selectedVCSFile = nil
         }
         restoreMessageDraft(for: session)
@@ -126,6 +132,8 @@ extension AppViewModel {
         }
         withAnimation(opencodeSelectionAnimation) {
             directoryCommands = bootstrap.commands
+            directoryStore.syncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)
+            directoryStore.syncState.questionsBySessionID = Dictionary(grouping: bootstrap.questions, by: \.sessionID)
             objectWillChange.send()
             sessionInteractionStore.replacePermissions(bootstrap.permissions)
             sessionInteractionStore.replaceQuestions(bootstrap.questions)
@@ -280,7 +288,12 @@ extension AppViewModel {
             upsertVisibleSession(session)
             withAnimation(opencodeSelectionAnimation) {
                 selectedSession = session
-                chatStore.beginSelectingSession(cachedMessages: cachedMessagesBySessionID[session.id] ?? [])
+                let syncedMessages = directoryStore.syncState.messageEnvelopes(forSessionID: session.id)
+                let cachedMessages = syncedMessages.isEmpty ? (cachedMessagesBySessionID[session.id] ?? []) : syncedMessages
+                if syncedMessages.isEmpty, !cachedMessages.isEmpty {
+                    directoryStore.syncState.replaceMessages(cachedMessages, forSessionID: session.id)
+                }
+                chatStore.beginSelectingSession(cachedMessages: cachedMessages)
             }
             restoreMessageDraft(for: session)
             streamDirectory = session.directory
@@ -662,7 +675,6 @@ extension AppViewModel {
         do {
             try await sessionCoordinator.submitCommand(client: client, submission: commandSubmission)
             appendDebugLog("command accepted session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
-            startLiveRefresh(for: selectedSession, reason: "command")
             errorMessage = nil
         } catch {
             if userVisible {
@@ -774,6 +786,7 @@ extension AppViewModel {
         } else {
             chatStore.insertOptimisticUserMessage(localUserMessage)
         }
+        directoryStore.syncState.appendMessageEnvelope(localUserMessage, forSessionID: selectedSession.id)
         markChatBreadcrumb("optimistic insert", sessionID: selectedSession.id, messageID: resolvedMessageID, partID: resolvedPartID)
         return (resolvedMessageID, resolvedPartID)
     }
@@ -829,24 +842,6 @@ extension AppViewModel {
         let start = sessionCoordinator.promptStart(for: promptPreparation)
         let resolvedMessageID = start.messageID
         let resolvedPartID = start.partID
-
-        let localUserMessage = sessionCoordinator.optimisticUserMessage(for: promptPreparation)
-        if userVisible, appendOptimisticMessage {
-            objectWillChange.send()
-            composerStore.draftMessage = ""
-            composerStore.draftAgentMentions = []
-            clearDraftAttachments()
-            clearPersistedMessageDraft(forSessionID: selectedSession.id)
-            composerStore.resetToken = UUID()
-            chatStore.insertOptimisticUserMessage(localUserMessage)
-            markChatBreadcrumb("optimistic insert", sessionID: selectedSession.id, messageID: resolvedMessageID, partID: resolvedPartID)
-        }
-        markChatBreadcrumb("send start", sessionID: start.sessionID, messageID: start.messageID, partID: start.partID)
-        appendDebugLog("send: \(start.text)")
-        appendDebugLog(
-            "send scope session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) currentProject=\(currentProject?.id ?? "nil") requestDir=\(debugDirectoryLabel(start.requestDirectory)) msgID=\(start.messageID) partID=\(start.partID)"
-        )
-
         isLoading = true
         let previousStatus = sessionStatuses[selectedSession.id]
         let statusTransition = sessionCoordinator.promptStatusTransition(
@@ -855,6 +850,23 @@ extension AppViewModel {
         )
         sessionStatuses[statusTransition.sessionID] = statusTransition.nextStatus
         defer { isLoading = false }
+
+        let localUserMessage = sessionCoordinator.optimisticUserMessage(for: promptPreparation)
+        if userVisible, appendOptimisticMessage {
+            composerStore.draftMessage = ""
+            composerStore.draftAgentMentions = []
+            clearDraftAttachments()
+            clearPersistedMessageDraft(forSessionID: selectedSession.id)
+            composerStore.resetToken = UUID()
+            chatStore.insertOptimisticUserMessage(localUserMessage)
+            directoryStore.syncState.appendMessageEnvelope(localUserMessage, forSessionID: selectedSession.id)
+            markChatBreadcrumb("optimistic insert", sessionID: selectedSession.id, messageID: resolvedMessageID, partID: resolvedPartID)
+        }
+        markChatBreadcrumb("send start", sessionID: start.sessionID, messageID: start.messageID, partID: start.partID)
+        appendDebugLog("send: \(start.text)")
+        appendDebugLog(
+            "send scope session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) currentProject=\(currentProject?.id ?? "nil") requestDir=\(debugDirectoryLabel(start.requestDirectory)) msgID=\(start.messageID) partID=\(start.partID)"
+        )
 
         await maybeAutoStartLiveActivity(for: selectedSession)
 
@@ -876,7 +888,6 @@ extension AppViewModel {
                     await self?.logServerMessageSnapshot(for: selectedSession, reason: "post-send 2s")
                 }
             }
-            startLiveRefresh(for: selectedSession, reason: "send")
             refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
         } catch {
@@ -890,6 +901,7 @@ extension AppViewModel {
                     previousStatus: statusTransition.previousStatus
                 )
                 chatStore.rollbackOptimisticUserMessage(messageID: rollback.optimisticMessageID)
+                _ = directoryStore.syncState.removeMessage(sessionID: selectedSession.id, messageID: rollback.optimisticMessageID)
                 markChatBreadcrumb("send rollback", sessionID: rollback.sessionID, messageID: rollback.messageID, partID: rollback.partID)
                 objectWillChange.send()
                 composerStore.draftMessage = rollback.draftText
@@ -908,6 +920,7 @@ extension AppViewModel {
     func removeOptimisticUserMessage(messageID: String, sessionID: String) {
         guard selectedSession?.id == sessionID else { return }
         chatStore.removeOptimisticUserMessage(messageID: messageID)
+        _ = directoryStore.syncState.removeMessage(sessionID: sessionID, messageID: messageID)
         markChatBreadcrumb("optimistic remove", sessionID: sessionID, messageID: messageID)
     }
 
@@ -1028,7 +1041,6 @@ extension AppViewModel {
                 preparation: compactPreparation
             )
             appendDebugLog("compact accepted session=\(debugSessionLabel(selectedSession))")
-            startLiveRefresh(for: selectedSession, reason: "compact")
             refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
         } catch {
@@ -1117,6 +1129,7 @@ extension AppViewModel {
         refreshSessionPreview(for: session.id, messages: loadedMessages)
         let isActiveSession = selectedSession?.id == session.id
         chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
+        directoryStore.syncState.replaceMessages(isActiveSession ? messages : loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
         appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
         syncComposerSelections(for: session)
@@ -1258,6 +1271,7 @@ extension AppViewModel {
 
         let refreshedTodos = try await client.getTodos(sessionID: selectedSession.id)
         objectWillChange.send()
+        directoryStore.syncState.todosBySessionID[selectedSession.id] = refreshedTodos
         sessionInteractionStore.replaceTodos(refreshedTodos)
 
         let latestTodoMessageID = messages
@@ -1280,13 +1294,19 @@ extension AppViewModel {
             let todos = try await client.getTodos(sessionID: session.id)
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                sessionInteractionStore.replaceTodos(todos)
+                directoryStore.syncState.todosBySessionID[session.id] = todos
+                if selectedSession?.id == session.id {
+                    sessionInteractionStore.replaceTodos(todos)
+                }
             }
             refreshLiveActivityIfNeeded(for: session.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                sessionInteractionStore.replaceTodos([])
+                directoryStore.syncState.todosBySessionID[session.id] = []
+                if selectedSession?.id == session.id {
+                    sessionInteractionStore.replaceTodos([])
+                }
             }
             refreshLiveActivityIfNeeded(for: session.id)
         }
@@ -1297,12 +1317,14 @@ extension AppViewModel {
             let permissions = try await client.listPermissions(directory: directory, workspaceID: workspaceID)
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
+                directoryStore.syncState.permissionsBySessionID = Dictionary(grouping: permissions, by: \.sessionID)
                 sessionInteractionStore.replacePermissions(permissions)
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
+                directoryStore.syncState.permissionsBySessionID = [:]
                 sessionInteractionStore.replacePermissions([])
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
@@ -1318,12 +1340,14 @@ extension AppViewModel {
             let questions = try await client.listQuestions(directory: directory, workspaceID: workspaceID)
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
+                directoryStore.syncState.questionsBySessionID = Dictionary(grouping: questions, by: \.sessionID)
                 sessionInteractionStore.replaceQuestions(questions)
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
+                directoryStore.syncState.questionsBySessionID = [:]
                 sessionInteractionStore.replaceQuestions([])
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)

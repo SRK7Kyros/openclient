@@ -10,6 +10,7 @@ final class EventSyncCoordinator {
         var sessions: [OpenCodeSession]
         var selectedSession: OpenCodeSession?
         var sessionStatuses: [String: String]
+        var syncState: OpenCodeDirectorySyncState
         var messages: [OpenCodeMessageEnvelope]
         var todos: [OpenCodeTodo]
         var permissions: [OpenCodePermission]
@@ -186,6 +187,7 @@ final class EventSyncCoordinator {
         sessions: inout [OpenCodeSession],
         selectedSession: inout OpenCodeSession?,
         sessionStatuses: inout [String: String],
+        syncState: inout OpenCodeDirectorySyncState,
         messages: inout [OpenCodeMessageEnvelope],
         todos: inout [OpenCodeTodo],
         permissions: inout [OpenCodePermission],
@@ -196,6 +198,7 @@ final class EventSyncCoordinator {
             sessions: &sessions,
             selectedSession: &selectedSession,
             sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
             messages: &messages,
             todos: &todos,
             permissions: &permissions,
@@ -208,6 +211,7 @@ final class EventSyncCoordinator {
         sessions: inout [OpenCodeSession],
         selectedSession: inout OpenCodeSession?,
         sessionStatuses: inout [String: String],
+        syncState: inout OpenCodeDirectorySyncState,
         messages: inout [OpenCodeMessageEnvelope],
         todos: inout [OpenCodeTodo],
         permissions: inout [OpenCodePermission],
@@ -218,6 +222,7 @@ final class EventSyncCoordinator {
             sessions: &sessions,
             selectedSession: &selectedSession,
             sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
             messages: &messages,
             todos: &todos,
             permissions: &permissions,
@@ -239,6 +244,7 @@ final class EventSyncCoordinator {
                 sessions: &nextState.sessions,
                 selectedSession: &nextState.selectedSession,
                 sessionStatuses: &nextState.sessionStatuses,
+                syncState: &nextState.syncState,
                 messages: &nextState.messages,
                 todos: &nextState.todos,
                 permissions: &nextState.permissions,

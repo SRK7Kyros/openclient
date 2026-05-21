@@ -4,6 +4,8 @@ struct ReasoningBlock: View {
     let text: String
     let isExpanded: Bool
     let isRunning: Bool
+    var isActiveRevealPart = false
+    var onRevealCompleted: (() -> Void)? = nil
     let onToggle: () -> Void
 
     var body: some View {
@@ -20,7 +22,7 @@ struct ReasoningBlock: View {
 
                     Spacer()
 
-                    if isRunning {
+                    if isRunning || isActiveRevealPart {
                         ProgressView()
                             .controlSize(.small)
                             .tint(.secondary)
@@ -31,7 +33,13 @@ struct ReasoningBlock: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                MarkdownMessageText(text: text, isUser: false, style: .reasoning)
+                MarkdownMessageText(
+                    text: text,
+                    isUser: false,
+                    style: .reasoning,
+                    isStreaming: isRunning || isActiveRevealPart,
+                    onStreamingRevealCompleted: onRevealCompleted
+                )
                     .padding(.top, 2)
             }
         }

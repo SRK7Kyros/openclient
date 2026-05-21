@@ -140,6 +140,19 @@ platform :ios do
     )
   end
 
+  desc "Print the latest TestFlight build number for a version"
+  lane :latest_testflight_build do |options|
+    api_key = asc_api_key
+    version = options[:version]
+    UI.user_error!("Pass version:<marketing version>") if version.nil? || version.empty?
+    latest = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: "com.ntoporcov.openclient",
+      version: version
+    )
+    UI.message("Latest TestFlight build for #{version}: #{latest}")
+  end
+
   desc "Submit the current build to App Store Connect"
   lane :release do
     api_key = asc_api_key
