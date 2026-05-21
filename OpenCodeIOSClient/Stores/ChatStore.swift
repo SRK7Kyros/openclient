@@ -272,23 +272,35 @@ final class ChatStore: ObservableObject {
         return (events, Self.coalescedTranscriptEvents(events))
     }
 
-    func drainPendingTranscriptEvents(
-        holding shouldHold: (OpenCodePendingTranscriptEvent) -> Bool
+    func drainAvailablePendingTranscriptEvents(
+        in syncState: OpenCodeDirectorySyncState
     ) -> (events: [OpenCodePendingTranscriptEvent], coalescedEvents: [OpenCodePendingTranscriptEvent])? {
         guard !pendingTranscriptEvents.isEmpty else { return nil }
 
-        var drained: [OpenCodePendingTranscriptEvent] = []
-        var held: [OpenCodePendingTranscriptEvent] = []
+        var drainCount = 0
         for event in pendingTranscriptEvents {
-            if shouldHold(event) {
-                held.append(event)
-            } else {
-                drained.append(event)
+            guard Self.canDrainPendingTranscriptEvent(event, in: syncState) else {
+                break
             }
+            drainCount += 1
         }
-        pendingTranscriptEvents = held
+
+        guard drainCount > 0 else { return nil }
+        let drained = Array(pendingTranscriptEvents.prefix(drainCount))
+        pendingTranscriptEvents.removeFirst(drainCount)
         guard !drained.isEmpty else { return nil }
         return (drained, Self.coalescedTranscriptEvents(drained))
+    }
+
+    nonisolated static func canDrainPendingTranscriptEvent(
+        _ event: OpenCodePendingTranscriptEvent,
+        in syncState: OpenCodeDirectorySyncState
+    ) -> Bool {
+        guard case let .messagePartDelta(_, messageID, partID, _, _) = event.typedEvent else {
+            return true
+        }
+
+        return syncState.partsByMessageID[messageID]?.contains(where: { $0.id == partID }) == true
     }
 
     nonisolated static func shouldBufferTranscriptEvent(

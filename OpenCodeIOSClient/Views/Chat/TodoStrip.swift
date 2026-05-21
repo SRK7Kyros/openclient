@@ -86,6 +86,7 @@ struct ComposerAccessoryArea: View {
     let onTapTodo: () -> Void
     let onTapAttachment: (OpenCodeComposerAttachment) -> Void
     let onRemoveAttachment: (OpenCodeComposerAttachment) -> Void
+    @Namespace private var accessoryCardNamespace
 
     private let todoSectionID = "composer-accessories-todos"
     private let attachmentSectionID = "composer-accessories-attachments"
@@ -124,30 +125,26 @@ struct ComposerAccessoryArea: View {
     private var collapsedStacks: some View {
         HStack(spacing: 14) {
             AccessoryStackSummary(
-                title: "Todos",
-                count: activeTodos.count,
-                tint: .blue,
                 focus: .todos,
                 expansion: $expansion
             ) {
-                ForEach(Array(activeTodos.prefix(3).enumerated()), id: \.element.id) { entry in
+                ForEach(Array(activeTodos.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
                     let todo = entry.element
-                    StackTodoCard(todo: todo)
+                    StackTodoCard(todo: todo, showsContent: entry.offset == 0)
+                        .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
                         .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
                         .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
                 }
             }
 
             AccessoryStackSummary(
-                title: "Attachments",
-                count: attachments.count,
-                tint: .purple,
                 focus: .attachments,
                 expansion: $expansion
             ) {
-                ForEach(Array(attachments.prefix(3).enumerated()), id: \.element.id) { entry in
+                ForEach(Array(attachments.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
                     let attachment = entry.element
-                    StackAttachmentCard(attachment: attachment)
+                    StackAttachmentCard(attachment: attachment, showsContent: entry.offset == 0)
+                        .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
                         .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
                         .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
                 }
@@ -159,13 +156,14 @@ struct ComposerAccessoryArea: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
-                    accessorySection(title: "Todos") {
+                    accessorySection {
                         HStack(spacing: 10) {
                             ForEach(activeTodos) { todo in
                                 Button {
                                     onTapTodo()
                                 } label: {
                                     TodoCard(todo: todo)
+                                        .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -173,7 +171,7 @@ struct ComposerAccessoryArea: View {
                     }
                     .id(todoSectionID)
 
-                    accessorySection(title: "Attachments") {
+                    accessorySection {
                         HStack(spacing: 10) {
                             ForEach(attachments) { attachment in
                                 AttachmentCard(
@@ -182,6 +180,7 @@ struct ComposerAccessoryArea: View {
                                     onTap: { onTapAttachment(attachment) },
                                     onRemove: { onRemoveAttachment(attachment) }
                                 )
+                                .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
                             }
                         }
                     }
@@ -200,15 +199,18 @@ struct ComposerAccessoryArea: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func accessorySection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func accessorySection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-
             content()
         }
+    }
+
+    private func todoCardGeometryID(_ id: String) -> String {
+        "composer-accessory-todo-\(id)"
+    }
+
+    private func attachmentCardGeometryID(_ id: String) -> String {
+        "composer-accessory-attachment-\(id)"
     }
 
     private func scrollExpandedRail(with proxy: ScrollViewProxy, animated: Bool) {
@@ -433,9 +435,6 @@ struct AttachmentThumbnail: View {
 }
 
 private struct AccessoryStackSummary<Cards: View>: View {
-    let title: String
-    let count: Int
-    let tint: Color
     let focus: ComposerAccessoryExpansion.Focus
     @Binding var expansion: ComposerAccessoryExpansion
     @ViewBuilder let cards: () -> Cards
@@ -446,27 +445,13 @@ private struct AccessoryStackSummary<Cards: View>: View {
                 expansion = .expanded(focus: focus)
             }
         } label: {
-            ZStack(alignment: .bottomLeading) {
+            ZStack(alignment: .topLeading) {
                 cards()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                    Text("\(count) item\(count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
             }
-            .frame(maxWidth: .infinity, minHeight: 94, alignment: .bottomLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(tint.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(tint.opacity(0.18), lineWidth: 1)
-            )
+            .padding(.top, 8)
+            .padding(.trailing, 14)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -474,47 +459,55 @@ private struct AccessoryStackSummary<Cards: View>: View {
 
 private struct StackTodoCard: View {
     let todo: OpenCodeTodo
+    var showsContent = true
 
     var body: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(OpenCodePlatformColor.secondaryGroupedBackground)
             .frame(height: 86)
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
             .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(todo.content)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(2)
-                    Text(todo.status.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if showsContent {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(todo.content)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(2)
+                        Text(todo.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
                 }
-                .padding(12)
             }
     }
 }
 
 private struct StackAttachmentCard: View {
     let attachment: OpenCodeComposerAttachment
+    var showsContent = true
 
     var body: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(OpenCodePlatformColor.secondaryGroupedBackground)
             .frame(height: 86)
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
             .overlay {
-                HStack(spacing: 10) {
-                    AttachmentThumbnail(attachment: attachment)
-                        .frame(width: 48, height: 48)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(attachment.filename)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                        Text(attachment.isImage ? "Image" : "Attachment")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if showsContent {
+                    HStack(spacing: 10) {
+                        AttachmentThumbnail(attachment: attachment)
+                            .frame(width: 48, height: 48)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(attachment.filename)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                            Text(attachment.isImage ? "Image" : "Attachment")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .padding(12)
                 }
-                .padding(12)
             }
     }
 }

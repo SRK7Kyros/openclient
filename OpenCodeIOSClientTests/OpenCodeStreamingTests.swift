@@ -59,6 +59,41 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(trailing.first?.data, #"{"type":"session.diff"}"#)
     }
 
+    func testManagedEventBatcherPreservesOrderWhenDeliverySuspends() async throws {
+        final class DeliveryRecorder: @unchecked Sendable {
+            private let lock = NSLock()
+            private var values: [String] = []
+
+            func append(_ value: String) {
+                lock.lock()
+                values.append(value)
+                lock.unlock()
+            }
+
+            func snapshot() -> [String] {
+                lock.lock()
+                defer { lock.unlock() }
+                return values
+            }
+        }
+
+        let recorder = DeliveryRecorder()
+        let batcher = OpenCodeManagedEventBatcher { event in
+            guard case let .messagePartDelta(_, _, _, _, delta) = event.typed else { return }
+            if delta == "1" {
+                try? await Task.sleep(for: .milliseconds(80))
+            }
+            recorder.append(delta)
+        }
+
+        await batcher.enqueue(managedDeltaEvent(delta: "1"))
+        try await Task.sleep(for: .milliseconds(25))
+        await batcher.enqueue(managedDeltaEvent(delta: "2"))
+        try await Task.sleep(for: .milliseconds(140))
+
+        XCTAssertEqual(recorder.snapshot(), ["1", "2"])
+    }
+
     func testReducerBuildsAssistantMessageFromUpdatedAndDeltaEvents() throws {
         let sessionID = "ses_test"
         let info = try decodeEvent(
@@ -1119,20 +1154,71 @@ final class OpenCodeStreamingTests: XCTestCase {
     }
 
     @MainActor
-    func testChatStoreDrainPendingTranscriptEventsCanHoldMatchingPartDeltas() {
+    func testChatStoreDrainAvailablePendingTranscriptEventsStopsAtMissingTarget() {
         let store = ChatStore()
-        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_a", delta: "held"))
-        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_b", partID: "part_b", delta: "drained"))
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([
+            message(id: "msg_b", role: "assistant", text: "", sessionID: "ses_test"),
+        ], forSessionID: "ses_test")
 
-        let drained = store.drainPendingTranscriptEvents { event in
-            event.messageID == "msg_a" && event.partID == "part_a"
-        }
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_a", delta: "held"))
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_b", partID: "part_msg_b", delta: "must not jump ahead"))
+
+        XCTAssertNil(store.drainAvailablePendingTranscriptEvents(in: syncState))
+        XCTAssertEqual(store.pendingTranscriptEventCount, 2)
+    }
+
+    @MainActor
+    func testChatStoreDrainAvailablePendingTranscriptEventsDrainsAvailablePrefixOnly() {
+        let store = ChatStore()
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([
+            message(id: "msg_a", role: "assistant", text: "", sessionID: "ses_test"),
+        ], forSessionID: "ses_test")
+
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_msg_a", delta: "drained"))
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_b", partID: "part_b", delta: "held"))
+
+        let drained = store.drainAvailablePendingTranscriptEvents(in: syncState)
 
         XCTAssertEqual(drained?.events.count, 1)
-        XCTAssertEqual(drained?.events.first?.messageID, "msg_b")
+        XCTAssertEqual(drained?.events.first?.messageID, "msg_a")
+        XCTAssertEqual(deltaText(drained!.coalescedEvents[0]), "drained")
         XCTAssertTrue(store.hasPendingTranscriptEvents)
         XCTAssertEqual(store.pendingTranscriptEventCount, 1)
-        XCTAssertEqual(store.drainPendingTranscriptEvents()?.events.first?.messageID, "msg_a")
+        XCTAssertNil(store.drainAvailablePendingTranscriptEvents(in: syncState))
+    }
+
+    @MainActor
+    func testChatStoreDrainAvailablePendingTranscriptEventsDrainsHeldDeltasAfterPartAppears() {
+        let store = ChatStore()
+        var syncState = OpenCodeDirectorySyncState()
+
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_a", delta: "Hello"))
+        store.enqueuePendingTranscriptEvent(pendingDelta(messageID: "msg_a", partID: "part_a", delta: " world"))
+
+        XCTAssertNil(store.drainAvailablePendingTranscriptEvents(in: syncState))
+
+        XCTAssertTrue(syncState.applyPartUpdated(OpenCodePart(
+            id: "part_a",
+            messageID: "msg_a",
+            sessionID: "ses_test",
+            type: "text",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: ""
+        )))
+
+        let drained = store.drainAvailablePendingTranscriptEvents(in: syncState)
+
+        XCTAssertEqual(drained?.events.count, 2)
+        XCTAssertEqual(drained?.coalescedEvents.count, 1)
+        XCTAssertEqual(deltaText(drained!.coalescedEvents[0]), "Hello world")
         XCTAssertFalse(store.hasPendingTranscriptEvents)
     }
 
@@ -1422,6 +1508,27 @@ This appended section simulates more streamed text arriving after some chunks ha
     private func deltaText(_ event: OpenCodePendingTranscriptEvent) -> String? {
         guard case let .messagePartDelta(_, _, _, _, delta) = event.typedEvent else { return nil }
         return delta
+    }
+
+    private func managedDeltaEvent(delta: String) -> OpenCodeManagedEvent {
+        let properties = OpenCodeEventProperties(
+            sessionID: "ses_test",
+            messageID: "msg_assistant",
+            partID: "part_text",
+            field: "text",
+            delta: delta
+        )
+        return OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(type: "message.part.delta", properties: properties),
+            typed: .messagePartDelta(
+                sessionID: "ses_test",
+                messageID: "msg_assistant",
+                partID: "part_text",
+                field: "text",
+                delta: delta
+            )
+        )
     }
 
     private func contextMessage(

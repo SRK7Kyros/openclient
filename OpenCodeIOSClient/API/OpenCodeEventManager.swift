@@ -11,7 +11,7 @@ enum OpenCodeManagedEventDecodeResult: Sendable {
     case dropped(String)
 }
 
-private actor OpenCodeManagedEventBatcher {
+actor OpenCodeManagedEventBatcher {
     private static let maxEventsPerFlush = 24
 
     private struct QueuedEvent: Sendable {
@@ -23,6 +23,7 @@ private actor OpenCodeManagedEventBatcher {
     private var queue: [QueuedEvent] = []
     private var coalescedIndexes: [String: Int] = [:]
     private var flushTask: Task<Void, Never>?
+    private var isFlushing = false
 
     init(onEvent: @escaping @Sendable (OpenCodeManagedEvent) async -> Void) {
         self.onEvent = onEvent
@@ -45,25 +46,27 @@ private actor OpenCodeManagedEventBatcher {
     }
 
     func flush() async {
+        guard !isFlushing else { return }
+        isFlushing = true
+        defer { isFlushing = false }
+
         flushTask?.cancel()
         flushTask = nil
-        guard !queue.isEmpty else { return }
 
-        let count = min(queue.count, Self.maxEventsPerFlush)
-        let events = Array(queue.prefix(count))
-        queue.removeFirst(count)
-        rebuildCoalescedIndexes()
+        while !queue.isEmpty {
+            let count = min(queue.count, Self.maxEventsPerFlush)
+            let events = Array(queue.prefix(count))
+            queue.removeFirst(count)
+            rebuildCoalescedIndexes()
 
-        for item in events {
-            await onEvent(item.event)
-        }
-
-        if !queue.isEmpty {
-            scheduleFlush()
+            for item in events {
+                await onEvent(item.event)
+            }
         }
     }
 
     private func scheduleFlush() {
+        guard !isFlushing else { return }
         guard flushTask == nil else { return }
         flushTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(16))

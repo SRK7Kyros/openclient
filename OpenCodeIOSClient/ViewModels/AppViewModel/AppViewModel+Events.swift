@@ -249,9 +249,8 @@ extension AppViewModel {
             return
         }
 
-        let heldPendingDeltasForPartUpdate = shouldHoldPendingTranscriptDeltas(for: managed)
         if shouldFlushPendingTranscriptEvents(before: managed) {
-            flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)", holdingForPartUpdate: heldPendingDeltasForPartUpdate ? managed : nil)
+            flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)")
         }
 
         if case let .sessionError(sessionID, message) = managed.typed {
@@ -275,7 +274,7 @@ extension AppViewModel {
 
         let application = eventSyncCoordinator.applyDirectoryEvent(managed, to: directoryEventState())
         applyDirectoryEventState(application.state, updatesSelectedMessages: payload.type != "message.part.delta")
-        if heldPendingDeltasForPartUpdate {
+        if managed.envelope.type == "message.part.updated" {
             flushPendingTranscriptEvents(reason: "after \(managed.envelope.type)")
         }
         let result = application.result
@@ -441,14 +440,6 @@ extension AppViewModel {
         return chatStore.hasPendingTranscriptEvents
     }
 
-    private func shouldHoldPendingTranscriptDeltas(for managed: OpenCodeManagedEvent) -> Bool {
-        guard case let .messagePartUpdated(part) = managed.typed,
-              let messageID = part.messageID,
-              let partID = part.id else { return false }
-
-        return directoryStore.syncState.partsByMessageID[messageID]?.contains(where: { $0.id == partID }) != true
-    }
-
     private func transcriptDeltaCharacterCount(for managed: OpenCodeManagedEvent) -> Int {
         guard case let .messagePartDelta(_, _, _, _, delta) = managed.typed else { return 0 }
         return delta.count
@@ -520,23 +511,13 @@ extension AppViewModel {
         flushPendingTranscriptEvents(reason: "timer")
     }
 
-    private func flushPendingTranscriptEvents(reason: String, holdingForPartUpdate managed: OpenCodeManagedEvent? = nil) {
+    private func flushPendingTranscriptEvents(reason: String) {
         streamDeltaFlushTask?.cancel()
         streamDeltaFlushTask = nil
         streamDeltaFlushGeneration &+= 1
 
         let now = Date()
-        let pending: (events: [OpenCodePendingTranscriptEvent], coalescedEvents: [OpenCodePendingTranscriptEvent])?
-        if let managed,
-           case let .messagePartUpdated(part) = managed.typed,
-           let messageID = part.messageID,
-           let partID = part.id {
-            pending = chatStore.drainPendingTranscriptEvents { event in
-                event.messageID == messageID && event.partID == partID
-            }
-        } else {
-            pending = chatStore.drainPendingTranscriptEvents()
-        }
+        let pending = chatStore.drainAvailablePendingTranscriptEvents(in: directoryStore.syncState)
         guard let pending else { return }
         let events = pending.events
         let reducerEvents = pending.coalescedEvents
