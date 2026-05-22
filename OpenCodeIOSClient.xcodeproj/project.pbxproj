@@ -109,6 +109,7 @@
 		6531D79763A93152FD03DBA7 /* GitStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 483F003FBB5C24B5B8B08C06 /* GitStatusView.swift */; };
 		65ED9342993C4A39A17ABA16 /* PinnedCommandStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAC9A1F93B6E86173FEE8D8 /* PinnedCommandStore.swift */; };
 		66A3053855DE9781D1817F1B /* ThinkingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04820AC7A37C8876C322AE1F /* ThinkingRow.swift */; };
+		66DDB73DD5EEB26B9B216361 /* LiveActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C062B901429100F912C90383 /* LiveActivityCoordinator.swift */; };
 		67B93C48ED205DEB346F173D /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E24421CE08AEAB38EEC236 /* AppViewModel.swift */; };
 		67EF1B51F0149E72EDA8D884 /* Highlighter in Frameworks */ = {isa = PBXBuildFile; productRef = 15BCBCD565E4A7B9E5140D3B /* Highlighter */; };
 		6940BD04FEC0B5B4BC35B2C0 /* TodoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8075AA645B1FFF1574EF2A95 /* TodoCard.swift */; };
@@ -124,6 +125,7 @@
 		6E5ACD06E69539059E6D105C /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336AA13CA174A57F5F0EB8E8 /* MessageComposer.swift */; };
 		6E80D953775B5C1682A39B57 /* OpenCodeWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CC2F75F73B3A2F9FF5DD8E /* OpenCodeWidgetStore.swift */; };
 		6E8741ED5C1559FF7F432489 /* FunAndGamesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770DAD6B1290DD7EE6686359 /* FunAndGamesStore.swift */; };
+		6E8D9395CF72054AF3B6A7A8 /* LiveActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C062B901429100F912C90383 /* LiveActivityCoordinator.swift */; };
 		70731237696C01D693E7A9F1 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
 		70E4E1C33A9EE3D0965C9018 /* OpenClientPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 768A055291804D40C5C400C9 /* OpenClientPaywallView.swift */; };
 		7149D59C3B14817F09F7F0E0 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */; };
@@ -156,6 +158,7 @@
 		897E3FD42AADEB5E65FA28F6 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A61A1222815F3D3886FC203 /* ChatStore.swift */; };
 		8BD3A4FC63B674AB6724DA1C /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336AA13CA174A57F5F0EB8E8 /* MessageComposer.swift */; };
 		8CA2B6FE03F9308F2C0F01D9 /* FindBugGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9CB528EFD1E60C4ED28322F /* FindBugGame.swift */; };
+		9115D867EBEAA45D939B1FCC /* LiveActivityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F94531391132B715EA0E0F9 /* LiveActivityStoreTests.swift */; };
 		937AAA91EAE9824E402FA1EC /* DirectoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0745A824CCD615EBB6F0B9D /* DirectoryStore.swift */; };
 		9556984BB2C2F5AF9D93E252 /* OpenCodeSavedServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */; };
 		95A42DA19A9D8F38D73C64AA /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D173E5CA44E0FAA00024A7DC /* ActivityRow.swift */; };
@@ -348,6 +351,7 @@
 		5098A1B36D1A31CC24A788C4 /* AppleIntelligenceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIntelligenceIntegrationTests.swift; sourceTree = "<group>"; };
 		5495928F452F10791C0614E4 /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		5BAC2BD4B4DBDAB0AFC40494 /* OpenCodeChatActivityExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenCodeChatActivityExtension.entitlements; sourceTree = "<group>"; };
+		5F94531391132B715EA0E0F9 /* LiveActivityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityStoreTests.swift; sourceTree = "<group>"; };
 		638D31E01C9E7027BBEF7770 /* AgentToolbarMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolbarMenu.swift; sourceTree = "<group>"; };
 		67ED70E3B988B800EF2527FE /* ReasoningBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReasoningBlock.swift; sourceTree = "<group>"; };
 		68104044F7459108D18F35A7 /* CoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinatorTests.swift; sourceTree = "<group>"; };
@@ -397,6 +401,7 @@
 		B92A6AF2F468C80FC3840F04 /* ProjectContentTabSelectorPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectContentTabSelectorPreviews.swift; sourceTree = "<group>"; };
 		BBB059EBF27890693F2A6FFD /* HelpPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpPreviews.swift; sourceTree = "<group>"; };
 		BCCD275C8D3DA6880342860D /* ConnectionPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionPreviews.swift; sourceTree = "<group>"; };
+		C062B901429100F912C90383 /* LiveActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityCoordinator.swift; sourceTree = "<group>"; };
 		C08CAC08E3E7D095333DCE80 /* OpenCodeIOSClient.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenCodeIOSClient.entitlements; sourceTree = "<group>"; };
 		C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		C237D3E4A11603721D0A94BF /* OpenCodeChatActivityExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OpenCodeChatActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -529,6 +534,7 @@
 				68104044F7459108D18F35A7 /* CoordinatorTests.swift */,
 				863410271333FF45C4759048 /* DirectoryStoreTests.swift */,
 				B3CAAAC035D35D7A8032EFC3 /* LiveActivitySnapshotBuilderTests.swift */,
+				5F94531391132B715EA0E0F9 /* LiveActivityStoreTests.swift */,
 				FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */,
 				FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */,
 				475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */,
@@ -731,6 +737,7 @@
 			children = (
 				D80E21EF102A85B41CE48EBC /* ConnectionCoordinator.swift */,
 				9D7CBE532634C1D292847018 /* EventSyncCoordinator.swift */,
+				C062B901429100F912C90383 /* LiveActivityCoordinator.swift */,
 				C89E5A5AAB367A0E214A668A /* ProjectCoordinator.swift */,
 				D5412AE7F684F6084E8DF091 /* SessionCoordinator.swift */,
 			);
@@ -1077,6 +1084,7 @@
 				28F67F78594BB825C10D9E2A /* CoordinatorTests.swift in Sources */,
 				9EDA0AAA1A09B5549E1243D2 /* DirectoryStoreTests.swift in Sources */,
 				FB80000A398474F9BD211CB2 /* LiveActivitySnapshotBuilderTests.swift in Sources */,
+				9115D867EBEAA45D939B1FCC /* LiveActivityStoreTests.swift in Sources */,
 				D4E1BDD6DC2915C9B06F45AC /* OpenCodeAPIClientTests.swift in Sources */,
 				E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */,
 				E1622D432C0701C5AAA52C46 /* OpenCodeSavedServerTests.swift in Sources */,
@@ -1155,6 +1163,7 @@
 				E659C43A30A60D37CCE988B6 /* HelpPreviews.swift in Sources */,
 				5A4CCDB9CDC0F2CC9CBDDDBC /* HelpView.swift in Sources */,
 				35DCF267C4C2DAB5E60F51BD /* HighlightedCodeBlock.swift in Sources */,
+				6E8D9395CF72054AF3B6A7A8 /* LiveActivityCoordinator.swift in Sources */,
 				9BC5E63A12D7697124C395BC /* LiveActivitySnapshotBuilder.swift in Sources */,
 				9B1CCBB813AE18C74CBC3852 /* LiveActivityStore.swift in Sources */,
 				7AFACF693932971AA33CD49A /* MCPListView.swift in Sources */,
@@ -1267,6 +1276,7 @@
 				5D25F987D4D97867A679E65D /* HelpPreviews.swift in Sources */,
 				152399F750FB324E47871DAA /* HelpView.swift in Sources */,
 				D049A6BCAAA4A8000ECA1EA6 /* HighlightedCodeBlock.swift in Sources */,
+				66DDB73DD5EEB26B9B216361 /* LiveActivityCoordinator.swift in Sources */,
 				2D56DD4C42E91F254E2750E7 /* LiveActivitySnapshotBuilder.swift in Sources */,
 				62989EC55CE2E199E088FC54 /* LiveActivityStore.swift in Sources */,
 				19844D5C4A3AA2DF723A0B90 /* MCPListView.swift in Sources */,

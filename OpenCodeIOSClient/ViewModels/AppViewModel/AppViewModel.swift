@@ -728,7 +728,6 @@ final class AppViewModel: ObservableObject {
         get { chatStore.nextStreamPartHapticAllowedAt }
         set { chatStore.nextStreamPartHapticAllowedAt = newValue }
     }
-    var liveActivityPreviewRefreshTasksBySessionID: [String: Task<Void, Never>] = [:]
     var pendingTranscriptEvents: [OpenCodePendingTranscriptEvent] {
         get { chatStore.pendingTranscriptEvents }
         set { chatStore.pendingTranscriptEvents = newValue }
@@ -763,11 +762,6 @@ final class AppViewModel: ObservableObject {
         get { composerStore.isStreamingFocused }
         set { composerStore.isStreamingFocused = newValue }
     }
-    #if canImport(ActivityKit) && os(iOS)
-    var liveActivityRefreshTasksBySessionID: [String: Task<Void, Never>] = [:]
-    var lastLiveActivityStatesBySessionID: [String: OpenCodeChatActivityAttributes.ContentState] = [:]
-    #endif
-
     let debugProbePrompt = "Write four short paragraphs about why responsive streaming matters in mobile AI apps. Make each paragraph 2-3 sentences."
     let defaultSearchRoot = NSHomeDirectory()
     static let actionSessionTitlePrefix = "__openclient_action__:"

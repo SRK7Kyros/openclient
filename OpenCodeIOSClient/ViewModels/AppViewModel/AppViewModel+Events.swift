@@ -273,7 +273,10 @@ extension AppViewModel {
         updateCachedMessagesForLiveActivityIfNeeded(payload: payload, sessionID: eventSessionID, selectedSessionID: currentSelectedSession?.id)
 
         let application = eventSyncCoordinator.applyDirectoryEvent(managed, to: directoryEventState())
-        applyDirectoryEventState(application.state, updatesSelectedMessages: payload.type != "message.part.delta")
+        applyDirectoryEventState(
+            application.state,
+            updatesSelectedMessages: payload.type != "message.part.delta" || eventAffectsActiveSession(managed)
+        )
         if managed.envelope.type == "message.part.updated" {
             flushPendingTranscriptEvents(reason: "after \(managed.envelope.type)")
         }
