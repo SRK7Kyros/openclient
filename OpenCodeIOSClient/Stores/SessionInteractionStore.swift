@@ -35,6 +35,11 @@ final class SessionInteractionStore: ObservableObject {
         questions = nextQuestions
     }
 
+    func applyDirectoryBootstrap(_ bootstrap: OpenCodeDirectoryBootstrap) {
+        permissions = bootstrap.permissions
+        questions = bootstrap.questions
+    }
+
     func permissions(forSessionID sessionID: String) -> [OpenCodePermission] {
         permissions.filter { $0.sessionID == sessionID }
     }

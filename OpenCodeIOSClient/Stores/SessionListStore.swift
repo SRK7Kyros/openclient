@@ -161,6 +161,11 @@ final class SessionListStore: ObservableObject {
         return sessions.filter { $0.directory == directory }
     }
 
+    func applyDirectoryReloadSessions(_ sessions: [OpenCodeSession], scopedTo directory: String?) -> [OpenCodeSession] {
+        setRecentSessions(sessions, for: directory)
+        return self.sessions(sessions, scopedTo: directory)
+    }
+
     func mergeSessions(_ sessions: [OpenCodeSession], into visibleSessions: inout [OpenCodeSession]) {
         for session in sessions {
             if let index = visibleSessions.firstIndex(where: { $0.id == session.id }) {

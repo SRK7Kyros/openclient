@@ -19,4 +19,15 @@ final class SessionListStoreTests: XCTestCase {
 
         XCTAssertEqual(store.sessions([global, project], scopedTo: "/tmp/project"), [project])
     }
+
+    func testApplyDirectoryReloadSessionsStoresRecentsAndReturnsScopedSessions() {
+        let store = SessionListStore()
+        let global = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: "/", projectID: "global", parentID: nil)
+        let project = OpenCodeSession(id: "ses_project", title: "Project", workspaceID: nil, directory: "/tmp/project", projectID: "proj", parentID: nil)
+
+        let visible = store.applyDirectoryReloadSessions([global, project], scopedTo: "/tmp/project")
+
+        XCTAssertEqual(visible, [project])
+        XCTAssertEqual(store.recentSessionsByDirectory["/tmp/project"], [global, project])
+    }
 }

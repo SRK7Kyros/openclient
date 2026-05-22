@@ -61,6 +61,49 @@ final class DirectoryStore: ObservableObject {
     }
 
     @discardableResult
+    func applyDirectoryReload(
+        bootstrap: OpenCodeDirectoryBootstrap,
+        statuses: [String: String],
+        scopedSessions: [OpenCodeSession]
+    ) -> Bool {
+        var changed = false
+
+        if isLoadingSessions {
+            isLoadingSessions = false
+            changed = true
+        }
+        if sessions != scopedSessions {
+            sessions = scopedSessions
+            changed = true
+        }
+        if commands != bootstrap.commands {
+            commands = bootstrap.commands
+            changed = true
+        }
+        if sessionStatuses != statuses {
+            sessionStatuses = statuses
+            changed = true
+        }
+
+        var nextSyncState = syncStore.state
+        nextSyncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)
+        nextSyncState.questionsBySessionID = Dictionary(grouping: bootstrap.questions, by: \.sessionID)
+        if nextSyncState != syncStore.state {
+            syncStore.state = nextSyncState
+            changed = true
+        }
+
+        return changed
+    }
+
+    @discardableResult
+    func applySelectedSessionAfterReload(_ nextSelectedSession: OpenCodeSession?) -> Bool {
+        guard selectedSession != nextSelectedSession else { return false }
+        selectedSession = nextSelectedSession
+        return true
+    }
+
+    @discardableResult
     func applyReducedEventState(
         _ state: OpenCodeDirectoryEventState,
         scopedSessions: [OpenCodeSession]

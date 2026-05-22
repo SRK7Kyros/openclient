@@ -126,18 +126,15 @@ extension AppViewModel {
         let previousSelectedSession = selectedSession
         let reload = try await sessionCoordinator.reloadDirectory(client: client, directory: effectiveSelectedDirectory)
         let bootstrap = reload.bootstrap
+        let scopedSessions = sessionListStore.applyDirectoryReloadSessions(bootstrap.sessions, scopedTo: effectiveSelectedDirectory)
         withAnimation(opencodeSelectionAnimation) {
-            isLoadingSessions = false
-            allSessions = bootstrap.sessions
-        }
-        sessionListStore.setRecentSessions(bootstrap.sessions, for: effectiveSelectedDirectory)
-        withAnimation(opencodeSelectionAnimation) {
-            directoryCommands = bootstrap.commands
-            directoryStore.syncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)
-            directoryStore.syncState.questionsBySessionID = Dictionary(grouping: bootstrap.questions, by: \.sessionID)
             objectWillChange.send()
-            sessionInteractionStore.replacePermissions(bootstrap.permissions)
-            sessionInteractionStore.replaceQuestions(bootstrap.questions)
+            directoryStore.applyDirectoryReload(
+                bootstrap: bootstrap,
+                statuses: reload.statuses,
+                scopedSessions: scopedSessions
+            )
+            sessionInteractionStore.applyDirectoryBootstrap(bootstrap)
         }
         let selection = sessionCoordinator.selectionAfterDirectoryReload(
             previousSelectedSession: previousSelectedSession,
@@ -152,12 +149,14 @@ extension AppViewModel {
 
         if selection.selectedSession != nil {
             withAnimation(opencodeSelectionAnimation) {
-                selectedSession = selection.selectedSession
+                objectWillChange.send()
+                directoryStore.applySelectedSessionAfterReload(selection.selectedSession)
             }
             streamDirectory = selection.streamDirectory
         } else {
             withAnimation(opencodeSelectionAnimation) {
-                selectedSession = nil
+                objectWillChange.send()
+                directoryStore.applySelectedSessionAfterReload(selection.selectedSession)
                 if selection.shouldClearActiveChat {
                     chatStore.clearActiveTranscript()
                     sessionInteractionStore.replaceTodos([])
@@ -172,8 +171,6 @@ extension AppViewModel {
         if streamDirectory == nil {
             streamDirectory = allSessions.first?.directory
         }
-
-        sessionStatuses = reload.statuses
 
         if hasGitProject, selectedProjectContentTab == .git {
             await reloadGitViewData(force: true)
