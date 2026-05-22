@@ -203,7 +203,6 @@ private struct ProjectListSectionHeader: View {
                 .font(ProjectListLayout.sectionTitleFont)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-                .padding(.horizontal, ProjectListLayout.contentMargin)
         }
         .padding(.top, isLoadingRecentSessions || !recentSessions.isEmpty ? 8 : 0)
         .scrollClipDisabled()
@@ -221,7 +220,6 @@ private struct RecentProjectSessionSection: View {
                 .font(ProjectListLayout.sectionTitleFont)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-                .padding(.horizontal, ProjectListLayout.contentMargin)
 
             RecentProjectSessionRail(sessions: sessions, isLoading: isLoading, onSelect: onSelect)
         }
@@ -336,7 +334,6 @@ private struct RecentProjectSessionCard: View {
 }
 
 private enum ProjectListLayout {
-    static let contentMargin: CGFloat = 16
     static let railContentOffset: CGFloat = 22
     static let sectionTitleFont = Font.system(.footnote, design: .default).weight(.semibold)
     static let roundedSectionTitleFont = Font.system(.footnote, design: .rounded).weight(.semibold)
