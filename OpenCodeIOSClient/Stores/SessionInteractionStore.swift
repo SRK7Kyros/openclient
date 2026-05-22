@@ -40,6 +40,47 @@ final class SessionInteractionStore: ObservableObject {
         questions = bootstrap.questions
     }
 
+    func applySelectedSession(sessionID: String, syncState: OpenCodeDirectorySyncState) {
+        todos = syncState.todosBySessionID[sessionID] ?? []
+        permissions = syncState.permissionsBySessionID[sessionID] ?? []
+        questions = syncState.questionsBySessionID[sessionID] ?? []
+    }
+
+    func applyTodos(_ nextTodos: [OpenCodeTodo], forSessionID sessionID: String, selectedSessionID: String?) {
+        guard selectedSessionID == sessionID else { return }
+        todos = nextTodos
+    }
+
+    func applyLoadedPermissions(_ nextPermissions: [OpenCodePermission]) {
+        permissions = nextPermissions
+    }
+
+    func applyLoadedQuestions(_ nextQuestions: [OpenCodeQuestionRequest]) {
+        questions = nextQuestions
+    }
+
+    @discardableResult
+    func applyVisibleInteractions(
+        todos nextTodos: [OpenCodeTodo],
+        permissions nextPermissions: [OpenCodePermission],
+        questions nextQuestions: [OpenCodeQuestionRequest]
+    ) -> Bool {
+        var changed = false
+        if todos != nextTodos {
+            todos = nextTodos
+            changed = true
+        }
+        if permissions != nextPermissions {
+            permissions = nextPermissions
+            changed = true
+        }
+        if questions != nextQuestions {
+            questions = nextQuestions
+            changed = true
+        }
+        return changed
+    }
+
     func permissions(forSessionID sessionID: String) -> [OpenCodePermission] {
         permissions.filter { $0.sessionID == sessionID }
     }

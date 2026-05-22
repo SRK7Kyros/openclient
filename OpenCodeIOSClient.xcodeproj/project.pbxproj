@@ -115,6 +115,7 @@
 		6ABA5760A9BB4D847E2F96CB /* AppViewModel+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC0BC6B94598163839BEB51 /* AppViewModel+Connection.swift */; };
 		6AE621B9A4D4F8445C701B57 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 00F78C3BDED61CA5491C804F /* AppIcon.icon */; };
 		6B846E22927BA463D441809F /* ProjectRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 976E7B6C266BBE6C7E32DCC6 /* ProjectRow.swift */; };
+		6C0A74A52E436B2699EC0AB4 /* SessionInteractionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52537FB705E167517B3096B /* SessionInteractionStoreTests.swift */; };
 		6CD4DEE3C0B5286E0D723483 /* OpenCodeStateReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */; };
 		6DB2469B41C37734C3F580EB /* OpenClientCommerce.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4A9F2274F5C2B27BDA72CB /* OpenClientCommerce.swift */; };
 		6E2BC9EB3D2EAA75811179DF /* ProjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89E5A5AAB367A0E214A668A /* ProjectCoordinator.swift */; };
@@ -424,6 +425,7 @@
 		F38ECBF6C78E9A20D6110C19 /* OpenCodePreviewText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodePreviewText.swift; sourceTree = "<group>"; };
 		F44D3044D46925B3F7A5326B /* AppViewModel+VCS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+VCS.swift"; sourceTree = "<group>"; };
 		F4B91D6745A8E634A21646B8 /* AppViewModel+Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Sessions.swift"; sourceTree = "<group>"; };
+		F52537FB705E167517B3096B /* SessionInteractionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionInteractionStoreTests.swift; sourceTree = "<group>"; };
 		F548AE214A483AB9207C376D /* OpenCodeAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeAPIClient.swift; sourceTree = "<group>"; };
 		F65558E77D320FFE4AD71AD9 /* OpenCodeChatActivityExtensionBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeChatActivityExtensionBundle.swift; sourceTree = "<group>"; };
 		F6CC62904B083C34CEC115F8 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 				FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */,
 				475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */,
 				41F2AB7FE622C4FDB3040763 /* OpenCodeStreamingTests.swift */,
+				F52537FB705E167517B3096B /* SessionInteractionStoreTests.swift */,
 				1B139514D80415E620B9F722 /* SessionListStoreTests.swift */,
 			);
 			path = OpenCodeIOSClientTests;
@@ -1066,6 +1069,7 @@
 				E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */,
 				E1622D432C0701C5AAA52C46 /* OpenCodeSavedServerTests.swift in Sources */,
 				BA04F4DD96A0C39C2511402F /* OpenCodeStreamingTests.swift in Sources */,
+				6C0A74A52E436B2699EC0AB4 /* SessionInteractionStoreTests.swift in Sources */,
 				0E6F60E08977B86AA1DE35A3 /* SessionListStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1357,7 +1361,7 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -1369,7 +1373,7 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

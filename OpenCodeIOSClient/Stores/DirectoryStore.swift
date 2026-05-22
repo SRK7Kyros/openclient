@@ -97,6 +97,60 @@ final class DirectoryStore: ObservableObject {
     }
 
     @discardableResult
+    func applySessionSelection(
+        _ session: OpenCodeSession,
+        cachedMessages: [OpenCodeMessageEnvelope]
+    ) -> [OpenCodeMessageEnvelope] {
+        let syncedMessages = syncStore.state.messageEnvelopes(forSessionID: session.id)
+        let visibleMessages = syncedMessages.isEmpty ? cachedMessages : syncedMessages
+
+        if syncedMessages.isEmpty, !cachedMessages.isEmpty {
+            syncStore.state.replaceMessages(cachedMessages, forSessionID: session.id)
+        }
+        selectedSession = session
+
+        return visibleMessages
+    }
+
+    func applyTodos(_ todos: [OpenCodeTodo], forSessionID sessionID: String) {
+        syncStore.state.todosBySessionID[sessionID] = todos
+    }
+
+    func applySessionStatuses(_ statuses: [String: String]) {
+        sessionStatuses = statuses
+        syncStore.state.sessionStatusesBySessionID = statuses
+    }
+
+    func applyCanonicalMessages(_ messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
+        syncStore.state.replaceMessages(messages, forSessionID: sessionID)
+    }
+
+    func appendMessage(_ message: OpenCodeMessageEnvelope, forSessionID sessionID: String) {
+        syncStore.state.appendMessageEnvelope(message, forSessionID: sessionID)
+    }
+
+    @discardableResult
+    func removeMessage(sessionID: String, messageID: String) -> Bool {
+        syncStore.state.removeMessage(sessionID: sessionID, messageID: messageID)
+    }
+
+    func applyPermissions(_ permissions: [OpenCodePermission]) {
+        syncStore.state.permissionsBySessionID = Dictionary(grouping: permissions, by: \.sessionID)
+    }
+
+    func clearPermissions() {
+        syncStore.state.permissionsBySessionID = [:]
+    }
+
+    func applyQuestions(_ questions: [OpenCodeQuestionRequest]) {
+        syncStore.state.questionsBySessionID = Dictionary(grouping: questions, by: \.sessionID)
+    }
+
+    func clearQuestions() {
+        syncStore.state.questionsBySessionID = [:]
+    }
+
+    @discardableResult
     func applySelectedSessionAfterReload(_ nextSelectedSession: OpenCodeSession?) -> Bool {
         guard selectedSession != nextSelectedSession else { return false }
         selectedSession = nextSelectedSession

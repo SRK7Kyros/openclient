@@ -277,13 +277,12 @@ final class AppViewModel: ObservableObject {
         get { directoryStore.sessionStatuses }
         set {
             objectWillChange.send()
-            directoryStore.sessionStatuses = newValue
-            directoryStore.syncState.sessionStatusesBySessionID = newValue
+            directoryStore.applySessionStatuses(newValue)
         }
         _modify {
             objectWillChange.send()
             yield &directoryStore.sessionStatuses
-            directoryStore.syncState.sessionStatusesBySessionID = directoryStore.sessionStatuses
+            directoryStore.applySessionStatuses(directoryStore.sessionStatuses)
         }
     }
     let chatStore = ChatStore()
@@ -887,14 +886,14 @@ final class AppViewModel: ObservableObject {
             objectWillChange.send()
             chatStore.messages = newValue
             if let selectedSessionID = selectedSession?.id {
-                directoryStore.syncState.replaceMessages(newValue, forSessionID: selectedSessionID)
+                directoryStore.applyCanonicalMessages(newValue, forSessionID: selectedSessionID)
             }
         }
         _modify {
             objectWillChange.send()
             yield &chatStore.messages
             if let selectedSessionID = selectedSession?.id {
-                directoryStore.syncState.replaceMessages(chatStore.messages, forSessionID: selectedSessionID)
+                directoryStore.applyCanonicalMessages(chatStore.messages, forSessionID: selectedSessionID)
             }
         }
     }

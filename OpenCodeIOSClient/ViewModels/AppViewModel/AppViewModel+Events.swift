@@ -573,17 +573,12 @@ extension AppViewModel {
                 messages = projectedMessages
             }
         }
-        if state.todos != todos {
+        if sessionInteractionStore.applyVisibleInteractions(
+            todos: state.todos,
+            permissions: state.permissions,
+            questions: state.questions
+        ) {
             objectWillChange.send()
-            sessionInteractionStore.replaceTodos(state.todos)
-        }
-        if state.permissions != permissions {
-            objectWillChange.send()
-            sessionInteractionStore.replacePermissions(state.permissions)
-        }
-        if state.questions != questions {
-            objectWillChange.send()
-            sessionInteractionStore.replaceQuestions(state.questions)
         }
     }
 
