@@ -355,41 +355,16 @@ extension AppViewModel {
 
         refreshLiveActivityIfNeeded(
             for: eventSessionID,
-            immediate: Self.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed)
+            immediate: eventSyncCoordinator.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed)
         )
-        if shouldPublishWidgetSnapshots(after: result) {
+        if eventSyncCoordinator.shouldPublishWidgetSnapshots(after: result) {
             scheduleWidgetSnapshotPublication()
-        }
-    }
-
-    nonisolated static func shouldRefreshLiveActivityImmediately(after result: SessionEventResult, event: OpenCodeTypedEvent) -> Bool {
-        switch result {
-        case .permissionChanged, .questionChanged:
-            return true
-        default:
-            break
-        }
-
-        switch event {
-        case .permissionAsked, .permissionReplied, .questionAsked, .questionReplied, .questionRejected:
-            return true
-        default:
-            return false
         }
     }
 
     private func shouldRefreshSessionPreview(for sessionID: String, eventType: String) -> Bool {
         guard eventType != "message.part.delta" else { return false }
         return sessionStatuses[sessionID] != "busy"
-    }
-
-    private func shouldPublishWidgetSnapshots(after result: SessionEventResult) -> Bool {
-        switch result {
-        case .sessionChanged, .todoChanged, .permissionChanged, .questionChanged, .statusChanged, .idle:
-            return true
-        case .message, .ignored:
-            return false
-        }
     }
 
     private func shouldLogEventDetails(for eventType: String) -> Bool {
@@ -628,14 +603,14 @@ extension AppViewModel {
     }
 
     private func updateCachedMessagesForLiveActivityIfNeeded(payload: OpenCodeEventEnvelope, sessionID: String?, selectedSessionID: String?) {
-        guard let sessionID,
-              sessionID != selectedSessionID,
-              activeLiveActivitySessionIDs.contains(sessionID),
-              isLiveActivityMessageEvent(payload.type) else {
-            return
-        }
-
-        guard let cachedMessages = chatStore.updateCachedMessagesForLiveActivity(payload: payload, sessionID: sessionID) else { return }
+        guard let cachedMessages = chatStore.updateCachedMessagesForLiveActivityIfNeeded(
+            payload: payload,
+            sessionID: sessionID,
+            selectedSessionID: selectedSessionID,
+            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs,
+            isLiveActivityMessageEvent: isLiveActivityMessageEvent(payload.type)
+        ) else { return }
+        guard let sessionID else { return }
         if sessionStatuses[sessionID] != "busy" {
             refreshSessionPreview(for: sessionID, messages: cachedMessages)
         }

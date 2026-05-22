@@ -42,6 +42,31 @@ final class EventSyncCoordinator {
         isConnected
     }
 
+    nonisolated func shouldPublishWidgetSnapshots(after result: SessionEventResult) -> Bool {
+        switch result {
+        case .sessionChanged, .todoChanged, .permissionChanged, .questionChanged, .statusChanged, .idle:
+            return true
+        case .message, .ignored:
+            return false
+        }
+    }
+
+    nonisolated func shouldRefreshLiveActivityImmediately(after result: SessionEventResult, event: OpenCodeTypedEvent) -> Bool {
+        switch result {
+        case .permissionChanged, .questionChanged:
+            return true
+        default:
+            break
+        }
+
+        switch event {
+        case .permissionAsked, .permissionReplied, .questionAsked, .questionReplied, .questionRejected:
+            return true
+        default:
+            return false
+        }
+    }
+
     func shouldProcessLiveMessageEvent(
         eventType: String,
         eventSessionID: String?,

@@ -1386,27 +1386,29 @@ final class OpenCodeStreamingTests: XCTestCase {
     }
 
     func testPermissionAndQuestionEventsRefreshLiveActivitiesImmediately() {
-        XCTAssertTrue(AppViewModel.shouldRefreshLiveActivityImmediately(
+        let coordinator = EventSyncCoordinator()
+
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
             after: .permissionChanged,
             event: .unknown("permission.asked")
         ))
 
-        XCTAssertTrue(AppViewModel.shouldRefreshLiveActivityImmediately(
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
             after: .questionChanged,
             event: .unknown("question.asked")
         ))
 
-        XCTAssertTrue(AppViewModel.shouldRefreshLiveActivityImmediately(
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
             after: .statusChanged,
             event: .permissionReplied(sessionID: "ses_live", requestID: "perm_1", reply: nil)
         ))
 
-        XCTAssertTrue(AppViewModel.shouldRefreshLiveActivityImmediately(
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
             after: .statusChanged,
             event: .questionRejected(sessionID: "ses_live", requestID: "q_1")
         ))
 
-        XCTAssertFalse(AppViewModel.shouldRefreshLiveActivityImmediately(
+        XCTAssertFalse(coordinator.shouldRefreshLiveActivityImmediately(
             after: .message("delta applied"),
             event: .messagePartDelta(sessionID: "ses_live", messageID: "msg_1", partID: "prt_1", field: "text", delta: "Hello")
         ))

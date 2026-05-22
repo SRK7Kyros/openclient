@@ -191,6 +191,23 @@ final class ChatStore: ObservableObject {
         return cachedMessages
     }
 
+    func updateCachedMessagesForLiveActivityIfNeeded(
+        payload: OpenCodeEventEnvelope,
+        sessionID: String?,
+        selectedSessionID: String?,
+        activeLiveActivitySessionIDs: Set<String>,
+        isLiveActivityMessageEvent: Bool
+    ) -> [OpenCodeMessageEnvelope]? {
+        guard let sessionID,
+              sessionID != selectedSessionID,
+              activeLiveActivitySessionIDs.contains(sessionID),
+              isLiveActivityMessageEvent else {
+            return nil
+        }
+
+        return updateCachedMessagesForLiveActivity(payload: payload, sessionID: sessionID)
+    }
+
     func recentToolMessageIDs(in messages: [OpenCodeMessageEnvelope], limit: Int) -> [String] {
         var seen = Set<String>()
         var ids: [String] = []

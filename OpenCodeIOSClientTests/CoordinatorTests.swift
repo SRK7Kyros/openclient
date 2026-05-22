@@ -110,6 +110,45 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.sessionID(for: .fileWatcherUpdated(file: "Sources/File.swift")))
     }
 
+    func testEventSyncCoordinatorWidgetSnapshotPolicyPublishesStatefulResults() {
+        let coordinator = EventSyncCoordinator()
+
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .sessionChanged))
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .todoChanged))
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .permissionChanged))
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .questionChanged))
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .statusChanged))
+        XCTAssertTrue(coordinator.shouldPublishWidgetSnapshots(after: .idle))
+    }
+
+    func testEventSyncCoordinatorWidgetSnapshotPolicyIgnoresTranscriptOnlyResults() {
+        let coordinator = EventSyncCoordinator()
+
+        XCTAssertFalse(coordinator.shouldPublishWidgetSnapshots(after: .message("updated")))
+        XCTAssertFalse(coordinator.shouldPublishWidgetSnapshots(after: .ignored("not relevant")))
+    }
+
+    func testEventSyncCoordinatorLiveActivityImmediateRefreshPolicyIncludesInteractions() {
+        let coordinator = EventSyncCoordinator()
+        let permission = OpenCodePermission(id: "perm_1", sessionID: "ses_1", permission: "bash", patterns: [], always: nil, metadata: nil, tool: nil)
+        let question = OpenCodeQuestionRequest(id: "q_1", sessionID: "ses_1", questions: [], tool: nil)
+
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .permissionChanged, event: .installationUpdated(version: "1")))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .questionChanged, event: .installationUpdated(version: "1")))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .ignored("event"), event: .permissionAsked(permission)))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .ignored("event"), event: .permissionReplied(sessionID: "ses_1", requestID: "perm_1", reply: "allow")))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .ignored("event"), event: .questionAsked(question)))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .ignored("event"), event: .questionReplied(sessionID: "ses_1", requestID: "q_1")))
+        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(after: .ignored("event"), event: .questionRejected(sessionID: "ses_1", requestID: "q_1")))
+    }
+
+    func testEventSyncCoordinatorLiveActivityImmediateRefreshPolicyIgnoresNonInteractions() {
+        let coordinator = EventSyncCoordinator()
+
+        XCTAssertFalse(coordinator.shouldRefreshLiveActivityImmediately(after: .message("updated"), event: .installationUpdated(version: "1")))
+        XCTAssertFalse(coordinator.shouldRefreshLiveActivityImmediately(after: .idle, event: .sessionIdle(sessionID: "ses_1")))
+    }
+
     func testEventSyncCoordinatorAppliesSelectedSessionRegardlessOfDirectory() {
         let coordinator = EventSyncCoordinator()
 

@@ -246,6 +246,7 @@
 		F54ACA23469582F845E77EFA /* ConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBF691A45B28DA836E7479A /* ConnectionView.swift */; };
 		F6F950CEEB1D2621C2A143FA /* Generated-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A5DDA19A03EB0243DB1DC306 /* Generated-Info.plist */; };
 		FA61BB2C1AC617BA7C4AF422 /* AppViewModel+MCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94E567A68DA775F46359D052 /* AppViewModel+MCP.swift */; };
+		FBE7476825B2999C0DE4FAC7 /* ChatStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B8A89D1FF01FCA3954C17E0 /* ChatStoreTests.swift */; };
 		FD0CA1847F5C063DCEDDE00A /* SessionAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50694E000CB966DF38DDE41C /* SessionAvatar.swift */; };
 		FE6BC83C3FA66956C83F388C /* MCPStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A8D7FCF9F5649621670A6B /* MCPStore.swift */; };
 		FF4576F82738AC2C79CBC9AE /* OpenCodeEventStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = D206D56795411A6D0DE62123 /* OpenCodeEventStream.swift */; };
@@ -327,6 +328,7 @@
 		34F9BC37EE0D2242B03FD133 /* ProjectPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPreferencesStore.swift; sourceTree = "<group>"; };
 		37DF20ACB6AD0EFAC28A95D9 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		39ECDADD906549AE5867861D /* OpenCodeIOSClientTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OpenCodeIOSClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B8A89D1FF01FCA3954C17E0 /* ChatStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStoreTests.swift; sourceTree = "<group>"; };
 		3C2E4443213AED890D5731AD /* OpenCodeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeModels.swift; sourceTree = "<group>"; };
 		3FACBA07A4DA6A2A280B3820 /* OpenClientDebugEntitlementControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClientDebugEntitlementControls.swift; sourceTree = "<group>"; };
 		41F2AB7FE622C4FDB3040763 /* OpenCodeStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeStreamingTests.swift; sourceTree = "<group>"; };
@@ -518,6 +520,7 @@
 			isa = PBXGroup;
 			children = (
 				2C863806B8786D01DC82EE9E /* AppViewModelTests.swift */,
+				3B8A89D1FF01FCA3954C17E0 /* ChatStoreTests.swift */,
 				68104044F7459108D18F35A7 /* CoordinatorTests.swift */,
 				863410271333FF45C4759048 /* DirectoryStoreTests.swift */,
 				FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */,
@@ -1063,6 +1066,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A6B5B539DE72F0CDADDB13C3 /* AppViewModelTests.swift in Sources */,
+				FBE7476825B2999C0DE4FAC7 /* ChatStoreTests.swift in Sources */,
 				28F67F78594BB825C10D9E2A /* CoordinatorTests.swift in Sources */,
 				9EDA0AAA1A09B5549E1243D2 /* DirectoryStoreTests.swift in Sources */,
 				D4E1BDD6DC2915C9B06F45AC /* OpenCodeAPIClientTests.swift in Sources */,
@@ -1361,7 +1365,7 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -1373,7 +1377,7 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
