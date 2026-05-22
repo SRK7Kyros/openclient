@@ -7,17 +7,23 @@ final class SessionListStore: ObservableObject {
     @Published var pinnedSessionIDsByScope: [String: [String]]
     @Published var workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState]
     @Published var pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun]
+    @Published var recentSessionsByDirectory: [String: [OpenCodeSession]]
+    @Published var isLoadingRecentProjectSessions: Bool
 
     init(
         previews: [String: SessionPreview] = [:],
         pinnedSessionIDsByScope: [String: [String]] = [:],
         workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState] = [:],
-        pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] = [:]
+        pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] = [:],
+        recentSessionsByDirectory: [String: [OpenCodeSession]] = [:],
+        isLoadingRecentProjectSessions: Bool = false
     ) {
         self.previews = previews
         self.pinnedSessionIDsByScope = pinnedSessionIDsByScope
         self.workspaceSessionsByDirectory = workspaceSessionsByDirectory
         self.pendingActionRunsBySessionID = pendingActionRunsBySessionID
+        self.recentSessionsByDirectory = recentSessionsByDirectory
+        self.isLoadingRecentProjectSessions = isLoadingRecentProjectSessions
     }
 
     func setPreview(_ preview: SessionPreview, for sessionID: String) -> Bool {
@@ -181,6 +187,43 @@ final class SessionListStore: ObservableObject {
         pendingActionRunsBySessionID[run.sessionID] = run
     }
 
+    func setRecentSessions(_ sessions: [OpenCodeSession], for directory: String?) {
+        recentSessionsByDirectory[Self.recentDirectoryKey(directory)] = sessions
+    }
+
+    func recentProjectSessions(
+        projects: [OpenCodeProject],
+        previews: [String: SessionPreview],
+        statuses: [String: String],
+        limit: Int = 15
+    ) -> [RecentProjectSession] {
+        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        var seen = Set<String>()
+
+        return recentSessionsByDirectory.values
+            .flatMap { $0 }
+            .filter { $0.isRootSession && !$0.isArchived }
+            .sorted { lhs, rhs in
+                let lhsTime = Self.sortTime(for: lhs, preview: previews[lhs.id])
+                let rhsTime = Self.sortTime(for: rhs, preview: previews[rhs.id])
+                if lhsTime != rhsTime { return lhsTime > rhsTime }
+                return lhs.id < rhs.id
+            }
+            .compactMap { session -> RecentProjectSession? in
+                let key = "\(Self.recentDirectoryKey(session.directory)):\(session.id)"
+                guard seen.insert(key).inserted else { return nil }
+                let project = Self.project(for: session, projects: projects, projectsByID: projectsByID)
+                return RecentProjectSession(
+                    session: session,
+                    projectTitle: project.map(Self.projectTitle) ?? Self.directoryTitle(session.directory),
+                    preview: previews[session.id],
+                    isBusy: statuses[session.id] == "busy"
+                )
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     func pendingActionRun(for sessionID: String) -> PendingOpenCodeActionRun? {
         pendingActionRunsBySessionID[sessionID]
     }
@@ -192,5 +235,52 @@ final class SessionListStore: ObservableObject {
         } else {
             pendingActionRunsBySessionID[sessionID] = nil
         }
+    }
+
+    nonisolated static func recentDirectoryKey(_ directory: String?) -> String {
+        guard let directory, !directory.isEmpty else { return "global" }
+        return directory
+    }
+
+    private static func project(for session: OpenCodeSession, projects: [OpenCodeProject], projectsByID: [String: OpenCodeProject]) -> OpenCodeProject? {
+        if let projectID = session.projectID, let project = projectsByID[projectID] {
+            return project
+        }
+
+        guard let directory = session.directory else {
+            return projects.first { $0.id == "global" }
+        }
+
+        return projects.first { project in
+            project.worktree == directory || (project.sandboxes ?? []).contains(directory)
+        }
+    }
+
+    private static func projectTitle(_ project: OpenCodeProject) -> String {
+        if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        if project.id == "global" { return "Global" }
+        return directoryTitle(project.worktree)
+    }
+
+    private static func directoryTitle(_ directory: String?) -> String {
+        guard let directory, !directory.isEmpty else { return "Global" }
+        return URL(fileURLWithPath: directory).lastPathComponent
+    }
+
+    private static func sortTime(for session: OpenCodeSession, preview: SessionPreview?) -> Double {
+        session.time?.updated ?? session.time?.created ?? (preview?.date?.timeIntervalSince1970).map { $0 * 1_000 } ?? 0
+    }
+}
+
+struct RecentProjectSession: Identifiable, Equatable {
+    let session: OpenCodeSession
+    let projectTitle: String
+    let preview: SessionPreview?
+    let isBusy: Bool
+
+    var id: String {
+        "\(SessionListStore.recentDirectoryKey(session.directory)):\(session.id)"
     }
 }

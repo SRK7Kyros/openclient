@@ -13,9 +13,11 @@ struct ProjectListView: View {
 
     var body: some View {
         let projectIDs = viewModel.projects.map { $0.id }.joined(separator: "|")
+        let recentSessions = viewModel.recentProjectSessions
+        let isLoadingRecentSessions = viewModel.isLoadingRecentProjectSessions
 
         List {
-            Section("Projects") {
+            Section {
                 ForEach(viewModel.projects) { project in
                     let title = projectTitle(project)
                     ProjectRow(
@@ -62,10 +64,21 @@ struct ProjectListView: View {
                         }
                     }
                 }
+            } header: {
+                ProjectListSectionHeader(recentSessions: recentSessions, isLoadingRecentSessions: isLoadingRecentSessions) { recent in
+                    viewModel.prepareRecentProjectSessionSelection(recent)
+                    withAnimation(opencodeSelectionAnimation) {
+                        onProjectChosen()
+                    }
+                    Task {
+                        await viewModel.openRecentProjectSession(recent)
+                    }
+                }
+                .textCase(nil)
             }
 
             if viewModel.funAndGamesPreferences.showsSection {
-                Section("Fun & Games") {
+                Section {
                     ProjectRow(
                         title: "Find the Place",
                         subtitle: "Guess a secret city from live weather clues",
@@ -89,13 +102,22 @@ struct ProjectListView: View {
                     .onTapGesture {
                         viewModel.presentFindBugLanguageSheet()
                     }
+                } header: {
+                    Text("Fun & Games")
+                        .font(ProjectListLayout.roundedSectionTitleFont)
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
                 }
             }
 
         }
         .listStyle(.sidebar)
+        .scrollClipDisabled()
         .refreshable {
             await viewModel.refreshProjectList()
+        }
+        .task(id: projectIDs) {
+            await viewModel.loadRecentProjectSessionsAcrossProjects()
         }
         .navigationTitle("Projects")
         .toolbar {
@@ -160,6 +182,164 @@ struct ProjectListView: View {
         }
         return project.name ?? project.worktree.split(separator: "/").last.map(String.init) ?? project.worktree
     }
+}
+
+private struct ProjectListSectionHeader: View {
+    let recentSessions: [RecentProjectSession]
+    let isLoadingRecentSessions: Bool
+    let onSelectRecentSession: (RecentProjectSession) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if isLoadingRecentSessions || !recentSessions.isEmpty {
+                RecentProjectSessionSection(
+                    sessions: recentSessions,
+                    isLoading: isLoadingRecentSessions,
+                    onSelect: onSelectRecentSession
+                )
+            }
+
+            Text("Projects")
+                .font(ProjectListLayout.sectionTitleFont)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, ProjectListLayout.contentMargin)
+        }
+        .padding(.top, isLoadingRecentSessions || !recentSessions.isEmpty ? 8 : 0)
+        .scrollClipDisabled()
+    }
+}
+
+private struct RecentProjectSessionSection: View {
+    let sessions: [RecentProjectSession]
+    let isLoading: Bool
+    let onSelect: (RecentProjectSession) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recent Sessions")
+                .font(ProjectListLayout.sectionTitleFont)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, ProjectListLayout.contentMargin)
+
+            RecentProjectSessionRail(sessions: sessions, isLoading: isLoading, onSelect: onSelect)
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .scrollClipDisabled()
+    }
+}
+
+private struct RecentProjectSessionRail: View {
+    let sessions: [RecentProjectSession]
+    let isLoading: Bool
+    let onSelect: (RecentProjectSession) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                if sessions.isEmpty && isLoading {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RecentProjectSessionSkeletonCard()
+                    }
+                } else {
+                    ForEach(sessions) { recent in
+                        Button {
+                            onSelect(recent)
+                        } label: {
+                            RecentProjectSessionCard(recent: recent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .offset(x: -ProjectListLayout.railContentOffset)
+        }
+        .scrollClipDisabled()
+        .accessibilityIdentifier("projects.recentSessions")
+    }
+}
+
+private struct RecentProjectSessionSkeletonCard: View {
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.16))
+                .frame(width: 32, height: 32)
+
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: 94, height: 10)
+
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(width: 66, height: 8)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(width: 176, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .redacted(reason: .placeholder)
+        .accessibilityLabel("Loading recent session")
+    }
+}
+
+private struct RecentProjectSessionCard: View {
+    let recent: RecentProjectSession
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            SessionAvatar(title: title)
+                .frame(width: 32, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Text(recent.projectTitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            if recent.isBusy {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .frame(width: 176, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityLabel("Open recent session \(title) in \(recent.projectTitle)")
+    }
+
+    private var title: String {
+        recent.session.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? recent.session.title ?? "Session"
+            : "Session"
+    }
+}
+
+private enum ProjectListLayout {
+    static let contentMargin: CGFloat = 16
+    static let railContentOffset: CGFloat = 22
+    static let sectionTitleFont = Font.system(.footnote, design: .default).weight(.semibold)
+    static let roundedSectionTitleFont = Font.system(.footnote, design: .rounded).weight(.semibold)
 }
 
 private struct ProjectColorPickerSheet: View {

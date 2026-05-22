@@ -41,24 +41,37 @@ enum OpenCodeStateReducer {
             upsertSession(session, into: &sessions)
             return .sessionChanged
         case let .sessionUpdated(session):
+            if session.isArchived {
+                removeSession(
+                    session,
+                    sessions: &sessions,
+                    selectedSession: &selectedSession,
+                    sessionStatuses: &sessionStatuses,
+                    syncState: &syncState,
+                    messages: &messages,
+                    todos: &todos,
+                    permissions: &permissions,
+                    questions: &questions
+                )
+                return .sessionChanged
+            }
             upsertSession(session, into: &sessions)
             if selectedSession?.id == session.id {
                 selectedSession = selectedSession?.merged(with: session)
             }
             return .sessionChanged
         case let .sessionDeleted(session):
-            sessions.removeAll { $0.id == session.id }
-            sessionStatuses[session.id] = nil
-            syncState.sessionStatusesBySessionID[session.id] = nil
-            syncState.todosBySessionID[session.id] = nil
-            syncState.permissionsBySessionID[session.id] = nil
-            syncState.questionsBySessionID[session.id] = nil
-            syncState.removeMessages(forSessionID: session.id)
-            if selectedSession?.id == session.id {
-                selectedSession = nil
-                messages = []
-                todos = []
-            }
+            removeSession(
+                session,
+                sessions: &sessions,
+                selectedSession: &selectedSession,
+                sessionStatuses: &sessionStatuses,
+                syncState: &syncState,
+                messages: &messages,
+                todos: &todos,
+                permissions: &permissions,
+                questions: &questions
+            )
             return .sessionChanged
         case let .sessionStatus(sessionID, status):
             sessionStatuses[sessionID] = status
@@ -167,6 +180,33 @@ enum OpenCodeStateReducer {
             sessions[index] = sessions[index].merged(with: session)
         } else {
             sessions.append(session)
+        }
+    }
+
+    private static func removeSession(
+        _ session: OpenCodeSession,
+        sessions: inout [OpenCodeSession],
+        selectedSession: inout OpenCodeSession?,
+        sessionStatuses: inout [String: String],
+        syncState: inout OpenCodeDirectorySyncState,
+        messages: inout [OpenCodeMessageEnvelope],
+        todos: inout [OpenCodeTodo],
+        permissions: inout [OpenCodePermission],
+        questions: inout [OpenCodeQuestionRequest]
+    ) {
+        sessions.removeAll { $0.id == session.id }
+        sessionStatuses[session.id] = nil
+        syncState.sessionStatusesBySessionID[session.id] = nil
+        syncState.todosBySessionID[session.id] = nil
+        syncState.permissionsBySessionID[session.id] = nil
+        syncState.questionsBySessionID[session.id] = nil
+        syncState.removeMessages(forSessionID: session.id)
+        if selectedSession?.id == session.id {
+            selectedSession = nil
+            messages = []
+            todos = []
+            permissions = []
+            questions = []
         }
     }
 }

@@ -619,6 +619,57 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(selectedSession?.directory, "/tmp/project")
     }
 
+    func testSessionUpdatedWithArchivedTimeRemovesSessionAndSelectedCaches() throws {
+        let payload = try decodeEvent(
+            #"{"type":"session.updated","properties":{"sessionID":"ses_test","info":{"id":"ses_test","title":"Archived","directory":"/tmp/project","projectID":"proj_1","time":{"created":1,"updated":2,"archived":3}}}}"#
+        )
+
+        guard let typed = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected session.updated typed event")
+        }
+
+        let selected = OpenCodeSession(id: "ses_test", title: "Active", workspaceID: nil, directory: "/tmp/project", projectID: "proj_1", parentID: nil)
+        var sessions = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses = ["ses_test": "busy"]
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.todosBySessionID["ses_test"] = [OpenCodeTodo(content: "Do it", status: "pending", priority: "high")]
+        syncState.permissionsBySessionID["ses_test"] = [OpenCodePermission(id: "perm_1", sessionID: "ses_test", permission: "bash", patterns: nil, always: nil, metadata: nil, tool: nil)]
+        syncState.questionsBySessionID["ses_test"] = [OpenCodeQuestionRequest(id: "q_1", sessionID: "ses_test", questions: [OpenCodeQuestion(question: "Continue?", header: "Confirm", options: [])], tool: nil)]
+        syncState.replaceMessages([.local(role: "assistant", text: "Streaming", messageID: "msg_1", sessionID: "ses_test", partID: "prt_1")], forSessionID: "ses_test")
+        var messages: [OpenCodeMessageEnvelope] = [.local(role: "assistant", text: "Visible", messageID: "msg_1", sessionID: "ses_test", partID: "prt_1")]
+        var todos = [OpenCodeTodo(content: "Do it", status: "pending", priority: "high")]
+        var permissions = [OpenCodePermission(id: "perm_1", sessionID: "ses_test", permission: "bash", patterns: nil, always: nil, metadata: nil, tool: nil)]
+        var questions = [OpenCodeQuestionRequest(id: "q_1", sessionID: "ses_test", questions: [OpenCodeQuestion(question: "Continue?", header: "Confirm", options: [])], tool: nil)]
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: typed,
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .sessionChanged = result else {
+            return XCTFail("Expected sessionChanged, got \(result)")
+        }
+        XCTAssertTrue(sessions.isEmpty)
+        XCTAssertNil(selectedSession)
+        XCTAssertTrue(messages.isEmpty)
+        XCTAssertTrue(todos.isEmpty)
+        XCTAssertTrue(permissions.isEmpty)
+        XCTAssertTrue(questions.isEmpty)
+        XCTAssertNil(sessionStatuses["ses_test"])
+        XCTAssertNil(syncState.todosBySessionID["ses_test"])
+        XCTAssertNil(syncState.permissionsBySessionID["ses_test"])
+        XCTAssertNil(syncState.questionsBySessionID["ses_test"])
+        XCTAssertTrue(syncState.messageEnvelopes(forSessionID: "ses_test").isEmpty)
+    }
+
     func testQuestionAskedDecodesWithUpstreamOptionalDefaults() throws {
         let payload = try decodeEvent(
             #"{"type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test","questions":[{"question":"Choose","header":"Question","options":[{"label":"Build","description":"Build it"}]}]}}"#

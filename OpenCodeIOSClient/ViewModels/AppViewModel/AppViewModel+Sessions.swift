@@ -130,6 +130,7 @@ extension AppViewModel {
             isLoadingSessions = false
             allSessions = bootstrap.sessions
         }
+        sessionListStore.setRecentSessions(bootstrap.sessions, for: effectiveSelectedDirectory)
         withAnimation(opencodeSelectionAnimation) {
             directoryCommands = bootstrap.commands
             directoryStore.syncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)

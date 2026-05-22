@@ -12,6 +12,11 @@ struct ProjectImageCandidate: Identifiable, Hashable {
     }
 }
 
+private struct RecentSessionLoadResult: Sendable {
+    let directory: String?
+    let sessions: [OpenCodeSession]
+}
+
 extension AppViewModel {
     func prepareDirectorySelection(_ directory: String?) {
         preserveCurrentMessageDraftForNavigation()
@@ -62,6 +67,19 @@ extension AppViewModel {
 
     var isLiveActivityAutoStartEnabled: Bool {
         liveActivityAutoStartByScope[currentProjectPreferenceScopeKey] ?? false
+    }
+
+    var recentProjectSessions: [RecentProjectSession] {
+        guard showsRecentSessionsInProjectList else { return [] }
+        return sessionListStore.recentProjectSessions(
+            projects: projects,
+            previews: sessionPreviews,
+            statuses: sessionStatuses
+        )
+    }
+
+    var isLoadingRecentProjectSessions: Bool {
+        showsRecentSessionsInProjectList && sessionListStore.isLoadingRecentProjectSessions
     }
 
     func presentProjectPicker() {
@@ -337,10 +355,93 @@ extension AppViewModel {
     func refreshProjectList() async {
         do {
             try await refreshProjects()
+            await loadRecentProjectSessionsAcrossProjects()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func loadProjectListPreferences() {
+        let scopedPreferences = ProjectListPreferencesStore.load()
+        guard let key = currentServerDefaultsKey else {
+            showsRecentSessionsInProjectList = true
+            return
+        }
+
+        showsRecentSessionsInProjectList = scopedPreferences.preferencesByBaseURL[key]?.showsRecentSessions ?? true
+    }
+
+    func saveProjectListPreferences() {
+        guard let key = currentServerDefaultsKey else { return }
+
+        var scopedPreferences = ProjectListPreferencesStore.load()
+        scopedPreferences.preferencesByBaseURL[key] = ProjectListPreferences(showsRecentSessions: showsRecentSessionsInProjectList)
+        ProjectListPreferencesStore.save(scopedPreferences)
+    }
+
+    func setShowsRecentSessionsInProjectList(_ shows: Bool) {
+        showsRecentSessionsInProjectList = shows
+        saveProjectListPreferences()
+    }
+
+    func prepareRecentProjectSessionSelection(_ recent: RecentProjectSession) {
+        if let project = projectForRecentSession(recent.session) {
+            currentProject = project
+        }
+        prepareDirectorySelection(recent.session.directory)
+    }
+
+    func loadRecentProjectSessionsAcrossProjects() async {
+        guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        let directories = recentSessionDirectoriesToLoad()
+        guard !directories.isEmpty else { return }
+
+        objectWillChange.send()
+        sessionListStore.isLoadingRecentProjectSessions = true
+        defer {
+            objectWillChange.send()
+            sessionListStore.isLoadingRecentProjectSessions = false
+        }
+
+        let client = client
+        await withTaskGroup(of: RecentSessionLoadResult?.self) { group in
+            for directory in directories {
+                group.addTask {
+                    do {
+                        let sessions = try await client.listSessions(directory: directory, roots: true, limit: 5)
+                        return RecentSessionLoadResult(directory: directory, sessions: sessions)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+
+            for await result in group {
+                guard let result else { continue }
+                objectWillChange.send()
+                sessionListStore.setRecentSessions(result.sessions, for: result.directory)
+            }
+        }
+    }
+
+    func openRecentProjectSession(_ recent: RecentProjectSession) async {
+        let recentSession = recent.session
+        let project = projectForRecentSession(recentSession)
+        if let project {
+            currentProject = project
+        }
+
+        await selectDirectory(recentSession.directory)
+
+        guard let resolved = session(matching: recentSession.id) ?? allSessions.first(where: { $0.id == recentSession.id }) else {
+            errorMessage = "Session is no longer available."
+            removeSessionPreview(for: recentSession.id)
+            return
+        }
+
+        prepareSessionSelection(resolved)
+        await selectSession(resolved)
     }
 
     func loadSessionPreviews() -> [String: SessionPreview] {
@@ -406,6 +507,40 @@ extension AppViewModel {
     func persistProjectActionsByScope() {
         guard let data = try? JSONEncoder().encode(projectActionsByScope) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.projectActionsByScope)
+    }
+
+    private func recentSessionDirectoriesToLoad() -> [String?] {
+        var directories: [String?] = []
+        var seen = Set<String>()
+
+        if projects.contains(where: { $0.id == "global" }), seen.insert(SessionListStore.recentDirectoryKey(nil)).inserted {
+            directories.append(nil)
+        }
+
+        for project in projects where project.id != "global" {
+            for directory in [project.worktree] + (project.sandboxes ?? []) {
+                guard !directory.isEmpty else { continue }
+                guard seen.insert(SessionListStore.recentDirectoryKey(directory)).inserted else { continue }
+                directories.append(directory)
+            }
+        }
+
+        return directories
+    }
+
+    private func projectForRecentSession(_ session: OpenCodeSession) -> OpenCodeProject? {
+        if let projectID = session.projectID,
+           let project = projects.first(where: { $0.id == projectID }) {
+            return project
+        }
+
+        guard let directory = session.directory, !directory.isEmpty else {
+            return projects.first { $0.id == "global" }
+        }
+
+        return projects.first { project in
+            project.worktree == directory || (project.sandboxes ?? []).contains(directory)
+        }
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {

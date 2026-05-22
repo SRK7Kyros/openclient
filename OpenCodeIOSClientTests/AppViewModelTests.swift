@@ -10,6 +10,7 @@ final class AppViewModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.messageDraftsByChat)
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.appleIntelligenceWorkspaces)
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.pinnedSessionsByScope)
+        ProjectListPreferencesStore.reset()
         UserDefaults.standard.removeObject(forKey: pinnedCommandTestStorageKey)
     }
 
@@ -17,6 +18,7 @@ final class AppViewModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.messageDraftsByChat)
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.appleIntelligenceWorkspaces)
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.pinnedSessionsByScope)
+        ProjectListPreferencesStore.reset()
         UserDefaults.standard.removeObject(forKey: pinnedCommandTestStorageKey)
         super.tearDown()
     }
@@ -411,6 +413,37 @@ final class AppViewModelTests: XCTestCase {
         let scoped = store.sessions([global, project], scopedTo: nil)
 
         XCTAssertEqual(scoped.map(\.id), ["ses_global"])
+    }
+
+    func testSessionListStoreRecentProjectSessionsSortsAndFiltersLikeUpstream() {
+        let store = SessionListStore()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        var older = makeSession(id: "ses_older")
+        older.time = OpenCodeMessageTime(created: 1_000, updated: 1_000)
+        var newer = makeSession(id: "ses_newer")
+        newer.time = OpenCodeMessageTime(created: 2_000, updated: 4_000)
+        var child = OpenCodeSession(id: "ses_child", title: "Child", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: "ses_newer")
+        child.time = OpenCodeMessageTime(created: 5_000, updated: 5_000)
+        var archived = makeSession(id: "ses_archived")
+        archived.time = OpenCodeMessageTime(created: 6_000, updated: 6_000, archived: 6_000)
+
+        store.setRecentSessions([older, newer, child, archived], for: "/tmp/project")
+
+        let recent = store.recentProjectSessions(projects: [project], previews: [:], statuses: [:])
+
+        XCTAssertEqual(recent.map { $0.session.id }, ["ses_newer", "ses_older"])
+        XCTAssertEqual(recent.map(\.projectTitle), ["Project", "Project"])
+    }
+
+    func testProjectListPreferencesPersistPerServer() {
+        var scoped = ServerScopedProjectListPreferences()
+        scoped.preferencesByBaseURL["http://one.example"] = ProjectListPreferences(showsRecentSessions: false)
+        scoped.preferencesByBaseURL["http://two.example"] = ProjectListPreferences(showsRecentSessions: true)
+
+        ProjectListPreferencesStore.save(scoped)
+
+        XCTAssertEqual(ProjectListPreferencesStore.load().preferencesByBaseURL["http://one.example"]?.showsRecentSessions, false)
+        XCTAssertEqual(ProjectListPreferencesStore.load().preferencesByBaseURL["http://two.example"]?.showsRecentSessions, true)
     }
 
     func testProjectFilesStoreSortsTreeNodesAndTracksExpansionLoadNeed() {

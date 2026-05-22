@@ -63,13 +63,18 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
     let directory: String?
     let projectID: String?
     let parentID: String?
+    var time: OpenCodeMessageTime? = nil
 
     var isRootSession: Bool {
         parentID == nil
     }
 
+    var isArchived: Bool {
+        time?.archived != nil
+    }
+
     func merged(with incoming: OpenCodeSession) -> OpenCodeSession {
-        OpenCodeSession(
+        var session = OpenCodeSession(
             id: incoming.id,
             title: incoming.title ?? title,
             workspaceID: incoming.workspaceID ?? workspaceID,
@@ -77,6 +82,8 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
             projectID: incoming.projectID ?? projectID,
             parentID: incoming.parentID ?? parentID
         )
+        session.time = incoming.time ?? time
+        return session
     }
 }
 
@@ -614,7 +621,16 @@ struct OpenCodeMessageModelReference: Codable, Hashable, Sendable {
 
 struct OpenCodeMessageTime: Codable, Hashable, Sendable {
     let created: Double?
+    let updated: Double?
     let completed: Double?
+    let archived: Double?
+
+    init(created: Double? = nil, updated: Double? = nil, completed: Double? = nil, archived: Double? = nil) {
+        self.created = created
+        self.updated = updated
+        self.completed = completed
+        self.archived = archived
+    }
 }
 
 struct OpenCodeMessageTokenCache: Codable, Hashable, Sendable {
@@ -781,7 +797,9 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     }
 
     func asSession() -> OpenCodeSession {
-        OpenCodeSession(id: id, title: title, workspaceID: nil, directory: directory, projectID: projectID, parentID: parentID)
+        var session = OpenCodeSession(id: id, title: title, workspaceID: nil, directory: directory, projectID: projectID, parentID: parentID)
+        session.time = time
+        return session
     }
 
     init(from decoder: Decoder) throws {

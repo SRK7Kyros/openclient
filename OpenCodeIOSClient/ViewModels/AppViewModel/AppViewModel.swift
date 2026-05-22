@@ -366,6 +366,13 @@ final class AppViewModel: ObservableObject {
             yield &projectPreferencesStore.projectActionsByScope
         }
     }
+    var showsRecentSessionsInProjectList: Bool {
+        get { projectPreferencesStore.showsRecentSessionsInProjectList }
+        set {
+            objectWillChange.send()
+            projectPreferencesStore.showsRecentSessionsInProjectList = newValue
+        }
+    }
     var pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] {
         get { sessionListStore.pendingActionRunsBySessionID }
         set {

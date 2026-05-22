@@ -461,12 +461,14 @@ extension AppViewModel {
             )
             loadNewSessionDefaults()
             loadFunAndGamesPreferences()
+            loadProjectListPreferences()
             sanitizeComposerSelections()
         } catch {
             objectWillChange.send()
             modelConfigurationStore.clearComposerOptions()
             loadNewSessionDefaults()
             loadFunAndGamesPreferences()
+            loadProjectListPreferences()
         }
     }
 
