@@ -435,6 +435,22 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(recent.map(\.projectTitle), ["Project", "Project"])
     }
 
+    func testPrepareRecentProjectSessionSelectionSelectsDirectoryAndSessionImmediately() {
+        let viewModel = AppViewModel()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        let session = makeSession(id: "ses_recent")
+        let recent = RecentProjectSession(session: session, projectTitle: "Project", preview: nil, isBusy: false)
+        viewModel.projects = [project]
+        viewModel.selectedDirectory = "/tmp/other"
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject, project)
+        XCTAssertEqual(viewModel.selectedDirectory, session.directory)
+        XCTAssertEqual(viewModel.selectedSession, session)
+        XCTAssertEqual(viewModel.selectedProjectContentTab, .sessions)
+    }
+
     func testProjectListPreferencesPersistPerServer() {
         var scoped = ServerScopedProjectListPreferences()
         scoped.preferencesByBaseURL["http://one.example"] = ProjectListPreferences(showsRecentSessions: false)

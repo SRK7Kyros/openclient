@@ -390,6 +390,7 @@ extension AppViewModel {
             currentProject = project
         }
         prepareDirectorySelection(recent.session.directory)
+        prepareSessionSelection(recent.session)
     }
 
     func loadRecentProjectSessionsAcrossProjects() async {
@@ -432,7 +433,28 @@ extension AppViewModel {
             currentProject = project
         }
 
-        await selectDirectory(recentSession.directory)
+        if selectedDirectory != recentSession.directory || selectedSession?.id != recentSession.id {
+            prepareDirectorySelection(recentSession.directory)
+            prepareSessionSelection(recentSession)
+        }
+
+        do {
+            if let directory = recentSession.directory, !directory.isEmpty {
+                _ = try await client.listSessions(directory: directory, roots: true, limit: 55)
+                try await refreshProjects()
+            } else {
+                try await refreshProjects()
+            }
+            try await reloadSessions()
+            await loadComposerOptions()
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingProjectPicker = false
+            }
+        } catch {
+            isLoadingSessions = false
+            errorMessage = error.localizedDescription
+            return
+        }
 
         guard let resolved = session(matching: recentSession.id) ?? allSessions.first(where: { $0.id == recentSession.id }) else {
             errorMessage = "Session is no longer available."

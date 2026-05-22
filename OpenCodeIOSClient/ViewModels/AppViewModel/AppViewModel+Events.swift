@@ -355,7 +355,8 @@ extension AppViewModel {
 
         refreshLiveActivityIfNeeded(
             for: eventSessionID,
-            immediate: eventSyncCoordinator.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed)
+            immediate: eventSyncCoordinator.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed) ||
+                (isLiveActivityMessageEvent(payload.type) && activeLiveActivitySessionIDs.contains(eventSessionID ?? ""))
         )
         if eventSyncCoordinator.shouldPublishWidgetSnapshots(after: result) {
             scheduleWidgetSnapshotPublication()
@@ -501,7 +502,7 @@ extension AppViewModel {
         let publishElapsedMS = publishStart.elapsedMilliseconds
 
         for sessionID in Set(events.compactMap(\.sessionID)) {
-            refreshLiveActivityIfNeeded(for: sessionID)
+            refreshLiveActivityIfNeeded(for: sessionID, immediate: true)
         }
 
         logStreamDeltaFlush(
