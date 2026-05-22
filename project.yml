@@ -14,13 +14,14 @@ options:
 settings:
   base:
     SWIFT_VERSION: 6.0
-    CURRENT_PROJECT_VERSION: 18
+    CURRENT_PROJECT_VERSION: 19
     MARKETING_VERSION: 1.0.3
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
       ENABLE_TESTABILITY: YES
       SWIFT_OPTIMIZATION_LEVEL: -Onone
+      ONLY_ACTIVE_ARCH: YES
 schemes:
   OpenCodeIOSClientScreenshots:
     build:
@@ -47,7 +48,12 @@ targets:
           - OpenCodeMacApp.swift
           - Info.plist
           - Generated-Info.plist
+          - AGENTS.md
+          - "**/AGENTS.md"
       - path: OpenCodeShared
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
       - path: AppIcon.icon
         buildPhase: resources
         group: OpenCodeIOSClient
@@ -131,7 +137,12 @@ targets:
       - path: OpenCodeChatActivityExtension
         excludes:
           - Info.plist
+          - AGENTS.md
+          - "**/AGENTS.md"
       - path: OpenCodeShared
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
     preBuildScripts:
       - name: Validate bundle identifier
         script: |
@@ -166,7 +177,12 @@ targets:
       - path: OpenCodeIOSClient
         excludes:
           - OpenCodeIOSClientApp.swift
+          - AGENTS.md
+          - "**/AGENTS.md"
       - path: OpenCodeShared
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.macos
@@ -193,6 +209,9 @@ targets:
     hostApplication: OpenCodeIOSClient
     sources:
       - path: OpenCodeIOSClientTests
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
     dependencies:
       - target: OpenCodeIOSClient
     settings:
@@ -211,6 +230,9 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: OpenCodeIOSClientUITests
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
     dependencies:
       - target: OpenCodeIOSClient
     settings:
@@ -226,6 +248,9 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: OpenCodeMacClientTests
+        excludes:
+          - AGENTS.md
+          - "**/AGENTS.md"
     dependencies:
       - target: OpenCodeMacClient
     settings:

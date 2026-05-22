@@ -536,6 +536,98 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(project.sandboxes, ["/tmp/project-wt"])
     }
 
+    func testSessionDiffDecodesSnapshotFileDiffPayload() throws {
+        let payload = try decodeEvent(
+            #"{"type":"session.diff","properties":{"sessionID":"ses_test","diff":[{"file":"Sources/App.swift","patch":"@@ -1 +1 @@","additions":2,"deletions":1,"status":"modified"}]}}"#
+        )
+
+        guard case let .sessionDiff(sessionID, diff) = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected session.diff typed event")
+        }
+
+        XCTAssertEqual(sessionID, "ses_test")
+        XCTAssertEqual(diff.count, 1)
+        XCTAssertEqual(diff[0].file, "Sources/App.swift")
+        XCTAssertEqual(diff[0].patch, "@@ -1 +1 @@")
+        XCTAssertEqual(diff[0].additions, 2)
+        XCTAssertEqual(diff[0].deletions, 1)
+        XCTAssertEqual(diff[0].status, "modified")
+    }
+
+    func testLowRiskTypedParityEventsDecode() throws {
+        let disposed = try decodeEvent(
+            #"{"type":"server.instance.disposed","properties":{"directory":"/tmp/project"}}"#
+        )
+        guard case let .serverInstanceDisposed(directory) = OpenCodeTypedEvent(envelope: disposed) else {
+            return XCTFail("Expected server.instance.disposed")
+        }
+        XCTAssertEqual(directory, "/tmp/project")
+
+        let lsp = try decodeEvent(
+            #"{"type":"lsp.updated","properties":{}}"#
+        )
+        guard case .lspUpdated = OpenCodeTypedEvent(envelope: lsp) else {
+            return XCTFail("Expected lsp.updated")
+        }
+
+        let fileEdited = try decodeEvent(
+            #"{"type":"file.edited","properties":{"file":"Sources/App.swift"}}"#
+        )
+        guard case let .fileEdited(file) = OpenCodeTypedEvent(envelope: fileEdited) else {
+            return XCTFail("Expected file.edited")
+        }
+        XCTAssertEqual(file, "Sources/App.swift")
+
+        let installationUpdated = try decodeEvent(
+            #"{"type":"installation.updated","properties":{"version":"1.2.3"}}"#
+        )
+        guard case let .installationUpdated(version) = OpenCodeTypedEvent(envelope: installationUpdated) else {
+            return XCTFail("Expected installation.updated")
+        }
+        XCTAssertEqual(version, "1.2.3")
+
+        let updateAvailable = try decodeEvent(
+            #"{"type":"installation.update-available","properties":{"version":"1.2.4"}}"#
+        )
+        guard case let .installationUpdateAvailable(version) = OpenCodeTypedEvent(envelope: updateAvailable) else {
+            return XCTFail("Expected installation.update-available")
+        }
+        XCTAssertEqual(version, "1.2.4")
+    }
+
+    func testSessionDiffReducerStoresSessionLocalDiffs() {
+        let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        let diff = [
+            OpenCodeSnapshotFileDiff(file: "b.swift", patch: "b", additions: 1, deletions: 0, status: "added"),
+            OpenCodeSnapshotFileDiff(file: "a.swift", patch: "a", additions: 0, deletions: 1, status: "deleted")
+        ]
+        var sessions = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        var messages: [OpenCodeMessageEnvelope] = []
+        var todos: [OpenCodeTodo] = []
+        var permissions: [OpenCodePermission] = []
+        var questions: [OpenCodeQuestionRequest] = []
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .sessionDiff(sessionID: selected.id, diff: diff),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .statusChanged = result else {
+            return XCTFail("Expected statusChanged, got \(result)")
+        }
+        XCTAssertEqual(syncState.sessionDiffsBySessionID[selected.id]?.map(\.file), ["a.swift", "b.swift"])
+    }
+
     func testReducerIgnoresOtherSessions() throws {
         let payload = try decodeEvent(
             #"{"type":"message.updated","properties":{"sessionID":"ses_other","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_other"}}}"#
@@ -1351,6 +1443,254 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(messages.first?.parts.count, 1)
     }
 
+    func testMessageRemovedClearsSelectedMessageAndParts() {
+        let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        var sessions: [OpenCodeSession] = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([
+            message(id: "msg_keep", role: "user", text: "Keep me"),
+            message(id: "msg_remove", role: "assistant", text: "Remove me")
+        ], forSessionID: selected.id)
+        var messages = syncState.messageEnvelopes(forSessionID: selected.id)
+        var todos: [OpenCodeTodo] = []
+        var permissions: [OpenCodePermission] = []
+        var questions: [OpenCodeQuestionRequest] = []
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .messageRemoved(sessionID: selected.id, messageID: "msg_remove"),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .message("message removed") = result else {
+            return XCTFail("Expected message removed, got \(result)")
+        }
+        XCTAssertEqual(messages.map(\.id), ["msg_keep"])
+        XCTAssertEqual(syncState.messageEnvelopes(forSessionID: selected.id).map(\.id), ["msg_keep"])
+        XCTAssertNil(syncState.partsByMessageID["msg_remove"])
+    }
+
+    func testPartRemovedDeletesPartBucketWhenLastPartIsRemoved() {
+        let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        var sessions: [OpenCodeSession] = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([message(id: "msg_1", role: "assistant", text: "Only part")], forSessionID: selected.id)
+        var messages = syncState.messageEnvelopes(forSessionID: selected.id)
+        var todos: [OpenCodeTodo] = []
+        var permissions: [OpenCodePermission] = []
+        var questions: [OpenCodeQuestionRequest] = []
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .messagePartRemoved(messageID: "msg_1", partID: "part_msg_1"),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .message("part removed") = result else {
+            return XCTFail("Expected part removed, got \(result)")
+        }
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertTrue(messages[0].parts.isEmpty)
+        XCTAssertNil(syncState.partsByMessageID["msg_1"])
+    }
+
+    func testPermissionLifecycleUpsertsSortedAndRemovesOnReply() {
+        let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        var sessions: [OpenCodeSession] = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.permissionsBySessionID[selected.id] = [
+            permission(id: "perm_1", sessionID: selected.id, permission: "bash"),
+            permission(id: "perm_3", sessionID: selected.id, permission: "edit")
+        ]
+        var messages: [OpenCodeMessageEnvelope] = []
+        var todos: [OpenCodeTodo] = []
+        var permissions = syncState.permissionsBySessionID[selected.id] ?? []
+        var questions: [OpenCodeQuestionRequest] = []
+
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .permissionAsked(permission(id: "perm_2", sessionID: selected.id, permission: "read")),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .permissionAsked(permission(id: "perm_2", sessionID: selected.id, permission: "write")),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        XCTAssertEqual(permissions.map(\.id), ["perm_1", "perm_2", "perm_3"])
+        XCTAssertEqual(syncState.permissionsBySessionID[selected.id]?.map(\.id), ["perm_1", "perm_2", "perm_3"])
+        XCTAssertEqual(permissions.first { $0.id == "perm_2" }?.permission, "write")
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .permissionReplied(sessionID: selected.id, requestID: "perm_2", reply: "once"),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .permissionChanged = result else {
+            return XCTFail("Expected permissionChanged, got \(result)")
+        }
+        XCTAssertEqual(permissions.map(\.id), ["perm_1", "perm_3"])
+        XCTAssertEqual(syncState.permissionsBySessionID[selected.id]?.map(\.id), ["perm_1", "perm_3"])
+    }
+
+    func testQuestionLifecycleUpsertsSortedAndRemovesOnReplyOrReject() {
+        let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        var sessions: [OpenCodeSession] = [selected]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.questionsBySessionID[selected.id] = [
+            questionRequest(id: "q_1", sessionID: selected.id, header: "First"),
+            questionRequest(id: "q_3", sessionID: selected.id, header: "Third")
+        ]
+        var messages: [OpenCodeMessageEnvelope] = []
+        var todos: [OpenCodeTodo] = []
+        var permissions: [OpenCodePermission] = []
+        var questions = syncState.questionsBySessionID[selected.id] ?? []
+
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .questionAsked(questionRequest(id: "q_2", sessionID: selected.id, header: "Second")),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .questionAsked(questionRequest(id: "q_2", sessionID: selected.id, header: "Updated")),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        XCTAssertEqual(questions.map(\.id), ["q_1", "q_2", "q_3"])
+        XCTAssertEqual(syncState.questionsBySessionID[selected.id]?.map(\.id), ["q_1", "q_2", "q_3"])
+        XCTAssertEqual(questions.first { $0.id == "q_2" }?.questions.first?.header, "Updated")
+
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .questionReplied(sessionID: selected.id, requestID: "q_2"),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .questionRejected(sessionID: selected.id, requestID: "q_3"),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .questionChanged = result else {
+            return XCTFail("Expected questionChanged, got \(result)")
+        }
+        XCTAssertEqual(questions.map(\.id), ["q_1"])
+        XCTAssertEqual(syncState.questionsBySessionID[selected.id]?.map(\.id), ["q_1"])
+    }
+
+    func testTodoUpdatedStoresSessionLocalStateAndOnlyUpdatesSelectedVisibleTodos() {
+        let selected = OpenCodeSession(id: "ses_selected", title: "Selected", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        let other = OpenCodeSession(id: "ses_other", title: "Other", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        var sessions: [OpenCodeSession] = [selected, other]
+        var selectedSession: OpenCodeSession? = selected
+        var sessionStatuses: [String: String] = [:]
+        var syncState = OpenCodeDirectorySyncState()
+        var messages: [OpenCodeMessageEnvelope] = []
+        var todos = [OpenCodeTodo(content: "Visible", status: "pending", priority: "high")]
+        var permissions: [OpenCodePermission] = []
+        var questions: [OpenCodeQuestionRequest] = []
+        let otherTodos = [OpenCodeTodo(content: "Other", status: "in_progress", priority: "medium")]
+        let selectedTodos = [OpenCodeTodo(content: "Selected", status: "completed", priority: "low")]
+
+        _ = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .todoUpdated(sessionID: other.id, todos: otherTodos),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        XCTAssertEqual(todos.map(\.content), ["Visible"])
+        XCTAssertEqual(syncState.todosBySessionID[other.id], otherTodos)
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(
+            event: .todoUpdated(sessionID: selected.id, todos: selectedTodos),
+            sessions: &sessions,
+            selectedSession: &selectedSession,
+            sessionStatuses: &sessionStatuses,
+            syncState: &syncState,
+            messages: &messages,
+            todos: &todos,
+            permissions: &permissions,
+            questions: &questions
+        )
+
+        guard case .todoChanged = result else {
+            return XCTFail("Expected todoChanged, got \(result)")
+        }
+        XCTAssertEqual(todos, selectedTodos)
+        XCTAssertEqual(syncState.todosBySessionID[selected.id], selectedTodos)
+    }
+
     func testLargeMessageChunkerSplitsCapturedPerformanceSessionShape() throws {
         let text = Self.capturedPerformanceSessionText
         let message = Self.performanceSessionMessage(text: text)
@@ -1628,6 +1968,33 @@ This appended section simulates more streamed text arriving after some chunks ha
             parts: [
                 OpenCodePart(id: "part_\(id)", messageID: id, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: text),
             ]
+        )
+    }
+
+    private func permission(id: String, sessionID: String, permission: String) -> OpenCodePermission {
+        OpenCodePermission(
+            id: id,
+            sessionID: sessionID,
+            permission: permission,
+            patterns: [permission],
+            always: nil,
+            metadata: nil,
+            tool: nil
+        )
+    }
+
+    private func questionRequest(id: String, sessionID: String, header: String) -> OpenCodeQuestionRequest {
+        OpenCodeQuestionRequest(
+            id: id,
+            sessionID: sessionID,
+            questions: [
+                OpenCodeQuestion(
+                    question: "Choose",
+                    header: header,
+                    options: [OpenCodeQuestionOption(label: "Yes", description: "Continue")]
+                )
+            ],
+            tool: nil
         )
     }
 

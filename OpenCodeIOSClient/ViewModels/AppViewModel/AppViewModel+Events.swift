@@ -49,7 +49,7 @@ final class OpenCodeEventInterestSnapshot: @unchecked Sendable {
         switch event {
         case let .sessionCreated(session), let .sessionUpdated(session), let .sessionDeleted(session):
             return session.id
-        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
+        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID, _), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
             return sessionID
         case let .sessionError(sessionID, _):
             return sessionID
@@ -353,14 +353,6 @@ extension AppViewModel {
             break
         }
 
-        if let currentSelectedSession,
-           payload.type == "session.diff",
-           payload.properties.sessionID == currentSelectedSession.id {
-            Task { [weak self] in
-                await self?.loadTodos(for: currentSelectedSession)
-            }
-        }
-
         refreshLiveActivityIfNeeded(
             for: eventSessionID,
             immediate: Self.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed)
@@ -566,18 +558,8 @@ extension AppViewModel {
         updatesSelectedMessages: Bool = true
     ) {
         let scopedSessions = sessionListStore.sessions(state.sessions, scopedTo: effectiveSelectedDirectory)
-        if scopedSessions != allSessions {
-            allSessions = scopedSessions
-        }
-        if state.selectedSession != selectedSession {
-            selectedSession = state.selectedSession
-        }
-        if state.sessionStatuses != sessionStatuses {
-            sessionStatuses = state.sessionStatuses
-        }
-        if state.syncState != directoryStore.syncState {
+        if directoryStore.applyReducedEventState(state, scopedSessions: scopedSessions) {
             objectWillChange.send()
-            directoryStore.syncState = state.syncState
         }
         if updatesSelectedMessages {
             let projectedMessages: [OpenCodeMessageEnvelope]

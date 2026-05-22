@@ -59,4 +59,31 @@ final class DirectoryStore: ObservableObject {
         sessionStatuses = [:]
         syncStore.state = OpenCodeDirectorySyncState()
     }
+
+    @discardableResult
+    func applyReducedEventState(
+        _ state: OpenCodeDirectoryEventState,
+        scopedSessions: [OpenCodeSession]
+    ) -> Bool {
+        var changed = false
+
+        if scopedSessions != sessions {
+            sessions = scopedSessions
+            changed = true
+        }
+        if state.selectedSession != selectedSession {
+            selectedSession = state.selectedSession
+            changed = true
+        }
+        if state.sessionStatuses != sessionStatuses {
+            sessionStatuses = state.sessionStatuses
+            changed = true
+        }
+        if state.syncState != syncStore.state {
+            syncStore.state = state.syncState
+            changed = true
+        }
+
+        return changed
+    }
 }

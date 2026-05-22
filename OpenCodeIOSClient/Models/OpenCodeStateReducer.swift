@@ -81,6 +81,9 @@ enum OpenCodeStateReducer {
             sessionStatuses[sessionID] = "idle"
             syncState.sessionStatusesBySessionID[sessionID] = "idle"
             return selectedSession?.id == sessionID ? .idle : .statusChanged
+        case let .sessionDiff(sessionID, diff):
+            syncState.sessionDiffsBySessionID[sessionID] = diff.sorted { $0.file < $1.file }
+            return .statusChanged
         case let .todoUpdated(sessionID, updatedTodos):
             syncState.todosBySessionID[sessionID] = updatedTodos
             if sessionID == selectedSession?.id {
@@ -131,6 +134,7 @@ enum OpenCodeStateReducer {
             } else {
                 sessionPermissions.append(permission)
             }
+            sessionPermissions.sort { $0.id < $1.id }
             syncState.permissionsBySessionID[permission.sessionID] = sessionPermissions
             if permission.sessionID == selectedSession?.id {
                 if let index = permissions.firstIndex(where: { $0.id == permission.id }) {
@@ -138,6 +142,7 @@ enum OpenCodeStateReducer {
                 } else {
                     permissions.append(permission)
                 }
+                permissions.sort { $0.id < $1.id }
             }
             return .permissionChanged
         case let .permissionReplied(sessionID, requestID, _):
@@ -154,6 +159,7 @@ enum OpenCodeStateReducer {
             } else {
                 sessionQuestions.append(question)
             }
+            sessionQuestions.sort { $0.id < $1.id }
             syncState.questionsBySessionID[question.sessionID] = sessionQuestions
             if question.sessionID == selectedSession?.id {
                 if let index = questions.firstIndex(where: { $0.id == question.id }) {
@@ -161,6 +167,7 @@ enum OpenCodeStateReducer {
                 } else {
                     questions.append(question)
                 }
+                questions.sort { $0.id < $1.id }
             }
             return .questionChanged
         case let .questionReplied(sessionID, requestID), let .questionRejected(sessionID, requestID):
@@ -200,6 +207,7 @@ enum OpenCodeStateReducer {
         syncState.todosBySessionID[session.id] = nil
         syncState.permissionsBySessionID[session.id] = nil
         syncState.questionsBySessionID[session.id] = nil
+        syncState.sessionDiffsBySessionID[session.id] = nil
         syncState.removeMessages(forSessionID: session.id)
         if selectedSession?.id == session.id {
             selectedSession = nil

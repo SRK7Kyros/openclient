@@ -155,7 +155,7 @@ final class SessionListStore: ObservableObject {
 
     func sessions(_ sessions: [OpenCodeSession], scopedTo directory: String?) -> [OpenCodeSession] {
         guard let directory, !directory.isEmpty else {
-            return sessions.filter { ($0.directory ?? "").isEmpty }
+            return sessions
         }
 
         return sessions.filter { $0.directory == directory }

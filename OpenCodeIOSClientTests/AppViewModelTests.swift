@@ -938,6 +938,71 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.map(\.id), ["msg_assistant"])
     }
 
+    func testReducerHandledNonIdleEventsDoNotStartFallbackReload() {
+        let viewModel = AppViewModel()
+        let selectedSession = makeSession(id: "ses_selected")
+
+        viewModel.isConnected = true
+        viewModel.selectedDirectory = "/tmp/project"
+        viewModel.currentProject = OpenCodeProject(
+            id: "proj_test",
+            worktree: "/tmp/project",
+            vcs: "git",
+            name: "project",
+            sandboxes: nil,
+            icon: nil,
+            time: nil
+        )
+        viewModel.selectedSession = selectedSession
+        viewModel.allSessions = [selectedSession]
+        viewModel.todos = [OpenCodeTodo(content: "Existing", status: "pending", priority: "high")]
+
+        let events: [OpenCodeManagedEvent] = [
+            OpenCodeManagedEvent(
+                directory: "/tmp/project",
+                envelope: OpenCodeEventEnvelope(
+                    type: "todo.updated",
+                    properties: OpenCodeEventProperties(
+                        sessionID: selectedSession.id,
+                        todos: [OpenCodeTodo(content: "Updated", status: "in_progress", priority: "medium")]
+                    )
+                ),
+                typed: .todoUpdated(sessionID: selectedSession.id, todos: [OpenCodeTodo(content: "Updated", status: "in_progress", priority: "medium")])
+            ),
+            OpenCodeManagedEvent(
+                directory: "/tmp/project",
+                envelope: OpenCodeEventEnvelope(
+                    type: "permission.replied",
+                    properties: OpenCodeEventProperties(sessionID: selectedSession.id, requestID: "perm_1")
+                ),
+                typed: .permissionReplied(sessionID: selectedSession.id, requestID: "perm_1", reply: nil)
+            ),
+            OpenCodeManagedEvent(
+                directory: "/tmp/project",
+                envelope: OpenCodeEventEnvelope(
+                    type: "question.rejected",
+                    properties: OpenCodeEventProperties(sessionID: selectedSession.id, requestID: "q_1")
+                ),
+                typed: .questionRejected(sessionID: selectedSession.id, requestID: "q_1")
+            ),
+            OpenCodeManagedEvent(
+                directory: "/tmp/project",
+                envelope: OpenCodeEventEnvelope(
+                    type: "session.diff",
+                    properties: OpenCodeEventProperties(sessionID: selectedSession.id)
+                ),
+                typed: .sessionDiff(sessionID: selectedSession.id, diff: [])
+            )
+        ]
+
+        for event in events {
+            viewModel.handleManagedEvent(event)
+            XCTAssertNil(viewModel.reloadTask, "\(event.envelope.type) should not schedule fallback reload")
+        }
+
+        XCTAssertEqual(viewModel.todos.map(\.content), ["Updated"])
+    }
+
     func testActiveLiveActivityMessageEventBypassesSelectedDirectoryGateAndUpdatesCache() {
         let viewModel = AppViewModel()
         let selected = makeSession(id: "ses_selected")

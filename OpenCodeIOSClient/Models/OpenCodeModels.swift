@@ -352,6 +352,7 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
     var permissionsBySessionID: [String: [OpenCodePermission]] = [:]
     var questionsBySessionID: [String: [OpenCodeQuestionRequest]] = [:]
     var sessionStatusesBySessionID: [String: String] = [:]
+    var sessionDiffsBySessionID: [String: [OpenCodeVCSFileDiff]] = [:]
 
     mutating func replaceMessages(_ envelopes: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
         messagesBySessionID[sessionID] = envelopes.map(\.info).sorted { $0.id < $1.id }
@@ -428,6 +429,9 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
            let index = parts.firstIndex(where: { $0.id == partID }) {
             parts[index] = mergedPartUpdate(rawPart, existing: parts[index])
         } else {
+            // Preserve live part arrival order. On-device streaming has been
+            // validated against this behavior; sorting by part id can move the
+            // active text part and prevent visible streaming from updating.
             parts.append(rawPart)
         }
         partsByMessageID[messageID] = parts
@@ -1342,6 +1346,8 @@ struct OpenCodeVCSFileDiff: Codable, Hashable, Identifiable, Sendable {
     var id: String { file }
 }
 
+typealias OpenCodeSnapshotFileDiff = OpenCodeVCSFileDiff
+
 struct OpenCodeVCSSummary: Hashable, Sendable {
     let fileCount: Int
     let additions: Int
@@ -1952,15 +1958,20 @@ struct OpenCodeSessionErrorPayload: Codable, Hashable, Sendable {
 
 enum OpenCodeTypedEvent: Sendable {
     case projectUpdated(OpenCodeProject)
+    case serverInstanceDisposed(directory: String)
     case serverConnected
     case globalDisposed
+    case lspUpdated
+    case fileEdited(file: String)
+    case installationUpdated(version: String)
+    case installationUpdateAvailable(version: String)
     case sessionCreated(OpenCodeSession)
     case sessionUpdated(OpenCodeSession)
     case sessionDeleted(OpenCodeSession)
     case sessionStatus(sessionID: String, status: String)
     case sessionIdle(sessionID: String)
     case sessionError(sessionID: String?, message: String?)
-    case sessionDiff(sessionID: String)
+    case sessionDiff(sessionID: String, diff: [OpenCodeSnapshotFileDiff])
     case todoUpdated(sessionID: String, todos: [OpenCodeTodo])
     case messageUpdated(OpenCodeMessage)
     case messageRemoved(sessionID: String, messageID: String)
@@ -1981,10 +1992,24 @@ enum OpenCodeTypedEvent: Sendable {
         case "project.updated":
             guard let data = try? JSONDecoder().decode(OpenCodeProject.self, from: try JSONEncoder().encode(envelope.properties)) else { return nil }
             self = .projectUpdated(data)
+        case "server.instance.disposed":
+            guard let directory = envelope.properties.directory else { return nil }
+            self = .serverInstanceDisposed(directory: directory)
         case "server.connected":
             self = .serverConnected
         case "global.disposed":
             self = .globalDisposed
+        case "lsp.updated":
+            self = .lspUpdated
+        case "file.edited":
+            guard let file = envelope.properties.file else { return nil }
+            self = .fileEdited(file: file)
+        case "installation.updated":
+            guard let version = envelope.properties.version else { return nil }
+            self = .installationUpdated(version: version)
+        case "installation.update-available":
+            guard let version = envelope.properties.version else { return nil }
+            self = .installationUpdateAvailable(version: version)
         case "session.created":
             guard let info = envelope.properties.info else { return nil }
             self = .sessionCreated(info.asSession())
@@ -2005,7 +2030,7 @@ enum OpenCodeTypedEvent: Sendable {
             self = .sessionError(sessionID: envelope.properties.sessionID, message: envelope.properties.error?.data?.message)
         case "session.diff":
             guard let sessionID = envelope.properties.sessionID else { return nil }
-            self = .sessionDiff(sessionID: sessionID)
+            self = .sessionDiff(sessionID: sessionID, diff: envelope.properties.diff ?? [])
         case "todo.updated":
             guard let sessionID = envelope.properties.sessionID,
                   let todos = envelope.properties.todos else { return nil }
@@ -2095,6 +2120,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let reason: String?
     let status: OpenCodeSessionStatus?
     let todos: [OpenCodeTodo]?
+    let diff: [OpenCodeSnapshotFileDiff]?
     let messageID: String?
     let partID: String?
     let field: String?
@@ -2118,6 +2144,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let error: OpenCodeSessionErrorPayload?
     let branch: String?
     let file: String?
+    let directory: String?
+    let version: String?
 
     init(
         worktree: String? = nil,
@@ -2138,6 +2166,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         reason: String? = nil,
         status: OpenCodeSessionStatus? = nil,
         todos: [OpenCodeTodo]? = nil,
+        diff: [OpenCodeSnapshotFileDiff]? = nil,
         messageID: String? = nil,
         partID: String? = nil,
         field: String? = nil,
@@ -2160,7 +2189,9 @@ struct OpenCodeEventProperties: Codable, Sendable {
         message: String? = nil,
         error: OpenCodeSessionErrorPayload? = nil,
         branch: String? = nil,
-        file: String? = nil
+        file: String? = nil,
+        directory: String? = nil,
+        version: String? = nil
     ) {
         self.worktree = worktree
         self.vcs = vcs
@@ -2180,6 +2211,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         self.reason = reason
         self.status = status
         self.todos = todos
+        self.diff = diff
         self.messageID = messageID
         self.partID = partID
         self.field = field
@@ -2203,6 +2235,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
         self.error = error
         self.branch = branch
         self.file = file
+        self.directory = directory
+        self.version = version
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2224,6 +2258,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case reason
         case status
         case todos
+        case diff
         case messageID
         case partID
         case field
@@ -2247,6 +2282,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case error
         case branch
         case file
+        case directory
+        case version
     }
 
     func reconstructedPartFromFlatEvent() -> OpenCodePart? {

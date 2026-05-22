@@ -1,38 +1,41 @@
 import Foundation
 
+struct OpenCodeDirectoryEventState: Equatable {
+    var sessions: [OpenCodeSession]
+    var selectedSession: OpenCodeSession?
+    var sessionStatuses: [String: String]
+    var syncState: OpenCodeDirectorySyncState
+    var messages: [OpenCodeMessageEnvelope]
+    var todos: [OpenCodeTodo]
+    var permissions: [OpenCodePermission]
+    var questions: [OpenCodeQuestionRequest]
+}
+
+struct OpenCodeDirectoryEventApplication {
+    var state: OpenCodeDirectoryEventState
+    var results: [SessionEventResult]
+
+    var result: SessionEventResult {
+        results.last ?? .ignored("no events")
+    }
+
+    var messageApplyCount: Int {
+        results.reduce(0) { count, result in
+            if case .message = result {
+                return count + 1
+            }
+            return count
+        }
+    }
+}
+
 @MainActor
 final class EventSyncCoordinator {
+    typealias DirectoryEventState = OpenCodeDirectoryEventState
+    typealias DirectoryEventApplication = OpenCodeDirectoryEventApplication
+
     enum GlobalEventAction {
         case refreshProjectsAndSessions
-    }
-
-    struct DirectoryEventState: Equatable {
-        var sessions: [OpenCodeSession]
-        var selectedSession: OpenCodeSession?
-        var sessionStatuses: [String: String]
-        var syncState: OpenCodeDirectorySyncState
-        var messages: [OpenCodeMessageEnvelope]
-        var todos: [OpenCodeTodo]
-        var permissions: [OpenCodePermission]
-        var questions: [OpenCodeQuestionRequest]
-    }
-
-    struct DirectoryEventApplication {
-        var state: DirectoryEventState
-        var results: [SessionEventResult]
-
-        var result: SessionEventResult {
-            results.last ?? .ignored("no events")
-        }
-
-        var messageApplyCount: Int {
-            results.reduce(0) { count, result in
-                if case .message = result {
-                    return count + 1
-                }
-                return count
-            }
-        }
     }
 
     func shouldProcessEvent(isConnected: Bool) -> Bool {
@@ -119,7 +122,7 @@ final class EventSyncCoordinator {
         switch event {
         case let .sessionCreated(session), let .sessionUpdated(session), let .sessionDeleted(session):
             return session.id == selectedSessionID
-        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
+        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID, _), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
             return sessionID == selectedSessionID
         case let .sessionError(sessionID, _):
             return sessionID == nil || sessionID == selectedSessionID
@@ -144,7 +147,7 @@ final class EventSyncCoordinator {
         switch event {
         case let .sessionCreated(session), let .sessionUpdated(session), let .sessionDeleted(session):
             return session.id
-        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
+        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID, _), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
             return sessionID
         case let .sessionError(sessionID, _):
             return sessionID
