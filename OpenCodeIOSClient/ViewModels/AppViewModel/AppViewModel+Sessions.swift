@@ -141,6 +141,7 @@ extension AppViewModel {
             isProjectWorkspacesEnabled: isProjectWorkspacesEnabled,
             effectiveSelectedDirectory: effectiveSelectedDirectory,
             workspaceDirectories: workspaceDirectories(),
+            preserveMissingSelectedSession: previousSelectedSession?.id == pendingRecentSessionOpenID,
             fallbackSession: { [weak self] sessionID in self?.session(matching: sessionID) }
         )
 

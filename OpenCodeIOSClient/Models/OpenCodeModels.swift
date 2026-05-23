@@ -73,6 +73,12 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
         time?.archived != nil
     }
 
+    var isGlobalScopeSession: Bool {
+        if projectID == "global" { return true }
+        guard let directory, !directory.isEmpty else { return true }
+        return directory == "/"
+    }
+
     func merged(with incoming: OpenCodeSession) -> OpenCodeSession {
         var session = OpenCodeSession(
             id: incoming.id,

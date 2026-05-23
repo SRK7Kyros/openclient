@@ -1,5 +1,114 @@
 import Foundation
 
+enum LiveActivityDeepLinkAction: Equatable {
+    case open
+    case permission(requestID: String, reply: String)
+    case question(requestID: String, answer: String)
+}
+
+struct LiveActivityDeepLink: Equatable {
+    var sessionID: String
+    var directory: String?
+    var workspaceID: String?
+    var action: LiveActivityDeepLinkAction
+}
+
+struct LiveActivitySessionSnapshot: Equatable {
+    var sessionID: String
+    var sessionTitle: String
+    var workspaceID: String?
+    var directory: String?
+}
+
+enum LiveActivitySessionResolution: Equatable {
+    case existing(OpenCodeSession)
+    case fallback(OpenCodeSession)
+
+    var session: OpenCodeSession {
+        switch self {
+        case let .existing(session), let .fallback(session):
+            return session
+        }
+    }
+}
+
+enum LiveActivityCoordinator {
+    static func deepLink(from url: URL) -> LiveActivityDeepLink? {
+        guard url.scheme == OpenCodeChatActivityDeepLink.scheme,
+              url.host == OpenCodeChatActivityDeepLink.host else {
+            return nil
+        }
+
+        let pathComponents = url.pathComponents
+        guard pathComponents.count >= 3, pathComponents[1] == "session" else { return nil }
+
+        let sessionID = pathComponents[2]
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let queryItems = components?.queryItems ?? []
+        let actionValue = queryItems.first(where: { $0.name == "action" })?.value
+        let directory = queryItems.first(where: { $0.name == "directory" })?.value
+        let workspaceID = queryItems.first(where: { $0.name == "workspace" })?.value
+        let action: LiveActivityDeepLinkAction
+
+        switch actionValue {
+        case "permission":
+            guard let requestID = queryItems.first(where: { $0.name == "requestID" })?.value,
+                  let reply = queryItems.first(where: { $0.name == "reply" })?.value else {
+                return nil
+            }
+            action = .permission(requestID: requestID, reply: reply)
+        case "question":
+            guard let requestID = queryItems.first(where: { $0.name == "requestID" })?.value,
+                  let answer = queryItems.first(where: { $0.name == "answer" })?.value else {
+                return nil
+            }
+            action = .question(requestID: requestID, answer: answer)
+        default:
+            action = .open
+        }
+
+        return LiveActivityDeepLink(
+            sessionID: sessionID,
+            directory: directory,
+            workspaceID: workspaceID,
+            action: action
+        )
+    }
+
+    static func resolveSession(
+        sessionID: String,
+        directory: String?,
+        workspaceID: String?,
+        knownSessions: [OpenCodeSession],
+        selectedSession: OpenCodeSession?,
+        activitySnapshot: LiveActivitySessionSnapshot?
+    ) -> LiveActivitySessionResolution {
+        if let session = knownSessions.first(where: { $0.id == sessionID }) ?? (selectedSession?.id == sessionID ? selectedSession : nil) {
+            return .existing(session)
+        }
+
+        if let activitySnapshot {
+            return .fallback(OpenCodeSession(
+                id: activitySnapshot.sessionID,
+                title: activitySnapshot.sessionTitle,
+                workspaceID: activitySnapshot.workspaceID,
+                directory: activitySnapshot.directory,
+                projectID: nil,
+                parentID: nil
+            ))
+        }
+
+        return .fallback(OpenCodeSession(
+            id: sessionID,
+            title: "Session",
+            workspaceID: workspaceID,
+            directory: directory,
+            projectID: nil,
+            parentID: nil
+        ))
+    }
+}
+
 #if canImport(ActivityKit) && os(iOS)
 import ActivityKit
 
@@ -14,14 +123,7 @@ struct LiveActivityStartRequest {
     var state: OpenCodeChatActivityAttributes.ContentState
 }
 
-struct LiveActivitySessionSnapshot {
-    var sessionID: String
-    var sessionTitle: String
-    var workspaceID: String?
-    var directory: String?
-}
-
-enum LiveActivityCoordinator {
+extension LiveActivityCoordinator {
     static func requestOrUpdate(_ request: LiveActivityStartRequest) async throws {
         try await Task.detached(priority: .userInitiated) {
             if let existing = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == request.sessionID }) {

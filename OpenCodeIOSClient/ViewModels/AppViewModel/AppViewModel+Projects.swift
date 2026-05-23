@@ -386,10 +386,8 @@ extension AppViewModel {
     }
 
     func prepareRecentProjectSessionSelection(_ recent: RecentProjectSession) {
-        if let project = projectForRecentSession(recent.session) {
-            currentProject = project
-        }
-        prepareDirectorySelection(recent.session.directory)
+        currentProject = projectForRecentSession(recent.session)
+        prepareDirectorySelection(routeDirectory(forRecentSession: recent.session))
         prepareSessionSelection(recent.session)
     }
 
@@ -428,13 +426,14 @@ extension AppViewModel {
 
     func openRecentProjectSession(_ recent: RecentProjectSession) async {
         let recentSession = recent.session
-        let project = projectForRecentSession(recentSession)
-        if let project {
-            currentProject = project
-        }
+        let isGlobalRecentSession = recentSession.isGlobalScopeSession
+        pendingRecentSessionOpenID = isGlobalRecentSession ? recentSession.id : nil
+        defer { pendingRecentSessionOpenID = nil }
+        currentProject = projectForRecentSession(recentSession)
 
-        if selectedDirectory != recentSession.directory || selectedSession?.id != recentSession.id {
-            prepareDirectorySelection(recentSession.directory)
+        let routeDirectory = routeDirectory(forRecentSession: recentSession)
+        if selectedDirectory != routeDirectory || selectedSession?.id != recentSession.id {
+            prepareDirectorySelection(routeDirectory)
             prepareSessionSelection(recentSession)
         }
 
@@ -456,14 +455,21 @@ extension AppViewModel {
             return
         }
 
-        guard let resolved = session(matching: recentSession.id) ?? allSessions.first(where: { $0.id == recentSession.id }) else {
+        guard let resolved = session(matching: recentSession.id) ?? allSessions.first(where: { $0.id == recentSession.id }) ?? fallbackGlobalRecentSession(recentSession) else {
             errorMessage = "Session is no longer available."
             removeSessionPreview(for: recentSession.id)
             return
         }
 
+        if resolved.isGlobalScopeSession, !allSessions.contains(where: { $0.id == resolved.id }) {
+            upsertVisibleSession(resolved)
+        }
         prepareSessionSelection(resolved)
         await selectSession(resolved)
+    }
+
+    private func routeDirectory(forRecentSession session: OpenCodeSession) -> String? {
+        session.isGlobalScopeSession ? nil : session.directory
     }
 
     func loadSessionPreviews() -> [String: SessionPreview] {
@@ -556,13 +562,38 @@ extension AppViewModel {
             return project
         }
 
-        guard let directory = session.directory, !directory.isEmpty else {
-            return projects.first { $0.id == "global" }
+        guard !session.isGlobalScopeSession,
+              let directory = session.directory,
+              !directory.isEmpty else {
+            return globalProjectForRecentSession()
         }
 
         return projects.first { project in
             project.worktree == directory || (project.sandboxes ?? []).contains(directory)
         }
+    }
+
+    private func globalProjectForRecentSession() -> OpenCodeProject {
+        if let project = projects.first(where: { $0.id == "global" }) {
+            return project
+        }
+
+        let project = OpenCodeProject(
+            id: "global",
+            worktree: "",
+            vcs: nil,
+            name: "Global",
+            sandboxes: nil,
+            icon: nil,
+            time: nil
+        )
+        projects.insert(project, at: 0)
+        return project
+    }
+
+    private func fallbackGlobalRecentSession(_ session: OpenCodeSession) -> OpenCodeSession? {
+        guard session.isGlobalScopeSession else { return nil }
+        return session
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {

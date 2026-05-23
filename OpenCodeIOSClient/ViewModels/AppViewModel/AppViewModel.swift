@@ -711,6 +711,7 @@ final class AppViewModel: ObservableObject {
     var foregroundChatCatchUpTask: Task<Void, Never>?
     var lastForegroundChatCatchUpScheduledAt = Date.distantPast
     var reloadTask: Task<Void, Never>?
+    var pendingRecentSessionOpenID: String?
     var vcsEventRefreshTask: Task<Void, Never>?
     var widgetSnapshotPublishTask: Task<Void, Never>?
     var connectionAttemptTask: Task<Void, Never>?

@@ -161,7 +161,7 @@ final class ProjectCoordinator {
     }
 
     private func mergeProjectsPreservingLocal(serverProjects: [OpenCodeProject], currentProjects: [OpenCodeProject]) -> [OpenCodeProject] {
-        let localProjects = currentProjects.filter { $0.id.hasPrefix("local:") }
+        let localProjects = currentProjects.filter { $0.id.hasPrefix("local:") || $0.id == "global" }
         var merged: [String: OpenCodeProject] = [:]
 
         for project in localProjects {

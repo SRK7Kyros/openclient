@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
 
@@ -48,14 +49,18 @@ struct RootView: View {
         .animation(opencodeSelectionAnimation, value: viewModel.hasActiveWorkspace)
     }
 
+    @ViewBuilder
     private var appShell: some View {
+        splitShell
+    }
+
+    private var splitShell: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
             ProjectListView(viewModel: viewModel) {
                 guard viewModel.currentProject != nil else { return }
 
                 withAnimation(opencodeSelectionAnimation) {
-                    columnVisibility = .doubleColumn
-                    preferredCompactColumn = viewModel.selectedSession == nil ? .content : .detail
+                    showProjectContentOrDetail()
                 }
             }
         } content: {
@@ -95,11 +100,12 @@ struct RootView: View {
 
             if sessionID == nil {
                 withAnimation(opencodeSelectionAnimation) {
+                    columnVisibility = .doubleColumn
                     preferredCompactColumn = .content
                 }
             } else {
                 withAnimation(opencodeSelectionAnimation) {
-                    preferredCompactColumn = .detail
+                    showDetailColumn()
                 }
             }
         }
@@ -108,8 +114,7 @@ struct RootView: View {
                 if projectID == nil {
                     showProjectSidebarIfNeeded()
                 } else {
-                    columnVisibility = .doubleColumn
-                    preferredCompactColumn = .content
+                    showProjectContentOrDetail()
                 }
             }
         }
@@ -124,6 +129,20 @@ struct RootView: View {
 
         columnVisibility = .all
         preferredCompactColumn = .sidebar
+    }
+
+    private func showProjectContentOrDetail() {
+        if viewModel.selectedSession == nil {
+            columnVisibility = .doubleColumn
+            preferredCompactColumn = .content
+        } else {
+            showDetailColumn()
+        }
+    }
+
+    private func showDetailColumn() {
+        columnVisibility = horizontalSizeClass == .compact ? .detailOnly : .doubleColumn
+        preferredCompactColumn = .detail
     }
 }
 

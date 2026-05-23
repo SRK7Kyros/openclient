@@ -149,6 +149,87 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.shouldRefreshLiveActivityImmediately(after: .idle, event: .sessionIdle(sessionID: "ses_1")))
     }
 
+    func testLiveActivityCoordinatorParsesOpenDeepLink() throws {
+        let url = try XCTUnwrap(OpenCodeChatActivityDeepLink.openAppURL(
+            sessionID: "ses_1",
+            directory: "/tmp/project",
+            workspaceID: "wrk_1"
+        ))
+
+        let deepLink = LiveActivityCoordinator.deepLink(from: url)
+
+        XCTAssertEqual(deepLink, LiveActivityDeepLink(
+            sessionID: "ses_1",
+            directory: "/tmp/project",
+            workspaceID: "wrk_1",
+            action: .open
+        ))
+    }
+
+    func testLiveActivityCoordinatorParsesPermissionAndQuestionDeepLinks() throws {
+        let permissionURL = try XCTUnwrap(OpenCodeChatActivityDeepLink.permissionURL(
+            sessionID: "ses_1",
+            requestID: "perm_1",
+            reply: "allow",
+            directory: "/tmp/project"
+        ))
+        let questionURL = try XCTUnwrap(OpenCodeChatActivityDeepLink.questionURL(
+            sessionID: "ses_1",
+            requestID: "q_1",
+            answer: "Yes",
+            directory: "/tmp/project"
+        ))
+
+        XCTAssertEqual(LiveActivityCoordinator.deepLink(from: permissionURL)?.action, .permission(requestID: "perm_1", reply: "allow"))
+        XCTAssertEqual(LiveActivityCoordinator.deepLink(from: questionURL)?.action, .question(requestID: "q_1", answer: "Yes"))
+    }
+
+    func testLiveActivityCoordinatorRejectsInvalidDeepLinks() {
+        XCTAssertNil(LiveActivityCoordinator.deepLink(from: URL(string: "openclient://other/session/ses_1")!))
+        XCTAssertNil(LiveActivityCoordinator.deepLink(from: URL(string: "openclient://live-activity/project/ses_1")!))
+        XCTAssertNil(LiveActivityCoordinator.deepLink(from: URL(string: "openclient://live-activity/session/ses_1?action=permission")!))
+    }
+
+    func testLiveActivityCoordinatorResolvesExistingAndFallbackSessions() {
+        let known = makeSession(id: "ses_known", directory: "/tmp/project")
+
+        let existing = LiveActivityCoordinator.resolveSession(
+            sessionID: known.id,
+            directory: nil,
+            workspaceID: nil,
+            knownSessions: [known],
+            selectedSession: nil,
+            activitySnapshot: nil
+        )
+        let activityFallback = LiveActivityCoordinator.resolveSession(
+            sessionID: "ses_activity",
+            directory: nil,
+            workspaceID: nil,
+            knownSessions: [],
+            selectedSession: nil,
+            activitySnapshot: LiveActivitySessionSnapshot(
+                sessionID: "ses_activity",
+                sessionTitle: "From Activity",
+                workspaceID: "wrk_1",
+                directory: "/tmp/activity"
+            )
+        )
+        let urlFallback = LiveActivityCoordinator.resolveSession(
+            sessionID: "ses_url",
+            directory: "/tmp/url",
+            workspaceID: "wrk_2",
+            knownSessions: [],
+            selectedSession: nil,
+            activitySnapshot: nil
+        )
+
+        XCTAssertEqual(existing, .existing(known))
+        XCTAssertEqual(activityFallback.session.title, "From Activity")
+        XCTAssertEqual(activityFallback.session.directory, "/tmp/activity")
+        XCTAssertEqual(urlFallback.session.title, "Session")
+        XCTAssertEqual(urlFallback.session.directory, "/tmp/url")
+    }
+
     func testEventSyncCoordinatorAppliesSelectedSessionRegardlessOfDirectory() {
         let coordinator = EventSyncCoordinator()
 
@@ -1105,6 +1186,46 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertNil(preparation.submission.directory)
     }
 
+    func testSessionCoordinatorPreparePromptUsesNilDirectoryForGlobalProjectSessionWithRootDirectory() throws {
+        let coordinator = SessionCoordinator()
+        let session = OpenCodeSession(id: "ses_global", title: nil, workspaceID: nil, directory: "/", projectID: "global", parentID: nil)
+
+        let preparation = try XCTUnwrap(coordinator.preparePromptSubmission(
+            text: "Global send",
+            attachments: [],
+            session: session,
+            selectedDirectory: "/",
+            currentProjectID: "global",
+            messageID: "msg_global",
+            partID: "part_global",
+            model: nil,
+            agent: nil,
+            variant: nil
+        ))
+
+        XCTAssertNil(preparation.submission.directory)
+    }
+
+    func testSessionCoordinatorPreparePromptUsesNilDirectoryForRootDirectorySessionWithoutProjectID() throws {
+        let coordinator = SessionCoordinator()
+        let session = OpenCodeSession(id: "ses_global", title: nil, workspaceID: nil, directory: "/", projectID: nil, parentID: nil)
+
+        let preparation = try XCTUnwrap(coordinator.preparePromptSubmission(
+            text: "Global send",
+            attachments: [],
+            session: session,
+            selectedDirectory: "/",
+            currentProjectID: "global",
+            messageID: "msg_global",
+            partID: "part_global",
+            model: nil,
+            agent: nil,
+            variant: nil
+        ))
+
+        XCTAssertNil(preparation.submission.directory)
+    }
+
     func testSessionCoordinatorOptimisticUserMessageUsesPreparedPromptMetadata() throws {
         let coordinator = SessionCoordinator()
         let session = makeSession(id: "ses_optimistic", directory: "/tmp/project")
@@ -1722,6 +1843,73 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertEqual(result?.selectedDirectory, "/canonical/project")
         XCTAssertNil(result?.projects)
         XCTAssertEqual(seenPaths, ["/session", "/project/current", "/project/proj_1"])
+    }
+
+    func testProjectCoordinatorRefreshPreservesExistingGlobalProjectWhenServerOmitsIt() async throws {
+        let client = makeClient()
+        let coordinator = ProjectCoordinator()
+        let global = OpenCodeProject(id: "global", worktree: "", vcs: nil, name: "Global", sandboxes: nil, icon: nil, time: nil)
+
+        CoordinatorMockURLProtocol.requestHandler = { request in
+            switch request.url?.path ?? "" {
+            case "/project":
+                return try jsonResponse(for: request, body: #"[{"id":"proj_1","worktree":"/tmp/project","vcs":"git","name":"Project","sandboxes":null,"icon":null,"time":null}]"#)
+            case "/project/current":
+                return try jsonResponse(for: request, body: #"{"id":"proj_1","worktree":"/tmp/project","vcs":"git","name":"Project","sandboxes":null,"icon":null,"time":null}"#)
+            default:
+                return try jsonResponse(for: request, statusCode: 404, body: #"{"error":"unexpected"}"#)
+            }
+        }
+
+        let result = try await coordinator.refreshProjects(
+            client: client,
+            currentProjects: [global],
+            currentProject: global,
+            selectedDirectory: nil
+        )
+
+        XCTAssertEqual(result.currentProject?.id, "global")
+        XCTAssertTrue(result.projects.contains { $0.id == "global" })
+    }
+
+    func testSessionCoordinatorPreservesPendingRecentSelectionMissingFromReload() {
+        let coordinator = SessionCoordinator()
+        let previous = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+
+        let selection = coordinator.selectionAfterDirectoryReload(
+            previousSelectedSession: previous,
+            currentSelectedSessionID: previous.id,
+            sessions: [],
+            currentStreamDirectory: nil,
+            isProjectWorkspacesEnabled: false,
+            effectiveSelectedDirectory: nil,
+            workspaceDirectories: [],
+            preserveMissingSelectedSession: true,
+            fallbackSession: { _ in nil }
+        )
+
+        XCTAssertEqual(selection.selectedSession, previous)
+        XCTAssertFalse(selection.shouldClearActiveChat)
+    }
+
+    func testSessionCoordinatorClearsMissingSelectionWithoutRecentPreservation() {
+        let coordinator = SessionCoordinator()
+        let previous = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+
+        let selection = coordinator.selectionAfterDirectoryReload(
+            previousSelectedSession: previous,
+            currentSelectedSessionID: previous.id,
+            sessions: [],
+            currentStreamDirectory: nil,
+            isProjectWorkspacesEnabled: false,
+            effectiveSelectedDirectory: nil,
+            workspaceDirectories: [],
+            preserveMissingSelectedSession: false,
+            fallbackSession: { _ in nil }
+        )
+
+        XCTAssertNil(selection.selectedSession)
+        XCTAssertTrue(selection.shouldClearActiveChat)
     }
 
     func testSessionCoordinatorReloadSelectionUsesRefreshedSelectedSession() {

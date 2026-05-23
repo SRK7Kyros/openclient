@@ -451,6 +451,75 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedProjectContentTab, .sessions)
     }
 
+    func testPrepareRecentGlobalSessionSelectionCreatesGlobalRouteImmediately() {
+        let viewModel = AppViewModel()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        let recent = RecentProjectSession(session: session, projectTitle: "Global", preview: nil, isBusy: false)
+        viewModel.projects = [project]
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = "/tmp/project"
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject?.id, "global")
+        XCTAssertTrue(viewModel.projects.contains { $0.id == "global" })
+        XCTAssertNil(viewModel.selectedDirectory)
+        XCTAssertEqual(viewModel.selectedSession, session)
+        XCTAssertEqual(viewModel.selectedProjectContentTab, .sessions)
+    }
+
+    func testPrepareRecentGlobalProjectSessionSelectionNormalizesRootDirectoryToGlobalRoute() {
+        let viewModel = AppViewModel()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: "/", projectID: "global", parentID: nil)
+        let recent = RecentProjectSession(session: session, projectTitle: "Global", preview: nil, isBusy: false)
+        viewModel.projects = [project]
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = "/tmp/project"
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject?.id, "global")
+        XCTAssertNil(viewModel.selectedDirectory)
+        XCTAssertEqual(viewModel.selectedSession, session)
+        XCTAssertEqual(viewModel.streamDirectory, session.directory)
+    }
+
+    func testPrepareRecentRootDirectorySessionSelectionNormalizesToGlobalRouteWithoutProjectID() {
+        let viewModel = AppViewModel()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: "/", projectID: nil, parentID: nil)
+        let recent = RecentProjectSession(session: session, projectTitle: "Global", preview: nil, isBusy: false)
+        viewModel.projects = [project]
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = "/tmp/project"
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject?.id, "global")
+        XCTAssertNil(viewModel.selectedDirectory)
+        XCTAssertEqual(viewModel.selectedSession, session)
+        XCTAssertEqual(viewModel.streamDirectory, session.directory)
+    }
+
+    func testPrepareRecentGlobalProjectSessionSelectionNormalizesHomeDirectoryToGlobalRoute() {
+        let viewModel = AppViewModel()
+        let project = OpenCodeProject(id: "proj_test", worktree: "/tmp/project", vcs: nil, name: "Project", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "ses_1b27458fbffeZMYq1sSPquQXhF", title: "Stream Test", workspaceID: nil, directory: "/Users/mininic", projectID: "global", parentID: nil)
+        let recent = RecentProjectSession(session: session, projectTitle: "Global", preview: nil, isBusy: false)
+        viewModel.projects = [project]
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = "/tmp/project"
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject?.id, "global")
+        XCTAssertNil(viewModel.selectedDirectory)
+        XCTAssertEqual(viewModel.selectedSession, session)
+        XCTAssertEqual(viewModel.streamDirectory, session.directory)
+    }
+
     func testProjectListPreferencesPersistPerServer() {
         var scoped = ServerScopedProjectListPreferences()
         scoped.preferencesByBaseURL["http://one.example"] = ProjectListPreferences(showsRecentSessions: false)
@@ -1098,6 +1167,65 @@ final class AppViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(viewModel.permissions(for: permission.sessionID).map(\.id), [permission.id])
+    }
+
+    func testSelectedTranscriptDeltaProjectsWhenActiveChatFocusIsTemporarilyMissing() {
+        let viewModel = AppViewModel()
+        let selected = OpenCodeSession(id: "ses_selected", title: "Selected", workspaceID: nil, directory: "/tmp/project", projectID: nil, parentID: nil)
+        let message = OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)
+        let partID = "prt_text"
+        let part = OpenCodePart(
+            id: partID,
+            messageID: message.id,
+            sessionID: selected.id,
+            type: "text",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: ""
+        )
+
+        viewModel.isConnected = true
+        viewModel.selectedDirectory = selected.directory
+        viewModel.selectedSession = selected
+        viewModel.activeChatSessionID = nil
+
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(type: "message.updated", properties: OpenCodeEventProperties(info: OpenCodeEventInfo(message: message))),
+            typed: .messageUpdated(message)
+        ))
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(type: "message.part.updated", properties: OpenCodeEventProperties(part: part)),
+            typed: .messagePartUpdated(part)
+        ))
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(
+                type: "message.part.delta",
+                properties: OpenCodeEventProperties(
+                    sessionID: selected.id,
+                    messageID: message.id,
+                    partID: partID,
+                    field: "text",
+                    delta: "streaming"
+                )
+            ),
+            typed: .messagePartDelta(
+                sessionID: selected.id,
+                messageID: message.id,
+                partID: partID,
+                field: "text",
+                delta: "streaming"
+            )
+        ))
+
+        XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "streaming")
     }
 
     func testLiveActivityTranscriptShowsLatestAssistantLineOnly() {

@@ -154,6 +154,7 @@ final class SessionCoordinator {
         isProjectWorkspacesEnabled: Bool,
         effectiveSelectedDirectory: String?,
         workspaceDirectories: [String],
+        preserveMissingSelectedSession: Bool = false,
         fallbackSession: (String) -> OpenCodeSession?
     ) -> DirectoryReloadSelection {
         if let currentSelectedSessionID,
@@ -161,6 +162,17 @@ final class SessionCoordinator {
             return DirectoryReloadSelection(
                 selectedSession: refreshed,
                 streamDirectory: refreshed.directory,
+                shouldClearActiveChat: false,
+                preservedWorkspaceSelection: false
+            )
+        }
+
+        if preserveMissingSelectedSession,
+           let previousSelectedSession,
+           previousSelectedSession.id == currentSelectedSessionID {
+            return DirectoryReloadSelection(
+                selectedSession: previousSelectedSession,
+                streamDirectory: previousSelectedSession.directory,
                 shouldClearActiveChat: false,
                 preservedWorkspaceSelection: false
             )
@@ -487,6 +499,10 @@ final class SessionCoordinator {
     }
 
     func promptDirectory(for session: OpenCodeSession, selectedDirectory: String?, currentProjectID: String?) -> String? {
+        if session.directory == "/" || (currentProjectID == "global" && (session.directory?.isEmpty ?? true)) {
+            return nil
+        }
+
         // Keep existing sessions bound to the directory they were created in.
         if let sessionDirectory = session.directory,
            !sessionDirectory.isEmpty {

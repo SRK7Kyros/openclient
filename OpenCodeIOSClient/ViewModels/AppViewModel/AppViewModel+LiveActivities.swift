@@ -170,10 +170,7 @@ extension AppViewModel {
     }
 
     func handleLiveActivityURL(_ url: URL) async {
-        guard url.scheme == OpenCodeChatActivityDeepLink.scheme,
-              url.host == OpenCodeChatActivityDeepLink.host else {
-            return
-        }
+        guard let deepLink = LiveActivityCoordinator.deepLink(from: url) else { return }
 
         if !isConnected {
             guard hasSavedServer else { return }
@@ -181,18 +178,8 @@ extension AppViewModel {
             guard isConnected else { return }
         }
 
-        let pathComponents = url.pathComponents
-        guard pathComponents.count >= 3, pathComponents[1] == "session" else { return }
-
-        let sessionID = pathComponents[2]
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let queryItems = components?.queryItems ?? []
-        let action = queryItems.first(where: { $0.name == "action" })?.value
-        let directory = queryItems.first(where: { $0.name == "directory" })?.value
-        let workspaceID = queryItems.first(where: { $0.name == "workspace" })?.value
-
-        let openedSession = await openLiveActivitySession(sessionID: sessionID, directory: directory, workspaceID: workspaceID)
-        let resolvedDirectory = openedSession?.directory ?? directory
+        let openedSession = await openLiveActivitySession(deepLink)
+        let resolvedDirectory = openedSession?.directory ?? deepLink.directory
         if !isUsingAppleIntelligence, currentProject == nil || effectiveSelectedDirectory != resolvedDirectory {
             await selectDirectory(resolvedDirectory)
             if let openedSession {
@@ -200,25 +187,21 @@ extension AppViewModel {
             }
         }
 
-        switch action {
-        case "permission":
-            guard let requestID = queryItems.first(where: { $0.name == "requestID" })?.value,
-                  let reply = queryItems.first(where: { $0.name == "reply" })?.value,
-                  let permission = permissions(for: sessionID).first(where: { $0.id == requestID }) else {
+        switch deepLink.action {
+        case .open:
+            return
+        case let .permission(requestID, reply):
+            guard let permission = permissions(for: deepLink.sessionID).first(where: { $0.id == requestID }) else {
                 return
             }
             await respondToPermission(permission, response: reply)
-            refreshLiveActivityIfNeeded(for: sessionID)
-        case "question":
-            guard let requestID = queryItems.first(where: { $0.name == "requestID" })?.value,
-                  let answer = queryItems.first(where: { $0.name == "answer" })?.value,
-                  let question = questions(for: sessionID).first(where: { $0.id == requestID }) else {
+            refreshLiveActivityIfNeeded(for: deepLink.sessionID)
+        case let .question(requestID, answer):
+            guard let question = questions(for: deepLink.sessionID).first(where: { $0.id == requestID }) else {
                 return
             }
             await respondToQuestion(question, answers: [[answer]])
-            refreshLiveActivityIfNeeded(for: sessionID)
-        default:
-            return
+            refreshLiveActivityIfNeeded(for: deepLink.sessionID)
         }
     }
 
@@ -232,62 +215,46 @@ extension AppViewModel {
         }
 
         #if canImport(ActivityKit) && os(iOS)
-        guard let activity = LiveActivityCoordinator.sessionSnapshot(for: sessionID) else {
-            return nil
-        }
-
-        return OpenCodeSession(
-            id: activity.sessionID,
-            title: activity.sessionTitle,
-            workspaceID: activity.workspaceID,
-            directory: activity.directory,
-            projectID: nil,
-            parentID: nil
-        )
+        guard let activitySnapshot = LiveActivityCoordinator.sessionSnapshot(for: sessionID) else { return nil }
+        return LiveActivityCoordinator.resolveSession(
+            sessionID: sessionID,
+            directory: nil,
+            workspaceID: nil,
+            knownSessions: [],
+            selectedSession: nil,
+            activitySnapshot: activitySnapshot
+        ).session
         #else
         return nil
         #endif
     }
 
     @discardableResult
-    private func openLiveActivitySession(sessionID: String, directory: String?, workspaceID: String?) async -> OpenCodeSession? {
-        if session(matching: sessionID) == nil {
+    private func openLiveActivitySession(_ deepLink: LiveActivityDeepLink) async -> OpenCodeSession? {
+        if session(matching: deepLink.sessionID) == nil {
             await ensureAllSessionsLoaded()
         }
 
-        if let session = session(matching: sessionID) {
-            await selectSession(session)
-            return session
-        }
-
-        let fallback = liveActivityFallbackSession(sessionID: sessionID, directory: directory, workspaceID: workspaceID)
-        upsertVisibleSession(fallback)
-        await selectSession(fallback)
-        return fallback
-    }
-
-    private func liveActivityFallbackSession(sessionID: String, directory: String?, workspaceID: String?) -> OpenCodeSession {
         #if canImport(ActivityKit) && os(iOS)
-        if let activity = LiveActivityCoordinator.sessionSnapshot(for: sessionID) {
-            return OpenCodeSession(
-                id: activity.sessionID,
-                title: activity.sessionTitle,
-                workspaceID: activity.workspaceID,
-                directory: activity.directory,
-                projectID: nil,
-                parentID: nil
-            )
-        }
+        let activitySnapshot = LiveActivityCoordinator.sessionSnapshot(for: deepLink.sessionID)
+        #else
+        let activitySnapshot: LiveActivitySessionSnapshot? = nil
         #endif
 
-        return OpenCodeSession(
-            id: sessionID,
-            title: "Session",
-            workspaceID: workspaceID,
-            directory: directory,
-            projectID: nil,
-            parentID: nil
+        let resolution = LiveActivityCoordinator.resolveSession(
+            sessionID: deepLink.sessionID,
+            directory: deepLink.directory,
+            workspaceID: deepLink.workspaceID,
+            knownSessions: allSessions,
+            selectedSession: selectedSession,
+            activitySnapshot: activitySnapshot
         )
+        let openedSession = resolution.session
+        if case .fallback = resolution {
+            upsertVisibleSession(openedSession)
+        }
+        await selectSession(openedSession)
+        return openedSession
     }
 
     #if canImport(ActivityKit) && os(iOS)
