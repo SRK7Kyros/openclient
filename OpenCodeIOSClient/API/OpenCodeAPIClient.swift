@@ -182,16 +182,64 @@ struct OpenCodeAPIClient: Sendable {
     }
 
     func listProviders(directory: String? = nil) async throws -> [OpenCodeProvider] {
-        try await providerConfiguration(directory: directory).providers
+        try await providerState(directory: directory).all
     }
 
     func providerDefaults(directory: String? = nil) async throws -> [String: String] {
-        try await providerConfiguration(directory: directory).default ?? [:]
+        try await providerState(directory: directory).default
     }
 
     func providerConfiguration(directory: String? = nil) async throws -> OpenCodeProvidersResponse {
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
         return try await send(path: "/config/providers", method: "GET", queryItems: queryItems)
+    }
+
+    func providerState(directory: String? = nil, workspaceID: String? = nil) async throws -> OpenCodeProviderListResponse {
+        try await send(path: "/provider", method: "GET", queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID), directoryHeader: directory)
+    }
+
+    func providerAuthMethods(directory: String? = nil, workspaceID: String? = nil) async throws -> [String: [OpenCodeProviderAuthMethod]] {
+        try await send(path: "/provider/auth", method: "GET", queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID), directoryHeader: directory)
+    }
+
+    func setProviderAPIKey(providerID: String, key: String) async throws {
+        _ = try await send(path: "/auth/\(encodedPathComponent(providerID))", method: "PUT", body: SetProviderAuthRequest(type: "api", key: key)) as Bool
+    }
+
+    func authorizeProviderOAuth(providerID: String, method: Int, inputs: [String: String]? = nil, directory: String? = nil, workspaceID: String? = nil) async throws -> OpenCodeProviderAuthAuthorization? {
+        try await send(
+            path: "/provider/\(encodedPathComponent(providerID))/oauth/authorize",
+            method: "POST",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            body: ProviderOAuthAuthorizeRequest(method: method, inputs: inputs),
+            directoryHeader: directory
+        )
+    }
+
+    func completeProviderOAuth(providerID: String, method: Int, code: String? = nil, directory: String? = nil, workspaceID: String? = nil) async throws -> Bool {
+        try await send(
+            path: "/provider/\(encodedPathComponent(providerID))/oauth/callback",
+            method: "POST",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            body: ProviderOAuthCallbackRequest(method: method, code: code),
+            directoryHeader: directory
+        )
+    }
+
+    func removeProviderAuth(providerID: String) async throws {
+        _ = try await send(path: "/auth/\(encodedPathComponent(providerID))", method: "DELETE") as Bool
+    }
+
+    func updateGlobalConfig(_ patch: OpenCodeGlobalConfigPatch) async throws {
+        _ = try await send(path: "/global/config", method: "PATCH", body: patch) as OpenCodeJSONValue
+    }
+
+    func globalConfig() async throws -> OpenCodeJSONValue {
+        try await send(path: "/global/config", method: "GET")
+    }
+
+    func disposeGlobal() async throws {
+        try await sendNoContent(path: "/global/dispose", method: "POST")
     }
 
     func listMCPStatus(directory: String? = nil, workspaceID: String? = nil) async throws -> [String: OpenCodeMCPStatus] {
@@ -720,6 +768,21 @@ struct OpenCodeAPIClient: Sendable {
 private struct UpdateProjectRequest: Encodable {
     let name: String?
     let icon: OpenCodeProject.Icon?
+}
+
+private struct SetProviderAuthRequest: Encodable {
+    let type: String
+    let key: String
+}
+
+private struct ProviderOAuthAuthorizeRequest: Encodable {
+    let method: Int
+    let inputs: [String: String]?
+}
+
+private struct ProviderOAuthCallbackRequest: Encodable {
+    let method: Int
+    let code: String?
 }
 
 private struct WorktreeCreateRequest: Encodable {

@@ -153,6 +153,162 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testProviderStateUsesProviderEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/provider")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.httpMethod, "GET")
+            expectation.fulfill()
+
+            let data = #"{"all":[{"id":"openai","name":"OpenAI","source":"api","env":[],"options":{},"models":{"gpt-5":{"id":"gpt-5","providerID":"openai","name":"GPT-5","capabilities":{"reasoning":true},"status":"active","release_date":"2026-01-01"}}}],"connected":["openai"],"default":{"openai":"gpt-5"}}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let state = try await client.providerState(directory: "/tmp/project")
+
+        XCTAssertEqual(state.connected, ["openai"])
+        XCTAssertEqual(state.default["openai"], "gpt-5")
+        XCTAssertEqual(state.all.first?.models["gpt-5"]?.releaseDate, "2026-01-01")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testSetProviderAPIKeyUsesAuthEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/auth/openai")
+            XCTAssertEqual(request.httpMethod, "PUT")
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["type"] as? String, "api")
+            XCTAssertEqual(json["key"] as? String, "sk-test")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("true".utf8)
+            )
+        }
+
+        try await client.setProviderAPIKey(providerID: "openai", key: "sk-test")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testAuthorizeProviderOAuthUsesProviderOAuthEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/provider/openai/oauth/authorize")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["method"] as? Int, 1)
+            XCTAssertEqual((json["inputs"] as? [String: String])?["account"], "pro")
+            expectation.fulfill()
+
+            let data = #"{"url":"https://auth.example.com","method":"auto","instructions":"Enter code: ABCD-EFGH"}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let authorization = try await client.authorizeProviderOAuth(providerID: "openai", method: 1, inputs: ["account": "pro"], directory: "/tmp/project")
+        XCTAssertEqual(authorization?.method, "auto")
+        XCTAssertEqual(authorization?.instructions, "Enter code: ABCD-EFGH")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testCompleteProviderOAuthUsesProviderOAuthCallbackEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/provider/github-copilot/oauth/callback")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["method"] as? Int, 0)
+            XCTAssertEqual(json["code"] as? String, "oauth-code")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("true".utf8)
+            )
+        }
+
+        let completed = try await client.completeProviderOAuth(providerID: "github-copilot", method: 0, code: "oauth-code")
+        XCTAssertTrue(completed)
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testUpdateGlobalConfigEncodesDisabledProviders() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/global/config")
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["disabled_providers"] as? [String], ["custom"])
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("{}".utf8)
+            )
+        }
+
+        try await client.updateGlobalConfig(OpenCodeGlobalConfigPatch(provider: nil, disabledProviders: ["custom"]))
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     private static func requestBodyData(_ request: URLRequest) -> Data? {
         if let body = request.httpBody { return body }
         guard let stream = request.httpBodyStream else { return nil }

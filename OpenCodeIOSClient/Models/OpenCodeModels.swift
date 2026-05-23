@@ -859,10 +859,39 @@ struct OpenCodeAgent: Codable, Identifiable, Hashable, Sendable {
 
 struct OpenCodeModelCapabilities: Codable, Hashable, Sendable {
     let reasoning: Bool
+    let temperature: Bool?
+    let attachment: Bool?
+    let toolcall: Bool?
+
+    init(reasoning: Bool, temperature: Bool? = nil, attachment: Bool? = nil, toolcall: Bool? = nil) {
+        self.reasoning = reasoning
+        self.temperature = temperature
+        self.attachment = attachment
+        self.toolcall = toolcall
+    }
 }
 
 struct OpenCodeModelLimit: Codable, Hashable, Sendable {
     let context: Int?
+    let input: Int?
+    let output: Int?
+
+    init(context: Int? = nil, input: Int? = nil, output: Int? = nil) {
+        self.context = context
+        self.input = input
+        self.output = output
+    }
+}
+
+struct OpenCodeModelCostCache: Codable, Hashable, Sendable {
+    let read: Double?
+    let write: Double?
+}
+
+struct OpenCodeModelCost: Codable, Hashable, Sendable {
+    let input: Double?
+    let output: Double?
+    let cache: OpenCodeModelCostCache?
 }
 
 struct OpenCodeModel: Codable, Identifiable, Hashable, Sendable {
@@ -872,6 +901,10 @@ struct OpenCodeModel: Codable, Identifiable, Hashable, Sendable {
     let capabilities: OpenCodeModelCapabilities
     let variants: [String: OpenCodeJSONValue]?
     let limit: OpenCodeModelLimit?
+    let family: String?
+    let status: String?
+    let releaseDate: String?
+    let cost: OpenCodeModelCost?
 
     init(
         id: String,
@@ -879,7 +912,11 @@ struct OpenCodeModel: Codable, Identifiable, Hashable, Sendable {
         name: String,
         capabilities: OpenCodeModelCapabilities,
         variants: [String: OpenCodeJSONValue]? = nil,
-        limit: OpenCodeModelLimit? = nil
+        limit: OpenCodeModelLimit? = nil,
+        family: String? = nil,
+        status: String? = nil,
+        releaseDate: String? = nil,
+        cost: OpenCodeModelCost? = nil
     ) {
         self.id = id
         self.providerID = providerID
@@ -887,6 +924,23 @@ struct OpenCodeModel: Codable, Identifiable, Hashable, Sendable {
         self.capabilities = capabilities
         self.variants = variants
         self.limit = limit
+        self.family = family
+        self.status = status
+        self.releaseDate = releaseDate
+        self.cost = cost
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case providerID
+        case name
+        case capabilities
+        case variants
+        case limit
+        case family
+        case status
+        case releaseDate = "release_date"
+        case cost
     }
 }
 
@@ -894,6 +948,28 @@ struct OpenCodeProvider: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let models: [String: OpenCodeModel]
+    let source: String?
+    let env: [String]?
+    let key: String?
+    let options: [String: OpenCodeJSONValue]?
+
+    init(
+        id: String,
+        name: String,
+        models: [String: OpenCodeModel],
+        source: String? = nil,
+        env: [String]? = nil,
+        key: String? = nil,
+        options: [String: OpenCodeJSONValue]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.models = models
+        self.source = source
+        self.env = env
+        self.key = key
+        self.options = options
+    }
 }
 
 struct OpenCodeSessionContextMetrics: Hashable, Sendable {
@@ -1221,6 +1297,73 @@ struct OpenCodeChatBreadcrumb: Codable, Identifiable, Equatable, Sendable {
 struct OpenCodeProvidersResponse: Codable, Hashable, Sendable {
     let providers: [OpenCodeProvider]
     let `default`: [String: String]?
+}
+
+struct OpenCodeProviderListResponse: Codable, Hashable, Sendable {
+    let all: [OpenCodeProvider]
+    let connected: [String]
+    let `default`: [String: String]
+}
+
+struct OpenCodeProviderAuthMethod: Codable, Hashable, Sendable, Identifiable {
+    struct Prompt: Codable, Hashable, Sendable, Identifiable {
+        struct Condition: Codable, Hashable, Sendable {
+            let key: String
+            let op: String
+            let value: String
+        }
+
+        struct Option: Codable, Hashable, Sendable, Identifiable {
+            let label: String
+            let value: String
+            let hint: String?
+
+            var id: String { value }
+        }
+
+        let type: String
+        let key: String
+        let message: String
+        let placeholder: String?
+        let options: [Option]?
+        let when: Condition?
+
+        var id: String { key }
+    }
+
+    let type: String
+    let label: String
+    let prompts: [Prompt]?
+
+    var id: String { "\(type):\(label)" }
+}
+
+struct OpenCodeProviderAuthAuthorization: Codable, Hashable, Sendable {
+    let url: String
+    let method: String
+    let instructions: String
+}
+
+struct OpenCodeProviderConfig: Codable, Hashable, Sendable {
+    struct Model: Codable, Hashable, Sendable {
+        let name: String?
+    }
+
+    let npm: String?
+    let name: String?
+    let env: [String]?
+    let options: [String: OpenCodeJSONValue]?
+    let models: [String: Model]?
+}
+
+struct OpenCodeGlobalConfigPatch: Encodable, Sendable {
+    let provider: [String: OpenCodeProviderConfig]?
+    let disabledProviders: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case disabledProviders = "disabled_providers"
+    }
 }
 
 struct OpenCodeMCPStatus: Codable, Hashable, Sendable {
@@ -1617,6 +1760,24 @@ enum OpenCodeJSONValue: Codable, Hashable, Sendable {
             self = .object(value)
         } else {
             self = .array(try container.decode([OpenCodeJSONValue].self))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case let .string(value):
+            try container.encode(value)
+        case let .number(value):
+            try container.encode(value)
+        case let .bool(value):
+            try container.encode(value)
+        case let .object(value):
+            try container.encode(value)
+        case let .array(value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
         }
     }
 

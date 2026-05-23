@@ -577,6 +577,28 @@ final class AppViewModel: ObservableObject {
             yield &modelConfigurationStore.availableProviders
         }
     }
+    var allProviders: [OpenCodeProvider] {
+        get { modelConfigurationStore.allProviders }
+        set {
+            objectWillChange.send()
+            modelConfigurationStore.allProviders = newValue
+        }
+        _modify {
+            objectWillChange.send()
+            yield &modelConfigurationStore.allProviders
+        }
+    }
+    var connectedProviderIDs: Set<String> {
+        get { modelConfigurationStore.connectedProviderIDs }
+        set {
+            objectWillChange.send()
+            modelConfigurationStore.connectedProviderIDs = newValue
+        }
+        _modify {
+            objectWillChange.send()
+            yield &modelConfigurationStore.connectedProviderIDs
+        }
+    }
     var defaultModelsByProviderID: [String: String] {
         get { modelConfigurationStore.defaultModelsByProviderID }
         set {
@@ -806,6 +828,8 @@ final class AppViewModel: ObservableObject {
             // Observing all stores here doubles invalidations during hot paths like send.
             // ConnectionStore changes are low-frequency and are mostly routed through helpers.
             connectionStore.objectWillChange.eraseToAnyPublisher(),
+            // Provider configuration changes need to invalidate configuration sheets immediately.
+            modelConfigurationStore.objectWillChange.eraseToAnyPublisher(),
             // ProjectFilesStore still has a few direct dictionary/set mutations during tree loading.
             projectFilesStore.objectWillChange.eraseToAnyPublisher(),
         ]

@@ -9,9 +9,7 @@ struct ModelToolbarMenu: View {
         Menu {
             Menu("Model") {
                 ForEach(viewModel.sortedProviders) { provider in
-                    let models = provider.models.values.sorted {
-                        $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-                    }
+                    let models = viewModel.modelConfigurationStore.visibleModels(for: provider)
                     Menu(provider.name) {
                         ForEach(models, id: \.id) { model in
                             Button(model.name) {

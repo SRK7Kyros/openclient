@@ -13,10 +13,12 @@
 		02C99BC2D4B4F90083B23405 /* ProjectFilesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D430ADBC81A564B4749B510C /* ProjectFilesStore.swift */; };
 		032CFC26B2D9A3E945D1F635 /* OpenCodeServerPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */; };
 		03DCDDFD8CE860FAEAD89DB3 /* ThinkingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04820AC7A37C8876C322AE1F /* ThinkingRow.swift */; };
+		067D79F84D5A20EBD13FDD63 /* AppViewModel+Providers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B589E8430FCAC0B3367A60C /* AppViewModel+Providers.swift */; };
 		07316FB87EB08C952B407D76 /* OpenClientDebugEntitlementControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FACBA07A4DA6A2A280B3820 /* OpenClientDebugEntitlementControls.swift */; };
 		078C8308CA3570CF09E87A62 /* GitStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 483F003FBB5C24B5B8B08C06 /* GitStatusView.swift */; };
 		0837840A3BFCC58BF3310DF5 /* FunAndGamesPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF14E09446501DA55E50CA41 /* FunAndGamesPreferences.swift */; };
 		0851D72BB12ACF8FA5909238 /* OpenCodeWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CC2F75F73B3A2F9FF5DD8E /* OpenCodeWidgetStore.swift */; };
+		0B3BA54894A0BFC87EBD2110 /* AppViewModel+Providers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B589E8430FCAC0B3367A60C /* AppViewModel+Providers.swift */; };
 		0BC9ED1BEDCC1CD87C7C8CE7 /* NewSessionDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8994E8493B69E44F2907F0B /* NewSessionDefaults.swift */; };
 		0C0E30CEDC1FE29FD5E273ED /* ExcalidrawDrawingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90F376AA42D496CBD68290E /* ExcalidrawDrawingSheet.swift */; };
 		0D41361BFD53F13EA58E6A54 /* ForkSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02FC24D66B635B01B4F29AE5 /* ForkSessionSheet.swift */; };
@@ -32,6 +34,7 @@
 		152399F750FB324E47871DAA /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DF20ACB6AD0EFAC28A95D9 /* HelpView.swift */; };
 		16CEC496585A1932D18D7252 /* FunAndGamesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770DAD6B1290DD7EE6686359 /* FunAndGamesStore.swift */; };
 		179E8151B6C2BB86AF74F08C /* ProjectContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF3564009893D20694D105B /* ProjectContentView.swift */; };
+		17D5AC71AD9F3C2198D89062 /* ModelConfigurationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9117702395C7A5C205D112FD /* ModelConfigurationStoreTests.swift */; };
 		18FF891DA524B338EA1BD648 /* OpenClientCommerce.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4A9F2274F5C2B27BDA72CB /* OpenClientCommerce.swift */; };
 		192544AB25B47E88A3365D61 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48723322E87F93E488181C34 /* RootView.swift */; };
 		194B504F19D51A6F809D456E /* OpenCodeEventManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18EFEF6227AAFB3590882300 /* OpenCodeEventManager.swift */; };
@@ -371,8 +374,10 @@
 		863410271333FF45C4759048 /* DirectoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryStoreTests.swift; sourceTree = "<group>"; };
 		8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Screenshots.swift"; sourceTree = "<group>"; };
 		8A61A1222815F3D3886FC203 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
+		8B589E8430FCAC0B3367A60C /* AppViewModel+Providers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Providers.swift"; sourceTree = "<group>"; };
 		8CE4DD43AEBE68274E4B039C /* ScreenshotSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotSceneView.swift; sourceTree = "<group>"; };
 		8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeStateReducer.swift; sourceTree = "<group>"; };
+		9117702395C7A5C205D112FD /* ModelConfigurationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelConfigurationStoreTests.swift; sourceTree = "<group>"; };
 		9330DFD0E36A44A30ADA81F4 /* ModelToolbarMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelToolbarMenu.swift; sourceTree = "<group>"; };
 		9403CD63018375C683CB8CB9 /* ChatPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPreviews.swift; sourceTree = "<group>"; };
 		94E567A68DA775F46359D052 /* AppViewModel+MCP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+MCP.swift"; sourceTree = "<group>"; };
@@ -535,6 +540,7 @@
 				863410271333FF45C4759048 /* DirectoryStoreTests.swift */,
 				B3CAAAC035D35D7A8032EFC3 /* LiveActivitySnapshotBuilderTests.swift */,
 				5F94531391132B715EA0E0F9 /* LiveActivityStoreTests.swift */,
+				9117702395C7A5C205D112FD /* ModelConfigurationStoreTests.swift */,
 				FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */,
 				FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */,
 				475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */,
@@ -602,6 +608,7 @@
 				94E567A68DA775F46359D052 /* AppViewModel+MCP.swift */,
 				ED5404BF2A53DB64EC9BB8AC /* AppViewModel+Previews.swift */,
 				24200A73829BD02C29A419F2 /* AppViewModel+Projects.swift */,
+				8B589E8430FCAC0B3367A60C /* AppViewModel+Providers.swift */,
 				8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */,
 				F4B91D6745A8E634A21646B8 /* AppViewModel+Sessions.swift */,
 				F44D3044D46925B3F7A5326B /* AppViewModel+VCS.swift */,
@@ -1085,6 +1092,7 @@
 				9EDA0AAA1A09B5549E1243D2 /* DirectoryStoreTests.swift in Sources */,
 				FB80000A398474F9BD211CB2 /* LiveActivitySnapshotBuilderTests.swift in Sources */,
 				9115D867EBEAA45D939B1FCC /* LiveActivityStoreTests.swift in Sources */,
+				17D5AC71AD9F3C2198D89062 /* ModelConfigurationStoreTests.swift in Sources */,
 				D4E1BDD6DC2915C9B06F45AC /* OpenCodeAPIClientTests.swift in Sources */,
 				E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */,
 				E1622D432C0701C5AAA52C46 /* OpenCodeSavedServerTests.swift in Sources */,
@@ -1131,6 +1139,7 @@
 				CF28D8692C121599A02B91FD /* AppViewModel+MCP.swift in Sources */,
 				6218B3DCBFC6E9EA3360E9D8 /* AppViewModel+Previews.swift in Sources */,
 				8945B563B3D2F9410A0056F8 /* AppViewModel+Projects.swift in Sources */,
+				0B3BA54894A0BFC87EBD2110 /* AppViewModel+Providers.swift in Sources */,
 				8255CCB5E68A9B5842A29995 /* AppViewModel+Screenshots.swift in Sources */,
 				86BDB319B3F9D405C52E1A03 /* AppViewModel+Sessions.swift in Sources */,
 				78216DA038E15E620A2E0DFE /* AppViewModel+VCS.swift in Sources */,
@@ -1244,6 +1253,7 @@
 				FA61BB2C1AC617BA7C4AF422 /* AppViewModel+MCP.swift in Sources */,
 				8429493ED301FB3223F1EDE5 /* AppViewModel+Previews.swift in Sources */,
 				E1711616244122E08AA8F0FD /* AppViewModel+Projects.swift in Sources */,
+				067D79F84D5A20EBD13FDD63 /* AppViewModel+Providers.swift in Sources */,
 				E0618F3F267957A90EC83E01 /* AppViewModel+Screenshots.swift in Sources */,
 				19A2A0CA6D3A6AEEC0C28353 /* AppViewModel+Sessions.swift in Sources */,
 				2B735C6C5359A927E892AEF2 /* AppViewModel+VCS.swift in Sources */,
@@ -1385,7 +1395,7 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -1397,7 +1407,7 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
