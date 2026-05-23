@@ -150,8 +150,14 @@ private enum ConfigurationRoute: Hashable {
 }
 
 private struct ProviderConfigurationRow: View {
+    enum SubtitleMode {
+        case source
+        case authMethods
+    }
+
     @ObservedObject var viewModel: AppViewModel
     let provider: OpenCodeProvider
+    var subtitleMode: SubtitleMode = .source
 
     var body: some View {
         HStack(spacing: 12) {
@@ -159,11 +165,30 @@ private struct ProviderConfigurationRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(provider.name)
-                Text("\(viewModel.providerSourceTitle(provider)) • \(viewModel.models(for: provider).count) models")
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var subtitle: String {
+        switch subtitleMode {
+        case .source:
+            return "\(viewModel.providerSourceTitle(provider)) • \(viewModel.models(for: provider).count) models"
+        case .authMethods:
+            return "\(authMethodSummary) • \(viewModel.models(for: provider).count) models"
+        }
+    }
+
+    private var authMethodSummary: String {
+        let labels = viewModel.authMethods(for: provider).map { method in
+            if method.type == "api" { return "API Key" }
+            if method.type == "oauth" { return method.label.isEmpty ? "OAuth" : method.label }
+            return method.label.isEmpty ? method.type.capitalized : method.label
+        }
+        let unique = Array(NSOrderedSet(array: labels)) as? [String] ?? labels
+        return unique.joined(separator: ", ")
     }
 }
 
@@ -422,7 +447,7 @@ private struct AddProviderView: View {
             Section("Popular") {
                 ForEach(filtered(viewModel.popularAddableProviders)) { provider in
                     NavigationLink(value: ConfigurationRoute.providerConnect(provider.id)) {
-                        ProviderConfigurationRow(viewModel: viewModel, provider: provider)
+                        ProviderConfigurationRow(viewModel: viewModel, provider: provider, subtitleMode: .authMethods)
                     }
                 }
             }
@@ -432,7 +457,7 @@ private struct AddProviderView: View {
                 Section("Other") {
                     ForEach(other) { provider in
                         NavigationLink(value: ConfigurationRoute.providerConnect(provider.id)) {
-                            ProviderConfigurationRow(viewModel: viewModel, provider: provider)
+                            ProviderConfigurationRow(viewModel: viewModel, provider: provider, subtitleMode: .authMethods)
                         }
                     }
                 }
