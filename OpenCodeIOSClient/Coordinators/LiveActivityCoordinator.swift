@@ -46,7 +46,7 @@ enum LiveActivityCoordinator {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let queryItems = components?.queryItems ?? []
         let actionValue = queryItems.first(where: { $0.name == "action" })?.value
-        let directory = queryItems.first(where: { $0.name == "directory" })?.value
+        let directory = normalizedDirectory(queryItems.first(where: { $0.name == "directory" })?.value)
         let workspaceID = queryItems.first(where: { $0.name == "workspace" })?.value
         let action: LiveActivityDeepLinkAction
 
@@ -92,7 +92,7 @@ enum LiveActivityCoordinator {
                 id: activitySnapshot.sessionID,
                 title: activitySnapshot.sessionTitle,
                 workspaceID: activitySnapshot.workspaceID,
-                directory: activitySnapshot.directory,
+                directory: normalizedDirectory(activitySnapshot.directory),
                 projectID: nil,
                 parentID: nil
             ))
@@ -102,10 +102,15 @@ enum LiveActivityCoordinator {
             id: sessionID,
             title: "Session",
             workspaceID: workspaceID,
-            directory: directory,
+            directory: normalizedDirectory(directory),
             projectID: nil,
             parentID: nil
         ))
+    }
+
+    private static func normalizedDirectory(_ directory: String?) -> String? {
+        guard let directory, !directory.isEmpty, directory != "/" else { return nil }
+        return directory
     }
 }
 

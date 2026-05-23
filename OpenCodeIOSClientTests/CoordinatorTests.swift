@@ -166,6 +166,33 @@ final class CoordinatorTests: XCTestCase {
         ))
     }
 
+    func testLiveActivityCoordinatorNormalizesRootDirectoryDeepLinkToGlobalRoute() throws {
+        let url = try XCTUnwrap(OpenCodeChatActivityDeepLink.openAppURL(
+            sessionID: "ses_global",
+            directory: "/",
+            workspaceID: nil
+        ))
+
+        let deepLink = try XCTUnwrap(LiveActivityCoordinator.deepLink(from: url))
+        let resolution = LiveActivityCoordinator.resolveSession(
+            sessionID: deepLink.sessionID,
+            directory: deepLink.directory,
+            workspaceID: deepLink.workspaceID,
+            knownSessions: [],
+            selectedSession: nil,
+            activitySnapshot: LiveActivitySessionSnapshot(
+                sessionID: "ses_global",
+                sessionTitle: "Global",
+                workspaceID: nil,
+                directory: "/"
+            )
+        )
+
+        XCTAssertNil(deepLink.directory)
+        XCTAssertNil(resolution.session.directory)
+        XCTAssertTrue(resolution.session.isGlobalScopeSession)
+    }
+
     func testLiveActivityCoordinatorParsesPermissionAndQuestionDeepLinks() throws {
         let permissionURL = try XCTUnwrap(OpenCodeChatActivityDeepLink.permissionURL(
             sessionID: "ses_1",
@@ -1872,6 +1899,74 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertTrue(result.projects.contains { $0.id == "global" })
     }
 
+    func testProjectCoordinatorRecentSessionNavigationUsesProjectIDWhenAvailable() {
+        let coordinator = ProjectCoordinator()
+        let project = makeProject(id: "proj_1", worktree: "/tmp/project")
+        let other = makeProject(id: "proj_2", worktree: "/tmp/other")
+        let session = OpenCodeSession(id: "ses_1", title: nil, workspaceID: nil, directory: "/tmp/other", projectID: "proj_1", parentID: nil)
+
+        let result = coordinator.recentSessionNavigationResult(for: session, projects: [other, project])
+
+        XCTAssertEqual(result.currentProject?.id, "proj_1")
+        XCTAssertEqual(result.routeDirectory, "/tmp/other")
+        XCTAssertFalse(result.shouldPreserveMissingSession)
+        XCTAssertEqual(result.projects.map(\.id), ["proj_2", "proj_1"])
+    }
+
+    func testProjectCoordinatorRecentSessionNavigationMatchesProjectDirectoryAndSandboxes() {
+        let coordinator = ProjectCoordinator()
+        let project = OpenCodeProject(
+            id: "proj_1",
+            worktree: "/tmp/project",
+            vcs: nil,
+            name: "Project",
+            sandboxes: ["/tmp/project/sandbox"],
+            icon: nil,
+            time: nil
+        )
+        let session = makeSession(id: "ses_1", directory: "/tmp/project/sandbox")
+
+        let result = coordinator.recentSessionNavigationResult(for: session, projects: [project])
+
+        XCTAssertEqual(result.currentProject?.id, "proj_1")
+        XCTAssertEqual(result.routeDirectory, "/tmp/project/sandbox")
+        XCTAssertFalse(result.shouldPreserveMissingSession)
+    }
+
+    func testProjectCoordinatorRecentSessionNavigationCreatesGlobalProjectWhenMissing() {
+        let coordinator = ProjectCoordinator()
+        let session = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+
+        let result = coordinator.recentSessionNavigationResult(for: session, projects: [])
+
+        XCTAssertEqual(result.currentProject?.id, "global")
+        XCTAssertNil(result.routeDirectory)
+        XCTAssertTrue(result.shouldPreserveMissingSession)
+        XCTAssertEqual(result.projects.map(\.id), ["global"])
+    }
+
+    func testProjectCoordinatorRecentSessionResolutionPreservesMissingGlobalOnly() {
+        let coordinator = ProjectCoordinator()
+        let global = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
+        let project = makeSession(id: "ses_project", directory: "/tmp/project")
+
+        let globalResult = coordinator.resolveRecentSessionAfterReload(
+            recentSession: global,
+            matchingSession: nil,
+            allSessions: []
+        )
+        let projectResult = coordinator.resolveRecentSessionAfterReload(
+            recentSession: project,
+            matchingSession: nil,
+            allSessions: []
+        )
+
+        XCTAssertEqual(globalResult.session, global)
+        XCTAssertTrue(globalResult.shouldUpsertVisibleSession)
+        XCTAssertNil(projectResult.session)
+        XCTAssertFalse(projectResult.shouldUpsertVisibleSession)
+    }
+
     func testSessionCoordinatorPreservesPendingRecentSelectionMissingFromReload() {
         let coordinator = SessionCoordinator()
         let previous = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
@@ -1986,6 +2081,10 @@ private func makeClient() -> OpenCodeAPIClient {
 
 private func makeSession(id: String, directory: String?, workspaceID: String? = nil, parentID: String? = nil) -> OpenCodeSession {
     OpenCodeSession(id: id, title: nil, workspaceID: workspaceID, directory: directory, projectID: nil, parentID: parentID)
+}
+
+private func makeProject(id: String, worktree: String) -> OpenCodeProject {
+    OpenCodeProject(id: id, worktree: worktree, vcs: nil, name: URL(fileURLWithPath: worktree).lastPathComponent, sandboxes: nil, icon: nil, time: nil)
 }
 
 private func makeMessage(id: String, sessionID: String) -> OpenCodeMessageEnvelope {

@@ -27,7 +27,7 @@ extension AppViewModel {
                     credentialID: configSnapshot.recentServerID,
                     serverBaseURL: configSnapshot.baseURL,
                     serverUsername: configSnapshot.username,
-                    directory: session.directory,
+                    directory: session.isGlobalScopeSession ? nil : session.directory,
                     workspaceID: session.workspaceID,
                     state: state
                 )

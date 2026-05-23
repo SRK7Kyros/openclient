@@ -28,6 +28,18 @@ final class ProjectCoordinator {
         let selectedDirectory: String?
     }
 
+    struct RecentSessionNavigationResult {
+        let projects: [OpenCodeProject]
+        let currentProject: OpenCodeProject?
+        let routeDirectory: String?
+        let shouldPreserveMissingSession: Bool
+    }
+
+    struct RecentSessionResolutionResult {
+        let session: OpenCodeSession?
+        let shouldUpsertVisibleSession: Bool
+    }
+
     func searchProjects(client: OpenCodeAPIClient, query: String, defaultSearchRoot: String) async -> [String] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return [] }
@@ -160,6 +172,51 @@ final class ProjectCoordinator {
         return ProjectSelectionResult(currentProject: project, selectedDirectory: project.worktree)
     }
 
+    func recentSessionNavigationResult(for session: OpenCodeSession, projects: [OpenCodeProject]) -> RecentSessionNavigationResult {
+        let resolvedProject = projectForRecentSession(session, projects: projects)
+        var nextProjects = projects
+        let currentProject: OpenCodeProject?
+
+        if let resolvedProject {
+            currentProject = resolvedProject
+        } else if session.isGlobalScopeSession {
+            let global = globalProject(in: nextProjects)
+            if !nextProjects.contains(where: { $0.id == global.id }) {
+                nextProjects.insert(global, at: 0)
+            }
+            currentProject = global
+        } else {
+            currentProject = nil
+        }
+
+        return RecentSessionNavigationResult(
+            projects: nextProjects,
+            currentProject: currentProject,
+            routeDirectory: routeDirectory(forRecentSession: session),
+            shouldPreserveMissingSession: session.isGlobalScopeSession
+        )
+    }
+
+    func resolveRecentSessionAfterReload(
+        recentSession: OpenCodeSession,
+        matchingSession: OpenCodeSession?,
+        allSessions: [OpenCodeSession]
+    ) -> RecentSessionResolutionResult {
+        if let matchingSession {
+            return RecentSessionResolutionResult(session: matchingSession, shouldUpsertVisibleSession: false)
+        }
+
+        if let session = allSessions.first(where: { $0.id == recentSession.id }) {
+            return RecentSessionResolutionResult(session: session, shouldUpsertVisibleSession: false)
+        }
+
+        guard recentSession.isGlobalScopeSession else {
+            return RecentSessionResolutionResult(session: nil, shouldUpsertVisibleSession: false)
+        }
+
+        return RecentSessionResolutionResult(session: recentSession, shouldUpsertVisibleSession: true)
+    }
+
     private func mergeProjectsPreservingLocal(serverProjects: [OpenCodeProject], currentProjects: [OpenCodeProject]) -> [OpenCodeProject] {
         let localProjects = currentProjects.filter { $0.id.hasPrefix("local:") || $0.id == "global" }
         var merged: [String: OpenCodeProject] = [:]
@@ -181,6 +238,39 @@ final class ProjectCoordinator {
 
     private func localProjectID(for directory: String) -> String {
         "local:\(directory)"
+    }
+
+    private func routeDirectory(forRecentSession session: OpenCodeSession) -> String? {
+        session.isGlobalScopeSession ? nil : session.directory
+    }
+
+    private func projectForRecentSession(_ session: OpenCodeSession, projects: [OpenCodeProject]) -> OpenCodeProject? {
+        if let projectID = session.projectID,
+           let project = projects.first(where: { $0.id == projectID }) {
+            return project
+        }
+
+        guard !session.isGlobalScopeSession,
+              let directory = session.directory,
+              !directory.isEmpty else {
+            return projects.first { $0.id == "global" }
+        }
+
+        return projects.first { project in
+            project.worktree == directory || (project.sandboxes ?? []).contains(directory)
+        }
+    }
+
+    private func globalProject(in projects: [OpenCodeProject]) -> OpenCodeProject {
+        projects.first { $0.id == "global" } ?? OpenCodeProject(
+            id: "global",
+            worktree: "",
+            vcs: nil,
+            name: "Global",
+            sandboxes: nil,
+            icon: nil,
+            time: nil
+        )
     }
 
     private func reconcileCurrentProjectSelection(
