@@ -19,17 +19,6 @@ platform :ios do
     ]
   end
 
-  def normalize_ipad_landscape_screenshots(screenshot_output, device)
-    return unless device.downcase.include?("ipad")
-
-    identifier = device.tr(" ", "-")
-    pattern = File.join(screenshot_output, "en_US", "#{identifier}-*.png")
-    screenshots = Dir.glob(pattern)
-    return if screenshots.empty?
-
-    sh("sips -r 270 #{screenshots.map(&:shellescape).join(" ")}")
-  end
-
   def ensure_screenshot_simulator(device)
     devices = `xcrun simctl list devices available`
     return if devices.include?("#{device} (")
@@ -228,7 +217,6 @@ platform :ios do
           "ONLY_ACTIVE_ARCH=YES",
         ].join(" ")
       )
-      normalize_ipad_landscape_screenshots(screenshot_output, device)
     end
   end
 end

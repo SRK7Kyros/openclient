@@ -80,6 +80,12 @@ extension AppViewModel {
     }
 
     func loadProvidersForConfiguration() async {
+        if ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil, !modelConfigurationStore.allProviders.isEmpty {
+            modelConfigurationStore.isLoadingProviders = false
+            modelConfigurationStore.providerErrorMessage = nil
+            return
+        }
+
         objectWillChange.send()
         modelConfigurationStore.isLoadingProviders = true
         modelConfigurationStore.providerErrorMessage = nil

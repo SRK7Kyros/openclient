@@ -13,6 +13,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case findPlaceGame = "find-place-game"
     case findBugGame = "find-bug-game"
     case composerActions = "composer-actions"
+    case providerSetup = "provider-setup"
     case paywall
     case recentWidget = "recent-widget"
     case pinnedWidget = "pinned-widget"
@@ -61,6 +62,8 @@ extension AppViewModel {
             return screenshotFindBugGame()
         case .composerActions:
             return screenshotChat()
+        case .providerSetup:
+            return screenshotProviderSetup()
         case .paywall:
             return screenshotPaywall()
         }
@@ -180,6 +183,16 @@ extension AppViewModel {
         return viewModel
     }
 
+    private static func screenshotProviderSetup() -> AppViewModel {
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.allProviders = OpenClientScreenshotData.allProviders
+        viewModel.availableProviders = OpenClientScreenshotData.connectedProviders
+        viewModel.connectedProviderIDs = Set(OpenClientScreenshotData.connectedProviders.map(\.id))
+        viewModel.defaultModelsByProviderID = OpenClientScreenshotData.providerDefaults
+        viewModel.modelConfigurationStore.applyProviderAuthMethods(OpenClientScreenshotData.providerAuthMethods)
+        return viewModel
+    }
+
     private static func baseConnectedScreenshotViewModel(
         selectedSession: OpenCodeSession? = OpenClientScreenshotData.releaseSession,
         sessions: [OpenCodeSession] = OpenClientScreenshotData.sessions,
@@ -207,10 +220,17 @@ extension AppViewModel {
         viewModel.currentProject = OpenClientScreenshotData.repoProject
         viewModel.selectedDirectory = OpenClientScreenshotData.repoProject.worktree
         viewModel.sessionPreviews = OpenClientScreenshotData.sessionPreviews
+        viewModel.sessionListStore.setRecentSessions(OpenClientScreenshotData.recentRepoSessions, for: OpenClientScreenshotData.repoProject.worktree)
+        viewModel.sessionListStore.setRecentSessions(OpenClientScreenshotData.recentDocsSessions, for: OpenClientScreenshotData.docsProject.worktree)
         viewModel.recentServerConfigs = OpenClientScreenshotData.recentServers
         viewModel.hasSavedServer = true
         viewModel.showSavedServerPrompt = false
         viewModel.activeLiveActivitySessionIDs = [OpenClientScreenshotData.releaseSession.id]
+        viewModel.allProviders = OpenClientScreenshotData.allProviders
+        viewModel.availableProviders = OpenClientScreenshotData.connectedProviders
+        viewModel.connectedProviderIDs = Set(OpenClientScreenshotData.connectedProviders.map(\.id))
+        viewModel.defaultModelsByProviderID = OpenClientScreenshotData.providerDefaults
+        viewModel.modelConfigurationStore.applyProviderAuthMethods(OpenClientScreenshotData.providerAuthMethods)
         return viewModel
     }
 }
@@ -228,7 +248,7 @@ enum OpenClientScreenshotData {
         vcs: "git",
         name: "openclient",
         sandboxes: ["/Users/nick/Code/openclient-review"],
-        icon: OpenCodeProject.Icon(color: "#5B7CFF"),
+        icon: OpenCodeProject.Icon(override: appIconDataURL, color: "#5B7CFF"),
         time: OpenCodeProject.Time(created: 1_712_200_000, updated: 1_712_286_400)
     )
 
@@ -238,9 +258,12 @@ enum OpenClientScreenshotData {
         vcs: nil,
         name: "product-playbook",
         sandboxes: nil,
-        icon: OpenCodeProject.Icon(color: "#22C55E"),
+        icon: OpenCodeProject.Icon(override: docsIconDataURL, color: "#22C55E"),
         time: OpenCodeProject.Time(created: 1_712_100_000, updated: 1_712_180_000)
     )
+
+    static let appIconDataURL = "data:image/png;base64,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"
+    static let docsIconDataURL = "data:image/png;base64,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"
 
     static let projects = [OpenCodePreviewData.globalProject, repoProject, docsProject]
 
@@ -289,7 +312,18 @@ enum OpenClientScreenshotData {
         parentID: nil
     )
 
+    static let docsSession = OpenCodeSession(
+        id: "session-screenshot-docs",
+        title: "Product launch notes",
+        workspaceID: nil,
+        directory: docsProject.worktree,
+        projectID: docsProject.id,
+        parentID: nil
+    )
+
     static let sessions = [releaseSession, followupSession, archivedSession]
+    static let recentRepoSessions = [releaseSession, followupSession, archivedSession, reviewSession]
+    static let recentDocsSessions = [docsSession]
 
     static let pinnedSectionSessions = [releaseSession, followupSession, archivedSession, reviewSession]
 
@@ -327,10 +361,39 @@ enum OpenClientScreenshotData {
         OpenCodeServerConfig(iconName: "cube.box.fill", baseURL: "https://lab.open-client.com", username: "team", password: "lab-token")
     ]
 
+    static let providerDefaults = ["openai": "gpt-5.4", "anthropic": "claude-sonnet-4.5"]
+
+    static let openAIModel = OpenCodeModel(id: "gpt-5.4", providerID: "openai", name: "GPT-5.4", capabilities: OpenCodeModelCapabilities(reasoning: true), variants: ["balanced": .bool(true), "deep_think": .bool(true)])
+    static let claudeModel = OpenCodeModel(id: "claude-sonnet-4.5", providerID: "anthropic", name: "Claude Sonnet 4.5", capabilities: OpenCodeModelCapabilities(reasoning: true), variants: ["balanced": .bool(true)])
+    static let copilotModel = OpenCodeModel(id: "gpt-5-copilot", providerID: "github-copilot", name: "GPT-5 Copilot", capabilities: OpenCodeModelCapabilities(reasoning: true))
+    static let googleModel = OpenCodeModel(id: "gemini-3-pro", providerID: "google", name: "Gemini 3 Pro", capabilities: OpenCodeModelCapabilities(reasoning: true))
+    static let openRouterModel = OpenCodeModel(id: "openai/gpt-5.4", providerID: "openrouter", name: "GPT-5.4 via OpenRouter", capabilities: OpenCodeModelCapabilities(reasoning: true))
+    static let vercelModel = OpenCodeModel(id: "v0-1.5-md", providerID: "vercel", name: "v0 1.5 Medium", capabilities: OpenCodeModelCapabilities(reasoning: false))
+
+    static let connectedProviders = [
+        OpenCodeProvider(id: "openai", name: "OpenAI", models: [openAIModel.id: openAIModel], source: "api"),
+        OpenCodeProvider(id: "anthropic", name: "Anthropic", models: [claudeModel.id: claudeModel], source: "env"),
+    ]
+
+    static let allProviders = connectedProviders + [
+        OpenCodeProvider(id: "github-copilot", name: "GitHub Copilot", models: [copilotModel.id: copilotModel]),
+        OpenCodeProvider(id: "google", name: "Google", models: [googleModel.id: googleModel]),
+        OpenCodeProvider(id: "openrouter", name: "OpenRouter", models: [openRouterModel.id: openRouterModel]),
+        OpenCodeProvider(id: "vercel", name: "Vercel", models: [vercelModel.id: vercelModel]),
+    ]
+
+    static let providerAuthMethods: [String: [OpenCodeProviderAuthMethod]] = [
+        "github-copilot": [OpenCodeProviderAuthMethod(type: "oauth", label: "Sign in with GitHub", prompts: nil)],
+        "google": [OpenCodeProviderAuthMethod(type: "oauth", label: "Sign in with Google", prompts: nil)],
+        "openrouter": [OpenCodeProviderAuthMethod(type: "api", label: "API Key", prompts: nil)],
+        "vercel": [OpenCodeProviderAuthMethod(type: "oauth", label: "Sign in with Vercel", prompts: nil)],
+    ]
+
     static let sessionPreviews: [String: SessionPreview] = [
         releaseSession.id: SessionPreview(text: "Tightened the release surface and App Store flow.", date: Date().addingTimeInterval(-180)),
         followupSession.id: SessionPreview(text: "Verified question actions route into the tracked chat.", date: Date().addingTimeInterval(-1_200)),
         archivedSession.id: SessionPreview(text: "Added deterministic screenshot scenes for launch assets.", date: Date().addingTimeInterval(-3_200)),
+        docsSession.id: SessionPreview(text: "Collected provider setup notes for the next release.", date: Date().addingTimeInterval(-2_100)),
     ]
 
     static let pinnedSectionSessionPreviews: [String: SessionPreview] = [

@@ -25,28 +25,25 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
     @MainActor
     func testAppStoreScreenshots() {
-        if isRunningOniPadSimulator {
-            XCUIDevice.shared.orientation = .landscapeLeft
-        }
-
         let scenes: [(scene: String, screenshotName: String)] = [
             ("connection", "01-connection"),
             ("recent-servers", "02-recent-servers"),
             ("projects", "03-projects"),
-            ("sessions", "04-sessions"),
-            ("chat", "05-chat"),
-            ("permission", "06-permission"),
-            ("question", "07-question"),
-            ("fun-games", "08-fun-games"),
-            ("find-place-game", "09-find-place-game"),
-            ("find-bug-game", "10-find-bug-game"),
-            ("composer-actions", "11-composer-actions"),
-            ("paywall", "12-paywall"),
-            ("recent-widget", "13-recent-widget"),
-            ("pinned-widget", "14-pinned-widget"),
-            ("live-activity", "15-live-activity"),
-            ("session-actions", "16-session-actions"),
-            ("session-pinned", "17-session-pinned"),
+            ("provider-setup", "04-provider-setup"),
+            ("sessions", "05-sessions"),
+            ("chat", "06-chat"),
+            ("permission", "07-permission"),
+            ("question", "08-question"),
+            ("fun-games", "09-fun-games"),
+            ("find-place-game", "10-find-place-game"),
+            ("find-bug-game", "11-find-bug-game"),
+            ("composer-actions", "12-composer-actions"),
+            ("paywall", "13-paywall"),
+            ("recent-widget", "14-recent-widget"),
+            ("pinned-widget", "15-pinned-widget"),
+            ("live-activity", "16-live-activity"),
+            ("session-actions", "17-session-actions"),
+            ("session-pinned", "18-session-pinned"),
         ]
 
         for (scene, screenshotName) in scenes {
@@ -58,6 +55,14 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             let sceneMarker = app.staticTexts["screenshot.scene.\(scene)"]
             XCTAssertTrue(sceneMarker.waitForExistence(timeout: 10), "Expected screenshot scene \(scene) to load")
 
+            if scene == "connection" || scene == "recent-servers" {
+                XCTAssertTrue(app.navigationBars["OpenClient"].waitForExistence(timeout: 10), "Expected connection sheet to load")
+            }
+
+            if scene == "projects" || scene == "provider-setup" {
+                XCTAssertTrue(app.scrollViews["projects.recentSessions"].waitForExistence(timeout: 10), "Expected recent sessions rail to load")
+            }
+
             if scene == "composer-actions" {
                 let composerMenu = app.buttons["chat.composer.menu"]
                 XCTAssertTrue(composerMenu.waitForExistence(timeout: 10), "Expected composer menu button to load")
@@ -65,14 +70,23 @@ final class OpenCodeIOSClientUITests: XCTestCase {
                 XCTAssertTrue(app.navigationBars["Message Tools"].waitForExistence(timeout: 10), "Expected composer actions sheet to load")
             }
 
+            if scene == "provider-setup" {
+                let configurations = app.buttons["projects.configurations"]
+                XCTAssertTrue(configurations.waitForExistence(timeout: 10), "Expected configurations button to load")
+                configurations.tap()
+
+                let addProvider = app.buttons["configurations.addProvider"].firstMatch
+                if !addProvider.waitForExistence(timeout: 3) {
+                    app.swipeUp()
+                }
+                XCTAssertTrue(addProvider.waitForExistence(timeout: 10), "Expected Add Provider row to load")
+                addProvider.tap()
+                XCTAssertTrue(app.navigationBars["Add Provider"].waitForExistence(timeout: 10), "Expected Add Provider screen to load")
+            }
+
             snapshot(screenshotName)
             app.terminate()
         }
-    }
-
-    private var isRunningOniPadSimulator: Bool {
-        let deviceName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
-        return deviceName.localizedCaseInsensitiveContains("iPad")
     }
 
     @MainActor

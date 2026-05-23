@@ -197,7 +197,7 @@ extension AppViewModel {
             projectFilesStore.selectProjectFile(node, isChanged: isChangedFile(node.absolute))
         }
 
-        guard !isChangedFile(node.absolute) else { return }
+        guard !isChangedFile(node.absolute) || OpenCodeFilePreviewSupport.isImagePath(node.absolute) else { return }
         Task {
             await loadFileContentIfNeeded(for: node)
         }
@@ -283,7 +283,7 @@ extension AppViewModel {
     func loadSelectedProjectFileContentIfNeeded() async {
         guard let path = selectedProjectFilePath else { return }
         guard projectFilesStore.needsFileContent(path: path) else { return }
-        guard !selectedProjectFileIsChanged else { return }
+        guard !selectedProjectFileIsChanged || OpenCodeFilePreviewSupport.isImagePath(path) else { return }
         await loadFileContent(path: path, force: false)
     }
 

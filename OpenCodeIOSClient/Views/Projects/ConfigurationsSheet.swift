@@ -59,6 +59,7 @@ struct ConfigurationsSheet: View {
                     NavigationLink(value: ConfigurationRoute.addProvider) {
                         Label("Add Provider", systemImage: "plus.circle.fill")
                     }
+                    .accessibilityIdentifier("configurations.addProvider")
                 }
 
                 Section("Fun & Games") {

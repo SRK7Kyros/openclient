@@ -203,6 +203,31 @@ struct OpenCodeFileContent: Codable, Hashable, Sendable {
     let mimeType: String?
 }
 
+enum OpenCodeFilePreviewSupport {
+    static func isImagePath(_ path: String) -> Bool {
+        switch URL(fileURLWithPath: path).pathExtension.lowercased() {
+        case "png", "jpg", "jpeg", "gif", "webp", "heic", "heif":
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func imageData(from content: OpenCodeFileContent) -> Data? {
+        let payload: String
+        if let comma = content.content.firstIndex(of: ","), content.content[..<comma].contains("base64") {
+            payload = String(content.content[content.content.index(after: comma)...])
+        } else {
+            payload = content.content
+        }
+
+        guard content.encoding == "base64" || content.type == "binary" || content.mimeType?.hasPrefix("image/") == true else {
+            return nil
+        }
+        return Data(base64Encoded: payload)
+    }
+}
+
 struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
     var info: OpenCodeMessage
     var parts: [OpenCodePart]

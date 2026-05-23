@@ -8,7 +8,10 @@ struct GitDiffView: View {
             hasGitProject: viewModel.hasGitProject,
             snapshot: viewModel.projectFilesSnapshot,
             relativeGitPath: { viewModel.relativeGitPath($0) },
-            onLoadDiff: { mode in await viewModel.loadVCSDiff(mode: mode) }
+            onLoadDiff: { mode in await viewModel.loadVCSDiff(mode: mode) },
+            onLoadSelectedFileContent: {
+                await viewModel.loadSelectedProjectFileContentIfNeeded()
+            }
         )
     }
 }
@@ -18,6 +21,7 @@ private struct GitDiffContent: View {
     let snapshot: AppViewModel.ProjectFilesSnapshot
     let relativeGitPath: (String) -> String
     let onLoadDiff: (OpenCodeVCSDiffMode) async -> Void
+    let onLoadSelectedFileContent: () async -> Void
 
     private var diff: OpenCodeVCSFileDiff? {
         snapshot.selectedFileDiff
@@ -27,6 +31,28 @@ private struct GitDiffContent: View {
         Group {
             if !hasGitProject {
                 ContentUnavailableView("Git Unavailable", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+            } else if let path = snapshot.selectedFilePath,
+                      OpenCodeFilePreviewSupport.isImagePath(path),
+                      let content = snapshot.selectedFileContent,
+                      let image = OpenCodeFilePreview.image(from: content) {
+                OpenCodeImageFilePreview(image: image, path: relativeGitPath(path))
+                    .navigationTitle(fileTitle(for: path))
+                    .opencodeInlineNavigationTitle()
+            } else if let path = snapshot.selectedFilePath,
+                      OpenCodeFilePreviewSupport.isImagePath(path),
+                      snapshot.isLoadingSelectedFileContent {
+                ContentUnavailableView(
+                    "Loading Image",
+                    systemImage: "photo",
+                    description: Text(relativeGitPath(path))
+                )
+            } else if let path = snapshot.selectedFilePath,
+                      OpenCodeFilePreviewSupport.isImagePath(path) {
+                ContentUnavailableView(
+                    snapshot.fileContentErrorMessage == nil ? "Loading Image" : "Preview Unavailable",
+                    systemImage: snapshot.fileContentErrorMessage == nil ? "photo" : "exclamationmark.triangle",
+                    description: Text([relativeGitPath(path), snapshot.fileContentErrorMessage].compactMap { $0 }.joined(separator: "\n\n"))
+                )
             } else if let diff {
                 OpenCodeUnifiedDiffView(
                     diff: OpenCodeUnifiedDiffData(
@@ -52,6 +78,9 @@ private struct GitDiffContent: View {
         .task(id: diffLoadTaskID) {
             guard snapshot.selectedFilePath != nil || snapshot.selectedVCSFile != nil else { return }
             await onLoadDiff(snapshot.selectedMode)
+            if let path = snapshot.selectedFilePath, OpenCodeFilePreviewSupport.isImagePath(path) {
+                await onLoadSelectedFileContent()
+            }
         }
     }
 
@@ -126,7 +155,9 @@ private struct ProjectFileContent: View {
 
     @ViewBuilder
     private func fileContent(_ content: OpenCodeFileContent, path: String) -> some View {
-        if content.type == "binary" {
+        if let image = OpenCodeFilePreview.image(from: content), OpenCodeFilePreviewSupport.isImagePath(path) {
+            OpenCodeImageFilePreview(image: image, path: relativeGitPath(path))
+        } else if content.type == "binary" {
             ContentUnavailableView(
                 "Binary File",
                 systemImage: "doc.fill",
@@ -147,6 +178,51 @@ private struct ProjectFileContent: View {
 
     private func fileTitle(for path: String) -> String {
         relativeGitPath(path).split(separator: "/").last.map(String.init) ?? path
+    }
+}
+
+enum OpenCodeFilePreview {
+    static func image(from content: OpenCodeFileContent) -> Image? {
+        guard let data = OpenCodeFilePreviewSupport.imageData(from: content) else { return nil }
+#if canImport(UIKit)
+        guard let platformImage = UIImage(data: data) else { return nil }
+        return Image(uiImage: platformImage)
+#elseif canImport(AppKit)
+        guard let platformImage = NSImage(data: data) else { return nil }
+        return Image(nsImage: platformImage)
+#endif
+    }
+}
+
+private struct OpenCodeImageFilePreview: View {
+    let image: Image
+    let path: String
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+
+                    image
+                        .resizable()
+                        .interpolation(.medium)
+                        .scaledToFit()
+                        .frame(
+                            maxWidth: max(geometry.size.width - 32, 0),
+                            maxHeight: max(geometry.size.height - 64, 240),
+                            alignment: .center
+                        )
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(16)
+                .frame(maxWidth: geometry.size.width, alignment: .leading)
+            }
+            .background(OpenCodePlatformColor.groupedBackground)
+        }
     }
 }
 

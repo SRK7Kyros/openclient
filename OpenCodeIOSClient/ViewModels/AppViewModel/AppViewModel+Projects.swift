@@ -395,6 +395,11 @@ extension AppViewModel {
 
     func loadRecentProjectSessionsAcrossProjects() async {
         guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        if ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil, !recentProjectSessions.isEmpty {
+            sessionListStore.isLoadingRecentProjectSessions = false
+            return
+        }
+
         let directories = recentSessionDirectoriesToLoad()
         guard !directories.isEmpty else { return }
 

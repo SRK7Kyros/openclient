@@ -577,6 +577,31 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(aggregate?.deletions, 1)
     }
 
+    func testFilePreviewSupportDecodesBase64PNGContent() {
+        let content = OpenCodeFileContent(
+            type: "binary",
+            content: "iVBORw0KGgo=",
+            diff: nil,
+            encoding: "base64",
+            mimeType: "image/png"
+        )
+
+        XCTAssertTrue(OpenCodeFilePreviewSupport.isImagePath("fastlane/screenshots/en_US/chat.png"))
+        XCTAssertEqual(OpenCodeFilePreviewSupport.imageData(from: content), Data(base64Encoded: "iVBORw0KGgo="))
+    }
+
+    func testFilePreviewSupportDecodesDataURLPNGContent() {
+        let content = OpenCodeFileContent(
+            type: "binary",
+            content: "data:image/png;base64,iVBORw0KGgo=",
+            diff: nil,
+            encoding: nil,
+            mimeType: nil
+        )
+
+        XCTAssertEqual(OpenCodeFilePreviewSupport.imageData(from: content), Data(base64Encoded: "iVBORw0KGgo="))
+    }
+
     func testMCPStoreDerivesSortedServersAndConnectedCount() {
         let store = MCPStore(statuses: [
             "zeta": OpenCodeMCPStatus(status: "disabled", error: nil),

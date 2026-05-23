@@ -23,10 +23,8 @@ struct ScreenshotSceneView: View {
     private var screenshotContent: some View {
         switch scene {
         case .connection, .recentServers:
-            NavigationStack {
-                ConnectionView(viewModel: viewModel)
-            }
-        case .projects:
+            RootView(viewModel: viewModel)
+        case .projects, .providerSetup:
             if isRunningOniPad {
                 RootView(viewModel: viewModel)
             } else {
