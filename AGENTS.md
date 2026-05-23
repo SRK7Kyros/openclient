@@ -148,6 +148,7 @@ Important streaming findings:
 - Deltas that arrive before the corresponding `message.part.updated` should be ignored rather than creating a placeholder `text` part, so reasoning streams are never misclassified as answer text
 - iOS still preserves accumulated text when a later empty `part.updated` would otherwise wipe it
 - Typed-event decode failures used to fail silently at the SSE boundary; the event manager now logs dropped events into the existing debug log.
+- Buffered visible-chat `message.part.delta` events must project reducer-applied messages back into the active `messages` array when flushed. A previous regression applied buffered deltas into directory sync state but called `applyDirectoryEventState(..., updatesSelectedMessages: false)`, making streaming appear stopped until a later full refresh/reload.
 
 ### Typed Event Decode Failures
 

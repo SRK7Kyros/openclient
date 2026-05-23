@@ -1253,6 +1253,69 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "streaming")
     }
 
+    func testBufferedSelectedTranscriptDeltaFlushProjectsVisibleMessages() {
+        let viewModel = AppViewModel()
+        let selected = OpenCodeSession(id: "ses_selected", title: "Selected", workspaceID: nil, directory: "/tmp/project", projectID: nil, parentID: nil)
+        let message = OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)
+        let partID = "prt_text"
+        let part = OpenCodePart(
+            id: partID,
+            messageID: message.id,
+            sessionID: selected.id,
+            type: "text",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: ""
+        )
+
+        viewModel.isConnected = true
+        viewModel.selectedDirectory = selected.directory
+        viewModel.selectedSession = selected
+        viewModel.activeChatSessionID = selected.id
+
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(type: "message.updated", properties: OpenCodeEventProperties(info: OpenCodeEventInfo(message: message))),
+            typed: .messageUpdated(message)
+        ))
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(type: "message.part.updated", properties: OpenCodeEventProperties(part: part)),
+            typed: .messagePartUpdated(part)
+        ))
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: "/tmp/project",
+            envelope: OpenCodeEventEnvelope(
+                type: "message.part.delta",
+                properties: OpenCodeEventProperties(
+                    sessionID: selected.id,
+                    messageID: message.id,
+                    partID: partID,
+                    field: "text",
+                    delta: "streaming"
+                )
+            ),
+            typed: .messagePartDelta(
+                sessionID: selected.id,
+                messageID: message.id,
+                partID: partID,
+                field: "text",
+                delta: "streaming"
+            )
+        ))
+
+        XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "")
+
+        viewModel.flushBufferedTranscript(reason: "test")
+
+        XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "streaming")
+    }
+
     func testLiveActivityTranscriptShowsLatestAssistantLineOnly() {
         let viewModel = AppViewModel()
         let session = OpenCodeSession(

@@ -501,7 +501,7 @@ extension AppViewModel {
         let application = eventSyncCoordinator.applyDirectoryEvents(reducerEvents.map(\.typedEvent), to: directoryEventState())
         let reduceElapsedMS = reduceStart.elapsedMilliseconds
         let publishStart = ContinuousClock.now
-        applyDirectoryEventState(application.state, updatesSelectedMessages: false)
+        applyDirectoryEventState(application.state, updatesSelectedMessages: true)
         let publishElapsedMS = publishStart.elapsedMilliseconds
 
         for sessionID in Set(events.compactMap(\.sessionID)) {
