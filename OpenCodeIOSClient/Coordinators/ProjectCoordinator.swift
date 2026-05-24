@@ -63,14 +63,19 @@ final class ProjectCoordinator {
         currentProject: OpenCodeProject?,
         selectedDirectory: String?
     ) async throws -> ProjectRefreshResult {
-        let serverProjects = try await client.listProjects()
-        let projects = mergeProjectsPreservingLocal(serverProjects: serverProjects, currentProjects: currentProjects)
-        let serverProject = try? await client.currentProject()
+        async let serverProjects = client.listProjects()
+        async let serverProject = try? client.currentProject()
+        let loadedProjects = try await serverProjects
+        let discoveredProject = await serverProject
+        let projects = mergeProjectsPreservingLocal(
+            serverProjects: normalizedProjects(loadedProjects, currentProject: discoveredProject),
+            currentProjects: currentProjects
+        )
         let reconciledProject = reconcileCurrentProjectSelection(
             projects: projects,
             currentProject: currentProject,
             selectedDirectory: selectedDirectory,
-            serverProject: serverProject
+            serverProject: discoveredProject
         )
         return ProjectRefreshResult(projects: projects, currentProject: reconciledProject)
     }
@@ -172,6 +177,30 @@ final class ProjectCoordinator {
         return ProjectSelectionResult(currentProject: project, selectedDirectory: project.worktree)
     }
 
+    func bootstrapProjects(_ serverProjects: [OpenCodeProject], currentProject: OpenCodeProject? = nil) -> [OpenCodeProject] {
+        let projects = normalizedProjects(serverProjects, currentProject: currentProject)
+        return mergeProjectsPreservingLocal(serverProjects: projects, currentProjects: projects)
+    }
+
+    func recentSessionDirectories(
+        projects: [OpenCodeProject],
+        currentProject: OpenCodeProject?,
+        selectedDirectory: String?
+    ) -> [String?] {
+        var directories: [String?] = []
+        var seen = Set<String>()
+
+        appendRecentDirectory(nil, to: &directories, seen: &seen)
+        appendRecentDirectory(selectedDirectory, to: &directories, seen: &seen)
+        appendRecentProjectDirectories(currentProject, to: &directories, seen: &seen)
+
+        for project in projects {
+            appendRecentProjectDirectories(project, to: &directories, seen: &seen)
+        }
+
+        return directories
+    }
+
     func recentSessionNavigationResult(for session: OpenCodeSession, projects: [OpenCodeProject]) -> RecentSessionNavigationResult {
         let resolvedProject = projectForRecentSession(session, projects: projects)
         var nextProjects = projects
@@ -238,6 +267,41 @@ final class ProjectCoordinator {
 
     private func localProjectID(for directory: String) -> String {
         "local:\(directory)"
+    }
+
+    private func normalizedProjects(_ serverProjects: [OpenCodeProject], currentProject: OpenCodeProject?) -> [OpenCodeProject] {
+        var projects = serverProjects
+        if let currentProject,
+           !projects.contains(where: { $0.id == currentProject.id }) {
+            projects.append(currentProject)
+        }
+
+        let global = globalProject(in: projects)
+        if !projects.contains(where: { $0.id == global.id }) {
+            projects.append(global)
+        }
+
+        return projects
+    }
+
+    private func appendRecentProjectDirectories(_ project: OpenCodeProject?, to directories: inout [String?], seen: inout Set<String>) {
+        guard let project, project.id != "global" else { return }
+        appendRecentDirectory(project.worktree, to: &directories, seen: &seen)
+        for sandbox in project.sandboxes ?? [] {
+            appendRecentDirectory(sandbox, to: &directories, seen: &seen)
+        }
+    }
+
+    private func appendRecentDirectory(_ directory: String?, to directories: inout [String?], seen: inout Set<String>) {
+        let key = recentDirectoryKey(directory)
+        guard seen.insert(key).inserted else { return }
+        if let directory, directory.isEmpty { return }
+        directories.append(directory)
+    }
+
+    private func recentDirectoryKey(_ directory: String?) -> String {
+        guard let directory, !directory.isEmpty else { return "global" }
+        return directory
     }
 
     private func routeDirectory(forRecentSession session: OpenCodeSession) -> String? {

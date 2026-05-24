@@ -196,6 +196,11 @@ final class SessionListStore: ObservableObject {
         recentSessionsByDirectory[Self.recentDirectoryKey(directory)] = sessions
     }
 
+    func clearRecentSessions() {
+        recentSessionsByDirectory = [:]
+        isLoadingRecentProjectSessions = false
+    }
+
     func recentProjectSessions(
         projects: [OpenCodeProject],
         previews: [String: SessionPreview],

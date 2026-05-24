@@ -395,6 +395,24 @@ extension AppViewModel {
 
     func loadRecentProjectSessionsAcrossProjects() async {
         guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        if let recentProjectSessionsLoadTask {
+            await recentProjectSessionsLoadTask.value
+            guard self.recentProjectSessionsLoadTask == nil else { return }
+        }
+
+        let generation = recentProjectSessionsLoadGeneration
+        recentProjectSessionsLoadTask = Task { [weak self] in
+            await self?.performRecentProjectSessionsLoad(generation: generation)
+            await MainActor.run { [weak self] in
+                guard let self, self.recentProjectSessionsLoadGeneration == generation else { return }
+                self.recentProjectSessionsLoadTask = nil
+            }
+        }
+        await recentProjectSessionsLoadTask?.value
+    }
+
+    private func performRecentProjectSessionsLoad(generation: Int) async {
+        guard backendMode == .server, showsRecentSessionsInProjectList else { return }
         if ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil, !recentProjectSessions.isEmpty {
             sessionListStore.isLoadingRecentProjectSessions = false
             return
@@ -406,8 +424,10 @@ extension AppViewModel {
         objectWillChange.send()
         sessionListStore.isLoadingRecentProjectSessions = true
         defer {
-            objectWillChange.send()
-            sessionListStore.isLoadingRecentProjectSessions = false
+            if recentProjectSessionsLoadGeneration == generation {
+                objectWillChange.send()
+                sessionListStore.isLoadingRecentProjectSessions = false
+            }
         }
 
         let client = client
@@ -425,10 +445,35 @@ extension AppViewModel {
 
             for await result in group {
                 guard let result else { continue }
+                guard recentProjectSessionsLoadGeneration == generation else { return }
                 objectWillChange.send()
                 sessionListStore.setRecentSessions(result.sessions, for: result.directory)
             }
         }
+    }
+
+    func beginRecentProjectSessionsLoadingIfPossible() {
+        guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        guard recentProjectSessionsLoadTask == nil else { return }
+
+        let generation = recentProjectSessionsLoadGeneration
+        objectWillChange.send()
+        sessionListStore.isLoadingRecentProjectSessions = true
+        recentProjectSessionsLoadTask = Task { [weak self] in
+            await self?.performRecentProjectSessionsLoad(generation: generation)
+            await MainActor.run { [weak self] in
+                guard let self, self.recentProjectSessionsLoadGeneration == generation else { return }
+                self.recentProjectSessionsLoadTask = nil
+            }
+        }
+    }
+
+    func resetRecentProjectSessionsForConnectionChange() {
+        recentProjectSessionsLoadGeneration &+= 1
+        recentProjectSessionsLoadTask?.cancel()
+        recentProjectSessionsLoadTask = nil
+        objectWillChange.send()
+        sessionListStore.clearRecentSessions()
     }
 
     func openRecentProjectSession(_ recent: RecentProjectSession) async {
@@ -546,22 +591,11 @@ extension AppViewModel {
     }
 
     private func recentSessionDirectoriesToLoad() -> [String?] {
-        var directories: [String?] = []
-        var seen = Set<String>()
-
-        if projects.contains(where: { $0.id == "global" }), seen.insert(SessionListStore.recentDirectoryKey(nil)).inserted {
-            directories.append(nil)
-        }
-
-        for project in projects where project.id != "global" {
-            for directory in [project.worktree] + (project.sandboxes ?? []) {
-                guard !directory.isEmpty else { continue }
-                guard seen.insert(SessionListStore.recentDirectoryKey(directory)).inserted else { continue }
-                directories.append(directory)
-            }
-        }
-
-        return directories
+        projectCoordinator.recentSessionDirectories(
+            projects: projects,
+            currentProject: currentProject,
+            selectedDirectory: selectedDirectory
+        )
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {

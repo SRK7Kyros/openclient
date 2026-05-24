@@ -13,6 +13,12 @@ struct ProjectListView: View {
 
     var body: some View {
         let projectIDs = viewModel.projects.map { $0.id }.joined(separator: "|")
+        let recentLoadKey = [
+            viewModel.config.recentServerID,
+            viewModel.isConnected ? "connected" : "disconnected",
+            viewModel.showsRecentSessionsInProjectList ? "recent-on" : "recent-off",
+            projectIDs,
+        ].joined(separator: "|")
         let recentSessions = viewModel.recentProjectSessions
         let isLoadingRecentSessions = viewModel.isLoadingRecentProjectSessions
 
@@ -116,7 +122,7 @@ struct ProjectListView: View {
         .refreshable {
             await viewModel.refreshProjectList()
         }
-        .task(id: projectIDs) {
+        .task(id: recentLoadKey) {
             await viewModel.loadRecentProjectSessionsAcrossProjects()
         }
         .navigationTitle("Projects")

@@ -44,19 +44,21 @@ extension AppViewModel {
     }
 
     func connect() async {
+        resetRecentProjectSessionsForConnectionChange()
         await connectionCoordinator.connect(
             client: client,
             applyBootstrap: { bootstrap in
                 persistConfigAfterSuccessfulConnection()
                 loadNewSessionDefaults()
                 loadFunAndGamesPreferences()
-                projects = bootstrap.projects
+                projects = projectCoordinator.bootstrapProjects(bootstrap.projects, currentProject: bootstrap.currentProject)
                 currentProject = nil
                 selectedDirectory = nil
                 selectedProjectContentTab = .sessions
                 directoryStore.reset()
                 streamDirectory = nil
                 reconcileLiveActivities()
+                loadProjectListPreferences()
                 connectionCoordinator.updateConnectionPhase(.preparingInterface)
                 await loadComposerOptions()
                 try? Task.checkCancellation()
@@ -69,6 +71,9 @@ extension AppViewModel {
                 directoryStore.reset()
             }
         )
+        if isConnected {
+            beginRecentProjectSessionsLoadingIfPossible()
+        }
     }
 
     func startConnection() {
@@ -120,6 +125,7 @@ extension AppViewModel {
         isShowingConnectionOverlay = false
         stopEventStream()
         directoryStore.reset()
+        resetRecentProjectSessionsForConnectionChange()
         connectionStore.applyConnectionCancellation()
     }
 
@@ -175,6 +181,7 @@ extension AppViewModel {
         connectionAttemptTask?.cancel()
         connectionAttemptTask = nil
         appleIntelligenceResponseTask?.cancel()
+        resetRecentProjectSessionsForConnectionChange()
         connectionCoordinator.disconnect(
             hasSavedServer: hasSavedServer,
             stopActiveWorkspace: {

@@ -1913,6 +1913,57 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertEqual(result.projects.map(\.id), ["proj_2", "proj_1"])
     }
 
+    func testProjectCoordinatorBootstrapProjectsAddsAndSortsGlobalProject() {
+        let coordinator = ProjectCoordinator()
+        let project = makeProject(id: "proj_1", worktree: "/tmp/project")
+
+        let projects = coordinator.bootstrapProjects([project])
+
+        XCTAssertEqual(projects.first?.id, "global")
+        XCTAssertTrue(projects.contains(project))
+    }
+
+    func testProjectCoordinatorBootstrapProjectsIncludesCurrentProjectWhenProjectListOmitsIt() {
+        let coordinator = ProjectCoordinator()
+        let listed = makeProject(id: "proj_listed", worktree: "/tmp/listed")
+        let current = makeProject(id: "proj_current", worktree: "/tmp/current")
+
+        let projects = coordinator.bootstrapProjects([listed], currentProject: current)
+
+        XCTAssertEqual(projects.first?.id, "global")
+        XCTAssertTrue(projects.contains(listed))
+        XCTAssertTrue(projects.contains(current))
+    }
+
+    func testProjectCoordinatorRecentSessionDirectoriesIncludesCurrentSelectedProjectsAndSandboxes() {
+        let coordinator = ProjectCoordinator()
+        let current = makeProject(id: "proj_current", worktree: "/tmp/current")
+        let project = OpenCodeProject(
+            id: "proj_1",
+            worktree: "/tmp/project",
+            vcs: nil,
+            name: "Project",
+            sandboxes: ["/tmp/project/sandbox", "/tmp/selected"],
+            icon: nil,
+            time: nil
+        )
+        let global = OpenCodeProject(id: "global", worktree: "", vcs: nil, name: "Global", sandboxes: nil, icon: nil, time: nil)
+
+        let directories = coordinator.recentSessionDirectories(
+            projects: [global, project],
+            currentProject: current,
+            selectedDirectory: "/tmp/selected"
+        )
+
+        XCTAssertEqual(directories.map { $0 ?? "global" }, [
+            "global",
+            "/tmp/selected",
+            "/tmp/current",
+            "/tmp/project",
+            "/tmp/project/sandbox",
+        ])
+    }
+
     func testProjectCoordinatorRecentSessionNavigationMatchesProjectDirectoryAndSandboxes() {
         let coordinator = ProjectCoordinator()
         let project = OpenCodeProject(
