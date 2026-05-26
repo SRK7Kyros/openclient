@@ -516,6 +516,7 @@ final class AppViewModel: ObservableObject {
         }
     }
     @Published var isShowingCreateSessionSheet = false
+    @Published var newProjectChatSheetRequest: NewProjectChatSheetRequest?
     @Published var isShowingProjectSettingsSheet = false
     @Published var isShowingConfigurationsSheet = false
     @Published var isShowingFindPlaceModelSheet = false
@@ -738,6 +739,7 @@ final class AppViewModel: ObservableObject {
     var recentProjectSessionsLoadGeneration = 0
     var vcsEventRefreshTask: Task<Void, Never>?
     var widgetSnapshotPublishTask: Task<Void, Never>?
+    var pendingWidgetSnapshotIncludesModelOptions = false
     var connectionAttemptTask: Task<Void, Never>?
     var appleIntelligenceResponseTask: Task<Void, Never>?
     var activeAppleIntelligenceWorkspaceURL: URL?

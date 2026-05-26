@@ -9,6 +9,9 @@ final class SessionListStore: ObservableObject {
     @Published var pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun]
     @Published var recentSessionsByDirectory: [String: [OpenCodeSession]]
     @Published var isLoadingRecentProjectSessions: Bool
+    @Published var projectSessionSearchQuery: String
+    @Published var projectSessionSearchResults: [RecentProjectSession]
+    @Published var isSearchingProjectSessions: Bool
 
     init(
         previews: [String: SessionPreview] = [:],
@@ -16,7 +19,10 @@ final class SessionListStore: ObservableObject {
         workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState] = [:],
         pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] = [:],
         recentSessionsByDirectory: [String: [OpenCodeSession]] = [:],
-        isLoadingRecentProjectSessions: Bool = false
+        isLoadingRecentProjectSessions: Bool = false,
+        projectSessionSearchQuery: String = "",
+        projectSessionSearchResults: [RecentProjectSession] = [],
+        isSearchingProjectSessions: Bool = false
     ) {
         self.previews = previews
         self.pinnedSessionIDsByScope = pinnedSessionIDsByScope
@@ -24,6 +30,9 @@ final class SessionListStore: ObservableObject {
         self.pendingActionRunsBySessionID = pendingActionRunsBySessionID
         self.recentSessionsByDirectory = recentSessionsByDirectory
         self.isLoadingRecentProjectSessions = isLoadingRecentProjectSessions
+        self.projectSessionSearchQuery = projectSessionSearchQuery
+        self.projectSessionSearchResults = projectSessionSearchResults
+        self.isSearchingProjectSessions = isSearchingProjectSessions
     }
 
     func setPreview(_ preview: SessionPreview, for sessionID: String) -> Bool {
@@ -234,6 +243,51 @@ final class SessionListStore: ObservableObject {
             .map { $0 }
     }
 
+    func projectSessionSearchResults(
+        projects: [OpenCodeProject],
+        previews: [String: SessionPreview],
+        statuses: [String: String],
+        query: String,
+        limit: Int = 40
+    ) -> [RecentProjectSession] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return [] }
+
+        let terms = trimmedQuery
+            .lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+        guard !terms.isEmpty else { return [] }
+
+        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        var seen = Set<String>()
+
+        return recentSessionsByDirectory.values
+            .flatMap { $0 }
+            .filter { $0.isRootSession && !$0.isArchived }
+            .compactMap { session -> RecentProjectSession? in
+                let key = "\(Self.recentDirectoryKey(session.directory)):\(session.id)"
+                guard seen.insert(key).inserted else { return nil }
+                let project = Self.project(for: session, projects: projects, projectsByID: projectsByID)
+                let projectTitle = project.map(Self.projectTitle) ?? Self.directoryTitle(session.directory)
+                let result = RecentProjectSession(
+                    session: session,
+                    projectTitle: projectTitle,
+                    preview: previews[session.id],
+                    isBusy: statuses[session.id] == "busy"
+                )
+                return Self.matchesSearch(result, terms: terms) ? result : nil
+            }
+            .sorted { lhs, rhs in
+                let lhsTime = Self.sortTime(for: lhs.session, preview: lhs.preview)
+                let rhsTime = Self.sortTime(for: rhs.session, preview: rhs.preview)
+                if lhsTime != rhsTime { return lhsTime > rhsTime }
+                return lhs.id < rhs.id
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     func pendingActionRun(for sessionID: String) -> PendingOpenCodeActionRun? {
         pendingActionRunsBySessionID[sessionID]
     }
@@ -281,6 +335,20 @@ final class SessionListStore: ObservableObject {
 
     private static func sortTime(for session: OpenCodeSession, preview: SessionPreview?) -> Double {
         session.time?.updated ?? session.time?.created ?? (preview?.date?.timeIntervalSince1970).map { $0 * 1_000 } ?? 0
+    }
+
+    private static func matchesSearch(_ result: RecentProjectSession, terms: [String]) -> Bool {
+        let searchable = [
+            result.session.title,
+            result.preview?.text,
+            result.projectTitle,
+            result.session.directory,
+        ]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .lowercased()
+
+        return terms.allSatisfy { searchable.contains($0) }
     }
 }
 

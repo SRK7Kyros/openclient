@@ -74,6 +74,22 @@ final class ModelConfigurationStoreTests: XCTestCase {
         XCTAssertEqual(store.sourceTitle(for: provider), "Config")
     }
 
+    func testVisibleModelsAreCappedForLargeConnectedCatalogs() {
+        let store = ModelConfigurationStore()
+        let models = Dictionary(uniqueKeysWithValues: (0 ..< 140).map { index in
+            let id = String(format: "model-%03d", index)
+            return (id, model(id: id, providerID: "openrouter"))
+        })
+        let provider = OpenCodeProvider(id: "openrouter", name: "OpenRouter", models: models)
+
+        store.applyProviderState(OpenCodeProviderListResponse(all: [provider], connected: ["openrouter"], default: [:]))
+
+        let visibleModels = store.visibleModels(for: provider)
+        XCTAssertEqual(visibleModels.count, ModelConfigurationStore.visibleModelLimitPerProvider)
+        XCTAssertEqual(visibleModels.first?.id, "model-000")
+        XCTAssertEqual(visibleModels.last?.id, "model-079")
+    }
+
     private func provider(id: String, name: String, releaseDate: String? = nil, source: String? = nil) -> OpenCodeProvider {
         OpenCodeProvider(id: id, name: name, models: ["gpt-5": model(id: "gpt-5", providerID: id, releaseDate: releaseDate)], source: source)
     }

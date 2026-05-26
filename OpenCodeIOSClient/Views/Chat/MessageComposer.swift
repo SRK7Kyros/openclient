@@ -64,6 +64,9 @@ struct MessageComposer: View {
     let onLoadMCP: () -> Void
     let onToggleMCP: (String) -> Void
     let onAddAttachments: ([OpenCodeComposerAttachment]) -> Void
+    var allowsTextTools = true
+    var allowsSessionTools = true
+    var autoFocus = false
 
 #if canImport(PhotosUI) && canImport(UIKit)
     private enum AttachmentImportLimits {
@@ -117,15 +120,15 @@ struct MessageComposer: View {
     }
 
     private var canInsertCommandShortcut: Bool {
-        text.isEmpty && attachmentCount == 0 && !isBusy
+        allowsTextTools && text.isEmpty && attachmentCount == 0 && !isBusy && !commands.isEmpty
     }
 
     private var canInsertAgentMentionShortcut: Bool {
-        !isBusy && !mentionableAgents.isEmpty
+        allowsTextTools && !isBusy && !mentionableAgents.isEmpty
     }
 
     private var showsPinnedCommands: Bool {
-        text.isEmpty && attachmentCount == 0 && !isBusy && !pinnedCommands.isEmpty
+        allowsTextTools && text.isEmpty && attachmentCount == 0 && !isBusy && !pinnedCommands.isEmpty
     }
 
     private var slashQuery: String? {
@@ -179,7 +182,7 @@ struct MessageComposer: View {
     }
 
     private var showsCommandPicker: Bool {
-        slashQuery != nil && !isBusy
+        allowsTextTools && slashQuery != nil && !isBusy
     }
 
     private var expandedAccessorySheetDetentHeight: CGFloat {
@@ -377,8 +380,8 @@ struct MessageComposer: View {
     private var iosComposer: some View {
         ZStack(alignment: .bottomLeading) {
             HStack(alignment: .bottom, spacing: 8) {
-                Color.clear
-                    .frame(width: 36, height: 34)
+                accessoryContainer
+                    .zIndex(2)
 
                 #if canImport(UIKit)
                 ComposerTextView(
@@ -387,19 +390,20 @@ struct MessageComposer: View {
                     placeholder: "Message",
                     maxLines: 6,
                     canSubmit: canSend,
+                    autoFocus: autoFocus,
                     onSubmit: onSend,
                     onFocusChange: onFocusChange
                 )
                     .frame(minHeight: ComposerTextViewMetrics.minimumHeight)
                     .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .opencodeConcentricGlassSurface(minimumCornerRadius: 24, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .accessibilityIdentifier("chat.input")
                 #else
                 TextField("Message", text: textBinding, axis: .vertical)
                     .lineLimit(1 ... 6)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
-                    .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .opencodeConcentricGlassSurface(minimumCornerRadius: 24, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .accessibilityIdentifier("chat.input")
                     .simultaneousGesture(TapGesture().onEnded {
                         dismissAccessoryMenu()
@@ -409,19 +413,17 @@ struct MessageComposer: View {
                 Button(action: showsSendAction ? onSend : onStop) {
                     Image(systemName: showsSendAction ? "arrow.up" : "stop.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle((showsSendAction ? canSend : canStop) ? .primary : .secondary)
+                        .foregroundStyle(prominentActionForeground(isEnabled: showsSendAction ? canSend : canStop))
                         .frame(width: 32, height: 32)
                 }
                 .opencodePrimaryGlassButton()
+                .buttonBorderShape(.circle)
                 .disabled(showsSendAction ? !canSend : !canStop)
                 .accessibilityLabel(showsSendAction ? "Send" : "Stop")
                 .accessibilityIdentifier(showsSendAction ? "chat.send" : "chat.stop")
             }
             .zIndex(0)
             .shadow(color: .black.opacity(0.12), radius: 16, y: 5)
-
-            accessoryContainer
-                .zIndex(2)
 
         }
         .animation(opencodeSelectionAnimation, value: isBusy)
@@ -486,18 +488,25 @@ struct MessageComposer: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
         }
         .composerPlusButtonStyle()
         .accessibilityLabel("Open composer menu")
         .accessibilityIdentifier("chat.composer.menu")
-        .frame(width: 34, height: 34)
         .contentShape(Circle())
         .opencodeToolbarGlassID("composer-plus-menu", in: accessoryGlassNamespace)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 4)
-        .offset(y: -5)
+    }
+
+    private func prominentActionForeground(isEnabled: Bool) -> Color {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            return .white.opacity(isEnabled ? 1 : 0.68)
+        }
+        #endif
+        return isEnabled ? .primary : .secondary
     }
 
     private var expandedAccessoryMenu: some View {
@@ -566,62 +575,70 @@ struct MessageComposer: View {
 #endif
 #endif
 
-                AccessorySectionTitle("Utilities")
+                if allowsTextTools || allowsSessionTools {
+                    AccessorySectionTitle("Utilities")
 
-                AccessoryMenuAction(
-                    title: "MCP",
-                    subtitle: "Toggle servers",
-                    systemImage: "server.rack",
-                    tint: .indigo,
-                    isDisabled: false,
-                    accessibilityIdentifier: "chat.composer.mcp",
-                    action: {
-                        expandAccessorySheetForNestedContentIfNeeded()
-                        accessoryNavigationPath.append(.mcp)
+                    if allowsSessionTools {
+                        AccessoryMenuAction(
+                            title: "MCP",
+                            subtitle: "Toggle servers",
+                            systemImage: "server.rack",
+                            tint: .indigo,
+                            isDisabled: false,
+                            accessibilityIdentifier: "chat.composer.mcp",
+                            action: {
+                                expandAccessorySheetForNestedContentIfNeeded()
+                                accessoryNavigationPath.append(.mcp)
+                            }
+                        )
                     }
-                )
 
-                AccessoryMenuAction(
-                    title: "Commands",
-                    subtitle: "Insert slash command",
-                    systemImage: "chevron.left.forwardslash.chevron.right",
-                    tint: .blue,
-                    isDisabled: !canInsertCommandShortcut,
-                    action: insertSlashCommand
-                )
+                    if allowsTextTools {
+                        AccessoryMenuAction(
+                            title: "Commands",
+                            subtitle: "Insert slash command",
+                            systemImage: "chevron.left.forwardslash.chevron.right",
+                            tint: .blue,
+                            isDisabled: !canInsertCommandShortcut,
+                            action: insertSlashCommand
+                        )
 
-                AccessoryMenuAction(
-                    title: "Agent Mention",
-                    subtitle: "Mention a sub agent",
-                    systemImage: "brain.head.profile",
-                    tint: .purple,
-                    isDisabled: !canInsertAgentMentionShortcut,
-                    action: insertAgentMentionShortcut
-                )
-
-                AccessoryMenuAction(
-                    title: "Compact",
-                    subtitle: "Summarize context",
-                    systemImage: "rectangle.compress.vertical",
-                    tint: .teal,
-                    isDisabled: isBusy,
-                    action: {
-                        isAccessoryMenuOpen = false
-                        onCompact()
+                        AccessoryMenuAction(
+                            title: "Agent Mention",
+                            subtitle: "Mention a sub agent",
+                            systemImage: "brain.head.profile",
+                            tint: .purple,
+                            isDisabled: !canInsertAgentMentionShortcut,
+                            action: insertAgentMentionShortcut
+                        )
                     }
-                )
 
-                AccessoryMenuAction(
-                    title: "Fork",
-                    subtitle: "Start from a message",
-                    systemImage: "arrow.triangle.branch",
-                    tint: .purple,
-                    isDisabled: isBusy || !canFork,
-                    action: {
-                        expandAccessorySheetForNestedContentIfNeeded()
-                        accessoryNavigationPath.append(.fork)
+                    if allowsSessionTools {
+                        AccessoryMenuAction(
+                            title: "Compact",
+                            subtitle: "Summarize context",
+                            systemImage: "rectangle.compress.vertical",
+                            tint: .teal,
+                            isDisabled: isBusy,
+                            action: {
+                                isAccessoryMenuOpen = false
+                                onCompact()
+                            }
+                        )
+
+                        AccessoryMenuAction(
+                            title: "Fork",
+                            subtitle: "Start from a message",
+                            systemImage: "arrow.triangle.branch",
+                            tint: .purple,
+                            isDisabled: isBusy || !canFork,
+                            action: {
+                                expandAccessorySheetForNestedContentIfNeeded()
+                                accessoryNavigationPath.append(.fork)
+                            }
+                        )
                     }
-                )
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)
@@ -1148,6 +1165,7 @@ private struct ComposerTextView: UIViewRepresentable {
     let placeholder: String
     let maxLines: Int
     let canSubmit: Bool
+    let autoFocus: Bool
     let onSubmit: () -> Void
     let onFocusChange: (Bool) -> Void
 
@@ -1179,6 +1197,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.updatePlaceholderVisibility()
         textView.isEditable = true
         textView.isSelectable = true
+        context.coordinator.requestAutoFocusIfNeeded(on: textView)
         return textView
     }
 
@@ -1213,6 +1232,7 @@ private struct ComposerTextView: UIViewRepresentable {
 
         textView.canSubmit = canSubmit
         textView.onSubmit = onSubmit
+        context.coordinator.requestAutoFocusIfNeeded(on: textView)
 
         guard needsLayoutUpdate else { return }
 
@@ -1229,9 +1249,29 @@ private struct ComposerTextView: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerTextView
+        private var didCompleteAutoFocus = false
+        private var isAutoFocusPending = false
+        private var autoFocusAttemptCount = 0
 
         init(_ parent: ComposerTextView) {
             self.parent = parent
+        }
+
+        func requestAutoFocusIfNeeded(on textView: ComposerPlaceholderTextView) {
+            guard parent.autoFocus, !didCompleteAutoFocus, !isAutoFocusPending, autoFocusAttemptCount < 6 else { return }
+            isAutoFocusPending = true
+            autoFocusAttemptCount += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak textView] in
+                guard let self else { return }
+                self.isAutoFocusPending = false
+                guard self.parent.autoFocus else { return }
+                guard let textView, !textView.isFirstResponder else { return }
+                guard textView.window != nil, textView.becomeFirstResponder() else {
+                    self.requestAutoFocusIfNeeded(on: textView)
+                    return
+                }
+                self.didCompleteAutoFocus = true
+            }
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {

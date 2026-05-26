@@ -1321,6 +1321,7 @@ private struct MessageBubbleSnapshot: Equatable {
     let hidesReasoningBlocks: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
+    let expandedReasoningPartIDs: Set<String>
     let streamingReservePadding: CGFloat
 }
 
@@ -1411,6 +1412,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
     let onForkMessage: (OpenCodeMessageEnvelope) -> Void
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
+    let onToggleReasoningPart: (String) -> Void
 
     nonisolated static func == (lhs: EquatableMessageBubbleHost, rhs: EquatableMessageBubbleHost) -> Bool {
         lhs.snapshot == rhs.snapshot
@@ -1426,12 +1428,14 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             hidesReasoningBlocks: snapshot.hidesReasoningBlocks,
             reserveEntryFromComposer: snapshot.reserveEntryFromComposer,
             animateEntryFromComposer: snapshot.animateEntryFromComposer,
+            expandedReasoningPartIDs: snapshot.expandedReasoningPartIDs,
             resolveTaskSessionID: resolveTaskSessionID,
             onSelectPart: onSelectPart,
             onOpenTaskSession: onOpenTaskSession,
             onForkMessage: onForkMessage,
             onInspectDebugMessage: onInspectDebugMessage,
-            onEntryAnimationStarted: onEntryAnimationStarted
+            onEntryAnimationStarted: onEntryAnimationStarted,
+            onToggleReasoningPart: onToggleReasoningPart
         )
         .padding(.bottom, snapshot.streamingReservePadding)
     }
@@ -1641,6 +1645,7 @@ struct ChatView: View {
     @State private var preparingOutgoingMessageID: String?
     @State private var animatingOutgoingMessageID: String?
     @State private var outgoingEntryAnimationStartedMessageIDs: Set<String> = []
+    @State private var expandedReasoningPartIDs: Set<String> = []
     @State private var hasCompletedInitialHydrationSnap = false
     @State private var isScrollGeometryAtBottom = true
     @State private var isRefreshingChatData = false
@@ -1946,6 +1951,7 @@ struct ChatView: View {
                     hasCompletedInitialHydrationSnap = true
                     requestBottomReadjustment()
                 }
+                pruneExpandedReasoningParts()
                 updateDelayedLoadingIndicator()
             }
 #if canImport(UIKit)
@@ -1973,6 +1979,7 @@ struct ChatView: View {
             syncComposerDraftFromViewModel()
             refreshCachedContextMetrics()
             refreshCachedForkableMessages()
+            pruneExpandedReasoningParts()
             updateDelayedLoadingIndicator()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -2080,10 +2087,14 @@ struct ChatView: View {
         }
         .onChange(of: chatStore.messages.count) { _, _ in
             copiedTranscript = false
+            pruneExpandedReasoningParts()
             if !isSessionBusy {
                 refreshCachedContextMetrics()
                 refreshCachedForkableMessages()
             }
+        }
+        .onChange(of: reasoningPartKeySignature) { _, _ in
+            pruneExpandedReasoningParts()
         }
         .onChange(of: isSessionBusy) { _, isBusy in
             if !isBusy {
@@ -2350,7 +2361,8 @@ struct ChatView: View {
         composer
             .equatable()
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.top, 8)
+            .padding(.bottom, isComposerInputFocused ? 8 : 0)
             .background(.clear)
     }
 
@@ -2743,6 +2755,12 @@ struct ChatView: View {
         return Array(chatStore.messages.suffix(visibleMessageCount))
     }
 
+    private var reasoningPartKeySignature: String {
+        visibleChatMessages
+            .flatMap(reasoningPartKeys(for:))
+            .joined(separator: "|")
+    }
+
     private func displayedChatItems(for messages: [OpenCodeMessageEnvelope]) -> [ChatDisplayItem] {
         let messagesByID = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
         let key = ChatDisplayItemCacheKey(
@@ -2961,7 +2979,8 @@ struct ChatView: View {
                     onOpenTaskSession: { taskSessionID in Task { await viewModel.openSession(sessionID: taskSessionID) } },
                     onForkMessage: { forkMessage in Task { await viewModel.forkSelectedSession(from: forkMessage.id) } },
                     onInspectDebugMessage: { debugMessage in selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage) },
-                    onEntryAnimationStarted: { messageID in outgoingEntryAnimationStartedMessageIDs.insert(messageID) }
+                    onEntryAnimationStarted: { messageID in outgoingEntryAnimationStartedMessageIDs.insert(messageID) },
+                    onToggleReasoningPart: toggleReasoningPart
                 )
                 .equatable()
                 .padding(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -3056,6 +3075,8 @@ struct ChatView: View {
             selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage)
         } onEntryAnimationStarted: { messageID in
             outgoingEntryAnimationStartedMessageIDs.insert(messageID)
+        } onToggleReasoningPart: { partID in
+            toggleReasoningPart(partID)
         }
         .equatable()
         .transition(.identity)
@@ -3080,6 +3101,7 @@ struct ChatView: View {
             hidesReasoningBlocks: isFunAndGamesSession(sessionID),
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
             animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
+            expandedReasoningPartIDs: expandedReasoningPartIDs,
             streamingReservePadding: isStreaming ? 44 : 0
         )
     }
@@ -3496,6 +3518,43 @@ struct ChatView: View {
             }.joined(separator: " ")
             return "\(role):\n\(partSummary)"
         }.joined(separator: "\n\n")
+    }
+
+    private func toggleReasoningPart(_ id: String) {
+        if expandedReasoningPartIDs.contains(id) {
+            expandedReasoningPartIDs.remove(id)
+        } else {
+            expandedReasoningPartIDs.insert(id)
+        }
+    }
+
+    private func pruneExpandedReasoningParts() {
+        guard !expandedReasoningPartIDs.isEmpty else { return }
+        let activeIDs = Set(visibleChatMessages.flatMap(reasoningPartKeys(for:)))
+        expandedReasoningPartIDs.formIntersection(activeIDs)
+    }
+
+    private func reasoningPartKeys(for message: OpenCodeMessageEnvelope) -> [String] {
+        message.parts.enumerated().compactMap { index, part in
+            guard isReasoningPart(part), part.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                return nil
+            }
+
+            if let partID = part.id {
+                return "\(message.id)-reasoning-\(partID)"
+            }
+
+            return "\(message.id)-reasoning-\(index)"
+        }
+    }
+
+    private func isReasoningPart(_ part: OpenCodePart) -> Bool {
+        if part.type == "reasoning" {
+            return true
+        }
+
+        let lowerReason = part.reason?.lowercased() ?? ""
+        return part.type == "text" && lowerReason.contains("reasoning")
     }
 }
 

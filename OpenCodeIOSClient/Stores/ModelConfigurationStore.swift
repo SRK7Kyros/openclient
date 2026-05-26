@@ -5,11 +5,14 @@ import Foundation
 final class ModelConfigurationStore: ObservableObject {
     static let preferredFallbackModelReference = OpenCodeModelReference(providerID: "opencode", modelID: "minimax-m2.5-free")
     static let popularProviderIDs = ["opencode", "opencode-go", "anthropic", "github-copilot", "openai", "google", "openrouter", "vercel"]
+    static let visibleModelLimitPerProvider = 80
 
     private static let visibilityDefaultsKey = "opencode.modelVisibility.v1"
 
     @Published var availableAgents: [OpenCodeAgent]
-    @Published var allProviders: [OpenCodeProvider]
+    @Published var allProviders: [OpenCodeProvider] {
+        didSet { invalidateModelCaches() }
+    }
     @Published var availableProviders: [OpenCodeProvider]
     @Published var connectedProviderIDs: Set<String>
     @Published var providerAuthMethodsByProviderID: [String: [OpenCodeProviderAuthMethod]]
@@ -23,6 +26,8 @@ final class ModelConfigurationStore: ObservableObject {
     @Published var selectedModelsBySessionID: [String: OpenCodeModelReference]
     @Published var selectedVariantsBySessionID: [String: String]
     @Published var newSessionDefaults: NewSessionDefaults
+    private var latestModelReferencesCache: Set<OpenCodeModelReference>?
+    private var visibleModelsCache: [String: [OpenCodeModel]] = [:]
 
     init(
         availableAgents: [OpenCodeAgent] = [],
@@ -200,10 +205,20 @@ final class ModelConfigurationStore: ObservableObject {
     }
 
     func visibleModels(for provider: OpenCodeProvider) -> [OpenCodeModel] {
-        let latestReferences = latestModelReferences
-        return modelEntries(for: provider).compactMap { entry in
-            isModelVisible(entry.reference, latestReferences: latestReferences) ? entry.model : nil
+        if let cached = visibleModelsCache[provider.id] {
+            return cached
         }
+
+        let latestReferences = latestModelReferences
+        var result: [OpenCodeModel] = []
+        for entry in modelEntries(for: provider) where isModelVisible(entry.reference, latestReferences: latestReferences) {
+            result.append(entry.model)
+            if result.count >= Self.visibleModelLimitPerProvider {
+                break
+            }
+        }
+        visibleModelsCache[provider.id] = result
+        return result
     }
 
     func isModelVisible(_ reference: OpenCodeModelReference) -> Bool {
@@ -227,6 +242,7 @@ final class ModelConfigurationStore: ObservableObject {
             modelID: reference.modelID,
             visibility: isVisible ? .show : .hide
         )
+        visibleModelsCache.removeAll()
         persistModelVisibilityPreferences()
     }
 
@@ -385,6 +401,10 @@ final class ModelConfigurationStore: ObservableObject {
     func formattedVariantTitle(_ variant: String) -> String { variant.replacingOccurrences(of: "_", with: " ").capitalized }
 
     private var latestModelReferences: Set<OpenCodeModelReference> {
+        if let latestModelReferencesCache {
+            return latestModelReferencesCache
+        }
+
         var newestByProviderFamily: [String: (reference: OpenCodeModelReference, date: Date)] = [:]
         let cutoff = Calendar.current.date(byAdding: .month, value: -6, to: Date()) ?? .distantPast
         for provider in allProviders {
@@ -396,7 +416,14 @@ final class ModelConfigurationStore: ObservableObject {
                 newestByProviderFamily[key] = (reference, date)
             }
         }
-        return Set(newestByProviderFamily.values.map(\.reference))
+        let references = Set(newestByProviderFamily.values.map(\.reference))
+        latestModelReferencesCache = references
+        return references
+    }
+
+    private func invalidateModelCaches() {
+        latestModelReferencesCache = nil
+        visibleModelsCache.removeAll()
     }
 
     private func sortedProviderList(_ providers: [OpenCodeProvider]) -> [OpenCodeProvider] {

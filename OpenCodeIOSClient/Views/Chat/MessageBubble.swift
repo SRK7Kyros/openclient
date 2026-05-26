@@ -19,14 +19,15 @@ struct MessageBubble: View {
     let hidesReasoningBlocks: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
+    let expandedReasoningPartIDs: Set<String>
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
     let onOpenTaskSession: (String) -> Void
     let onForkMessage: (OpenCodeMessageEnvelope) -> Void
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
+    let onToggleReasoningPart: (String) -> Void
 
-    @State private var expandedReasoningPartIDs: Set<String> = []
     @State private var expandedContextGroupIDs: Set<String> = []
     @State private var entryAnimationStartDate: Date?
     @State private var hasRunEntryAnimation = false
@@ -534,7 +535,11 @@ struct MessageBubble: View {
     }
 
     private func reasoningPartID(part: OpenCodePart, index: Int) -> String {
-        part.id ?? "\(effectiveMessage.id)-reasoning-\(index)"
+        if let partID = part.id {
+            return "\(effectiveMessage.id)-reasoning-\(partID)"
+        }
+
+        return "\(effectiveMessage.id)-reasoning-\(index)"
     }
 
     private func isReasoningExpanded(part: OpenCodePart, index: Int) -> Bool {
@@ -542,12 +547,7 @@ struct MessageBubble: View {
     }
 
     private func toggleReasoning(part: OpenCodePart, index: Int) {
-        let id = reasoningPartID(part: part, index: index)
-        if expandedReasoningPartIDs.contains(id) {
-            expandedReasoningPartIDs.remove(id)
-        } else {
-            expandedReasoningPartIDs.insert(id)
-        }
+        onToggleReasoningPart(reasoningPartID(part: part, index: index))
     }
 
     private func toggleContextGroup(_ id: String) {

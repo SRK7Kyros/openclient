@@ -21,13 +21,15 @@ struct ProjectContentView: View {
                 .accessibilityIdentifier("project.settings")
             }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button(action: toolbarAction) {
-                    Image(systemName: toolbarIcon)
+            if showsTopToolbarAction {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button(action: toolbarAction) {
+                        Image(systemName: toolbarIcon)
+                    }
+                    .accessibilityLabel(toolbarLabel)
+                    .accessibilityIdentifier(toolbarIdentifier)
+                    .disabled(toolbarDisabled)
                 }
-                .accessibilityLabel(toolbarLabel)
-                .accessibilityIdentifier(toolbarIdentifier)
-                .disabled(toolbarDisabled)
             }
         }
         .onAppear {
@@ -65,30 +67,117 @@ struct ProjectContentView: View {
     }
 
     private var usesSystemTabView: Bool {
-        horizontalSizeClass == .compact
+        return horizontalSizeClass == .compact
     }
 
+    private var usesNativeSearchRoleComposeTab: Bool {
+#if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 18.0, *) {
+            return horizontalSizeClass == .compact
+        }
+#endif
+
+        return false
+    }
+
+    @ViewBuilder
     private var tabContent: some View {
+#if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 18.0, *) {
+            nativeRoleTabContent
+        } else {
+            legacyTabContent
+        }
+#else
+        legacyTabContent
+#endif
+    }
+
+    private var legacyTabContent: some View {
         TabView(selection: $viewModel.selectedProjectContentTab) {
             SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
                 .tabItem {
-                    Label(AppViewModel.ProjectContentTab.sessions.title, systemImage: "bubble.left.and.bubble.right")
+                    Label(AppViewModel.ProjectContentTab.sessions.title, systemImage: AppViewModel.ProjectContentTab.sessions.systemImage)
                 }
                 .tag(AppViewModel.ProjectContentTab.sessions)
 
             if viewModel.hasGitProject {
                 GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
                     .tabItem {
-                        Label(AppViewModel.ProjectContentTab.git.title, systemImage: "doc.on.doc")
+                        Label(AppViewModel.ProjectContentTab.git.title, systemImage: AppViewModel.ProjectContentTab.git.systemImage)
                     }
                     .tag(AppViewModel.ProjectContentTab.git)
             }
 
             MCPListView(viewModel: viewModel)
                 .tabItem {
-                    Label(AppViewModel.ProjectContentTab.mcp.title, systemImage: "server.rack")
+                    Label(AppViewModel.ProjectContentTab.mcp.title, systemImage: AppViewModel.ProjectContentTab.mcp.systemImage)
                 }
                 .tag(AppViewModel.ProjectContentTab.mcp)
+        }
+    }
+
+#if os(iOS) || targetEnvironment(macCatalyst)
+    @available(iOS 18.0, *)
+    private var nativeRoleTabContent: some View {
+        TabView(selection: nativeTabSelection) {
+            Tab(
+                AppViewModel.ProjectContentTab.sessions.title,
+                systemImage: AppViewModel.ProjectContentTab.sessions.systemImage,
+                value: ProjectNativeTab.sessions
+            ) {
+                SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
+            }
+
+            if viewModel.hasGitProject {
+                Tab(
+                    AppViewModel.ProjectContentTab.git.title,
+                    systemImage: AppViewModel.ProjectContentTab.git.systemImage,
+                    value: ProjectNativeTab.git
+                ) {
+                    GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
+                }
+            }
+
+            Tab(
+                AppViewModel.ProjectContentTab.mcp.title,
+                systemImage: AppViewModel.ProjectContentTab.mcp.systemImage,
+                value: ProjectNativeTab.mcp
+            ) {
+                MCPListView(viewModel: viewModel)
+            }
+
+            Tab(value: ProjectNativeTab.compose, role: .search) {
+                EmptyView()
+            } label: {
+                Label("New", systemImage: "square.and.pencil")
+                    .accessibilityLabel("Create Session")
+                    .accessibilityIdentifier("sessions.create")
+            }
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private var nativeTabSelection: Binding<ProjectNativeTab> {
+        Binding(
+            get: { ProjectNativeTab(projectTab: viewModel.selectedProjectContentTab) },
+            set: { selection in
+                if selection == .compose {
+                    presentCreateSessionSheet()
+                } else if let projectTab = selection.projectTab {
+                    viewModel.selectedProjectContentTab = projectTab
+                }
+            }
+        )
+    }
+#endif
+
+    private var showsTopToolbarAction: Bool {
+        switch viewModel.selectedProjectContentTab {
+        case .sessions:
+            return !usesNativeSearchRoleComposeTab
+        case .git, .mcp:
+            return true
         }
     }
 
@@ -171,7 +260,7 @@ struct ProjectContentView: View {
     private func toolbarAction() {
         switch viewModel.selectedProjectContentTab {
         case .sessions:
-            viewModel.presentCreateSessionSheet()
+            presentCreateSessionSheet()
         case .git:
             Task {
                 if viewModel.projectFilesMode == .tree {
@@ -186,6 +275,14 @@ struct ProjectContentView: View {
                 await viewModel.reloadMCPStatus()
             }
         }
+    }
+
+    private func presentCreateSessionSheet() {
+        viewModel.presentNewProjectChatSheet(
+            projectID: viewModel.currentProject?.id,
+            workspaceDirectory: viewModel.effectiveSelectedDirectory,
+            locksProject: true
+        )
     }
 }
 
@@ -210,7 +307,47 @@ struct ProjectContentTabSelector: View {
     }
 
     private func systemImage(for tab: AppViewModel.ProjectContentTab) -> String {
-        switch tab {
+        tab.systemImage
+    }
+}
+
+#if os(iOS) || targetEnvironment(macCatalyst)
+@available(iOS 18.0, *)
+private enum ProjectNativeTab: Hashable {
+    case sessions
+    case git
+    case mcp
+    case compose
+
+    init(projectTab: AppViewModel.ProjectContentTab) {
+        switch projectTab {
+        case .sessions:
+            self = .sessions
+        case .git:
+            self = .git
+        case .mcp:
+            self = .mcp
+        }
+    }
+
+    var projectTab: AppViewModel.ProjectContentTab? {
+        switch self {
+        case .sessions:
+            return .sessions
+        case .git:
+            return .git
+        case .mcp:
+            return .mcp
+        case .compose:
+            return nil
+        }
+    }
+}
+#endif
+
+private extension AppViewModel.ProjectContentTab {
+    var systemImage: String {
+        switch self {
         case .sessions:
             return "bubble.left.and.bubble.right"
         case .git:

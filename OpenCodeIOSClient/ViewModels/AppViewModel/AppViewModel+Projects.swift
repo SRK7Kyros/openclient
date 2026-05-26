@@ -17,7 +17,58 @@ private struct RecentSessionLoadResult: Sendable {
     let sessions: [OpenCodeSession]
 }
 
+struct NewProjectChatComposerSelection: Equatable, Sendable {
+    let agentName: String?
+    let modelReference: OpenCodeModelReference?
+    let reasoningVariant: String?
+}
+
+struct NewProjectChatSheetRequest: Identifiable, Sendable {
+    let id: UUID
+    let projectID: String?
+    let workspaceDirectory: String?
+    let locksProject: Bool
+    let composerSelection: NewProjectChatComposerSelection?
+    let presentsAboveConnection: Bool
+
+    init(
+        id: UUID = UUID(),
+        projectID: String?,
+        workspaceDirectory: String?,
+        locksProject: Bool,
+        composerSelection: NewProjectChatComposerSelection?,
+        presentsAboveConnection: Bool = false
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.workspaceDirectory = workspaceDirectory
+        self.locksProject = locksProject
+        self.composerSelection = composerSelection
+        self.presentsAboveConnection = presentsAboveConnection
+    }
+}
+
 extension AppViewModel {
+    var projectSessionSearchQuery: String {
+        get { sessionListStore.projectSessionSearchQuery }
+        set {
+            objectWillChange.send()
+            sessionListStore.projectSessionSearchQuery = newValue
+            sessionListStore.projectSessionSearchResults = cachedProjectSessionSearchResults(for: newValue)
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sessionListStore.isSearchingProjectSessions = false
+            }
+        }
+    }
+
+    var projectSessionSearchResults: [RecentProjectSession] {
+        sessionListStore.projectSessionSearchResults
+    }
+
+    var isSearchingProjectSessions: Bool {
+        sessionListStore.isSearchingProjectSessions
+    }
+
     func prepareDirectorySelection(_ directory: String?) {
         preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
@@ -95,6 +146,26 @@ extension AppViewModel {
         withAnimation(opencodeSelectionAnimation) {
             isShowingCreateProjectSheet = true
         }
+    }
+
+    func presentNewProjectChatSheet(
+        projectID: String? = nil,
+        workspaceDirectory: String? = nil,
+        locksProject: Bool = false,
+        composerSelection: NewProjectChatComposerSelection? = nil,
+        presentsAboveConnection: Bool = false
+    ) {
+        newProjectChatSheetRequest = NewProjectChatSheetRequest(
+            projectID: projectID,
+            workspaceDirectory: workspaceDirectory,
+            locksProject: locksProject,
+            composerSelection: composerSelection,
+            presentsAboveConnection: presentsAboveConnection
+        )
+    }
+
+    func dismissNewProjectChatSheet() {
+        newProjectChatSheetRequest = nil
     }
 
     func presentProjectSettingsSheet() {
@@ -359,6 +430,212 @@ extension AppViewModel {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func searchProjectSessionsAcrossProjects() async {
+        let query = projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            objectWillChange.send()
+            sessionListStore.projectSessionSearchResults = []
+            sessionListStore.isSearchingProjectSessions = false
+            return
+        }
+
+        guard backendMode == .server, isConnected else {
+            objectWillChange.send()
+            sessionListStore.projectSessionSearchResults = []
+            sessionListStore.isSearchingProjectSessions = false
+            return
+        }
+
+        objectWillChange.send()
+        sessionListStore.projectSessionSearchResults = cachedProjectSessionSearchResults(for: query)
+        sessionListStore.isSearchingProjectSessions = true
+
+        let directories = projectSessionSearchDirectoriesToLoad()
+        let client = client
+
+        await withTaskGroup(of: RecentSessionLoadResult?.self) { group in
+            for directory in directories {
+                group.addTask {
+                    do {
+                        let sessions = try await client.listSessions(directory: directory, roots: true, limit: 55)
+                        return RecentSessionLoadResult(directory: directory, sessions: sessions)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+
+            for await result in group {
+                guard let result else { continue }
+                guard projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+                objectWillChange.send()
+                sessionListStore.setRecentSessions(result.sessions, for: result.directory)
+                sessionListStore.projectSessionSearchResults = cachedProjectSessionSearchResults(for: query)
+            }
+        }
+
+        guard projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+        objectWillChange.send()
+        sessionListStore.projectSessionSearchResults = cachedProjectSessionSearchResults(for: query)
+        sessionListStore.isSearchingProjectSessions = false
+    }
+
+    func isProjectWorkspacesEnabled(for project: OpenCodeProject) -> Bool {
+        guard project.id != "global", project.vcs == "git" else { return false }
+        return projectWorkspacesEnabledByScope[projectPreferenceScopeKey(forDirectory: project.worktree)] ?? false
+    }
+
+    func workspaceDisplayName(for directory: String?, in project: OpenCodeProject?) -> String? {
+        guard let directory, !directory.isEmpty else { return nil }
+        guard let project else {
+            return URL(fileURLWithPath: directory).lastPathComponent
+        }
+
+        if workspaceKey(directory) == workspaceKey(project.worktree) {
+            return "Local"
+        }
+
+        return URL(fileURLWithPath: directory).lastPathComponent
+    }
+
+    @discardableResult
+    func startNewProjectChat(
+        title: String = "",
+        prompt: String,
+        agentMentions: [OpenCodeAgentMention] = [],
+        attachments: [OpenCodeComposerAttachment] = [],
+        composerSelection: NewProjectChatComposerSelection? = nil,
+        projectID: String,
+        workspaceDirectory: String? = nil,
+        workspaceSelection: NewSessionWorkspaceSelection? = nil,
+        newWorkspaceName: String = ""
+    ) async -> Bool {
+        guard backendMode == .server, isConnected else {
+            errorMessage = "Connect to an OpenCode server before starting a chat."
+            return false
+        }
+
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || !attachments.isEmpty else { return false }
+        guard let project = projects.first(where: { $0.id == projectID }) else {
+            errorMessage = "Project is no longer available."
+            return false
+        }
+        guard canCreateSessionOrPresentPaywall() else { return false }
+        guard reserveUserPromptIfAllowed() else { return false }
+
+        let routeDirectory = project.id == "global" ? nil : project.worktree
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let targetDirectory = try await resolveProjectChatDirectory(
+                for: project,
+                workspaceDirectory: workspaceDirectory,
+                workspaceSelection: workspaceSelection,
+                newWorkspaceName: newWorkspaceName
+            )
+            currentProject = project
+            prepareDirectorySelection(routeDirectory)
+
+            let createSubmission = sessionCoordinator.prepareCreateSession(title: title, directory: targetDirectory)
+            let session = try await sessionCoordinator.submitCreate(client: client, submission: createSubmission)
+            recordCreatedSessionForMetering()
+            upsertVisibleSession(session)
+            try await reloadSessions()
+            await loadComposerOptions()
+            if let composerSelection {
+                applyNewProjectChatComposerSelection(composerSelection, to: session)
+            } else {
+                seedComposerSelectionsForNewSession(session)
+            }
+            upsertVisibleSession(session)
+            prepareSessionSelection(session)
+            await selectSession(session)
+
+            let didSend = await sendMessage(
+                text,
+                agentMentions: agentMentions,
+                attachments: attachments,
+                in: session,
+                userVisible: true,
+                meterPrompt: false
+            )
+            if !didSend {
+                return false
+            }
+
+            errorMessage = nil
+            return true
+        } catch {
+            refundReservedUserPromptIfNeeded()
+            isLoadingSessions = false
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func resolveProjectChatDirectory(
+        for project: OpenCodeProject,
+        workspaceDirectory: String?,
+        workspaceSelection: NewSessionWorkspaceSelection?,
+        newWorkspaceName: String
+    ) async throws -> String? {
+        guard project.id != "global" else { return nil }
+
+        guard let workspaceSelection,
+              isProjectWorkspacesEnabled(for: project),
+              project.vcs == "git" else {
+            if let workspaceDirectory, !workspaceDirectory.isEmpty {
+                return workspaceDirectory
+            }
+            return project.worktree
+        }
+
+        switch workspaceSelection {
+        case .main:
+            return project.worktree
+        case let .directory(directory):
+            return directory.isEmpty ? project.worktree : directory
+        case .createNew:
+            let name = newWorkspaceName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let created = try await client.createWorktree(
+                directory: project.worktree,
+                name: name.isEmpty ? nil : name
+            )
+            appendSandboxDirectory(created.directory, to: project)
+            sessionListStore.ensureWorkspaceStateExists(
+                for: created.directory,
+                defaultState: OpenCodeWorkspaceSessionState(isLoading: true)
+            )
+            return created.directory
+        }
+    }
+
+    func applyNewProjectChatComposerSelection(_ selection: NewProjectChatComposerSelection, to session: OpenCodeSession) {
+        objectWillChange.send()
+        if let agentName = selection.agentName,
+           modelConfigurationStore.selectableAgents.contains(where: { $0.name == agentName }) {
+            modelConfigurationStore.selectAgent(named: agentName, forSessionID: session.id)
+        } else {
+            modelConfigurationStore.selectAgent(named: nil, forSessionID: session.id)
+        }
+
+        if let modelReference = selection.modelReference,
+           modelConfigurationStore.validModelReferences.contains(modelReference) {
+            modelConfigurationStore.selectModel(modelReference, forSessionID: session.id)
+        } else {
+            modelConfigurationStore.selectModel(nil, forSessionID: session.id)
+        }
+
+        if let reasoningVariant = selection.reasoningVariant,
+           modelConfigurationStore.reasoningVariants(forSessionID: session.id).contains(reasoningVariant) {
+            modelConfigurationStore.selectVariant(reasoningVariant, forSessionID: session.id)
+        } else {
+            modelConfigurationStore.selectVariant(nil, forSessionID: session.id)
         }
     }
 
@@ -801,16 +1078,7 @@ extension AppViewModel {
     }
 
     func workspaceDisplayName(for directory: String?) -> String? {
-        guard let directory, !directory.isEmpty else { return nil }
-        guard let project = currentProject else {
-            return URL(fileURLWithPath: directory).lastPathComponent
-        }
-
-        if workspaceKey(directory) == workspaceKey(project.worktree) {
-            return "Local"
-        }
-
-        return URL(fileURLWithPath: directory).lastPathComponent
+        workspaceDisplayName(for: directory, in: currentProject)
     }
 
     func newSessionWorkspaceTitle(for selection: NewSessionWorkspaceSelection) -> String {
@@ -852,6 +1120,45 @@ extension AppViewModel {
         let normalized = directory.replacingOccurrences(of: "\\", with: "/")
         if normalized.allSatisfy({ $0 == "/" }) { return "/" }
         return normalized.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+    }
+
+    private func cachedProjectSessionSearchResults(for query: String) -> [RecentProjectSession] {
+        sessionListStore.projectSessionSearchResults(
+            projects: projects,
+            previews: sessionPreviews,
+            statuses: sessionStatuses,
+            query: query
+        )
+    }
+
+    private func projectSessionSearchDirectoriesToLoad() -> [String?] {
+        var directories: [String?] = []
+        var seen = Set<String>()
+
+        func append(_ directory: String?) {
+            let key = directory.map(workspaceKey) ?? "global"
+            guard seen.insert(key).inserted else { return }
+            directories.append(directory)
+        }
+
+        append(nil)
+
+        for project in projects where project.id != "global" {
+            append(project.worktree)
+            for sandbox in project.sandboxes ?? [] {
+                append(sandbox)
+            }
+        }
+
+        return directories
+    }
+
+    private func projectPreferenceScopeKey(forDirectory directory: String?) -> String {
+        [
+            "server",
+            config.recentServerID,
+            directory ?? "global",
+        ].joined(separator: "|")
     }
 
     func refreshSessionPreview(for sessionID: String, messages: [OpenCodeMessageEnvelope]) {

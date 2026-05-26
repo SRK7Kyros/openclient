@@ -40,7 +40,8 @@ struct OpenCodeIOSClientApp: App {
 #endif
             }
             .onOpenURL { url in
-                Task { await viewModel.handleLiveActivityURL(url) }
+                viewModel.prepareOpenURLPresentation(url)
+                Task { await viewModel.handleOpenURL(url) }
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }

@@ -734,15 +734,16 @@ extension AppViewModel {
         }
     }
 
-    func sendMessage(_ text: String, agentMentions: [OpenCodeAgentMention] = [], attachments: [OpenCodeComposerAttachment] = [], sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
+    @discardableResult
+    func sendMessage(_ text: String, agentMentions: [OpenCodeAgentMention] = [], attachments: [OpenCodeComposerAttachment] = [], sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async -> Bool {
         if isUsingAppleIntelligence {
-            guard let session = session(matching: sessionID) else { return }
+            guard let session = session(matching: sessionID) else { return false }
             await sendAppleIntelligenceMessage(text, attachments: attachments, in: session, userVisible: userVisible)
-            return
+            return true
         }
 
-        guard let session = session(matching: sessionID) else { return }
-        await sendMessage(text, agentMentions: agentMentions, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt)
+        guard let session = session(matching: sessionID) else { return false }
+        return await sendMessage(text, agentMentions: agentMentions, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt)
     }
 
     @discardableResult
@@ -786,6 +787,7 @@ extension AppViewModel {
         return (resolvedMessageID, resolvedPartID)
     }
 
+    @discardableResult
     func sendMessage(
         _ text: String,
         agentMentions: [OpenCodeAgentMention] = [],
@@ -796,7 +798,7 @@ extension AppViewModel {
         partID: String? = nil,
         appendOptimisticMessage: Bool = true,
         meterPrompt: Bool = true
-    ) async {
+    ) async -> Bool {
         if isUsingAppleIntelligence {
             await sendAppleIntelligenceMessage(
                 text,
@@ -807,7 +809,7 @@ extension AppViewModel {
                 partID: partID,
                 appendOptimisticMessage: appendOptimisticMessage
             )
-            return
+            return true
         }
 
         let modelReference = effectiveModelReference(for: selectedSession)
@@ -825,13 +827,13 @@ extension AppViewModel {
             model: modelReference,
             agent: agentName,
             variant: variant
-        ) else { return }
+        ) else { return false }
 
         let submission = promptPreparation.submission
 
         if userVisible, meterPrompt, !reserveUserPromptIfAllowed() {
             appendDebugLog("send blocked paywall session=\(debugSessionLabel(selectedSession))")
-            return
+            return false
         }
 
         let start = sessionCoordinator.promptStart(for: promptPreparation)
@@ -885,6 +887,7 @@ extension AppViewModel {
             }
             refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
+            return true
         } catch {
             if userVisible {
                 refundReservedUserPromptIfNeeded()
@@ -909,6 +912,7 @@ extension AppViewModel {
             appendDebugLog("send error: \(error.localizedDescription)")
             markChatBreadcrumb("send error", sessionID: selectedSession.id, messageID: resolvedMessageID, partID: resolvedPartID)
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

@@ -451,18 +451,16 @@ extension AppViewModel {
     func loadComposerOptions() async {
         do {
             async let agents = client.listAgents(directory: effectiveSelectedDirectory)
-            async let providerConfiguration = client.providerConfiguration(directory: effectiveSelectedDirectory)
-            let loadedProviderConfiguration = try await providerConfiguration
+            async let providerState = client.providerState(directory: effectiveSelectedDirectory)
+            let loadedProviderState = try await providerState
             objectWillChange.send()
-            modelConfigurationStore.applyComposerOptions(
-                agents: try await agents,
-                providers: loadedProviderConfiguration.providers,
-                defaults: loadedProviderConfiguration.default ?? [:]
-            )
+            modelConfigurationStore.availableAgents = try await agents
+            modelConfigurationStore.applyProviderState(loadedProviderState)
             loadNewSessionDefaults()
             loadFunAndGamesPreferences()
             loadProjectListPreferences()
             sanitizeComposerSelections()
+            scheduleWidgetSnapshotPublication(includeModelOptions: true)
         } catch {
             objectWillChange.send()
             modelConfigurationStore.clearComposerOptions()

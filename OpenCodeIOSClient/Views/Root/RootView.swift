@@ -6,11 +6,30 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
 
-    private var isShowingConnectionSheet: Binding<Bool> {
+    private var primarySheet: Binding<RootPrimarySheet?> {
         Binding(
-            get: { !viewModel.isConnected || viewModel.isUsingAppleIntelligence || viewModel.isShowingConnectionOverlay },
-            set: { _ in }
+            get: {
+                if let request = viewModel.newProjectChatSheetRequest {
+                    return .newProjectChat(request)
+                }
+
+                if isShowingConnectionSheetContent {
+                    return .connection
+                }
+
+                return nil
+            },
+            set: { sheet in
+                guard sheet == nil else { return }
+                if viewModel.newProjectChatSheetRequest != nil {
+                    viewModel.dismissNewProjectChatSheet()
+                }
+            }
         )
+    }
+
+    private var isShowingConnectionSheetContent: Bool {
+        return !viewModel.isConnected || viewModel.isUsingAppleIntelligence || viewModel.isShowingConnectionOverlay
     }
 
     private var isShowingConnectionExperience: Bool {
@@ -27,8 +46,17 @@ struct RootView: View {
             appShell
                 .opacity(isShowingConnectionExperience ? 0 : 1)
         }
-        .sheet(isPresented: isShowingConnectionSheet) {
-            ConnectionSheetView(viewModel: viewModel)
+        .sheet(item: primarySheet) { sheet in
+            switch sheet {
+            case .connection:
+                ConnectionSheetView(viewModel: viewModel)
+            case let .newProjectChat(request):
+                ProjectNewChatSheet(viewModel: viewModel, request: request) {
+                    withAnimation(opencodeSelectionAnimation) {
+                        showDetailColumn()
+                    }
+                }
+            }
         }
         .sheet(item: $viewModel.paywallReason) { reason in
             OpenClientPaywallView(viewModel: viewModel, purchaseManager: viewModel.purchaseManager, reason: reason)
@@ -143,6 +171,20 @@ struct RootView: View {
     private func showDetailColumn() {
         columnVisibility = horizontalSizeClass == .compact ? .detailOnly : .doubleColumn
         preferredCompactColumn = .detail
+    }
+}
+
+private enum RootPrimarySheet: Identifiable {
+    case connection
+    case newProjectChat(NewProjectChatSheetRequest)
+
+    var id: String {
+        switch self {
+        case .connection:
+            return "connection"
+        case let .newProjectChat(request):
+            return "newProjectChat-\(request.id.uuidString)"
+        }
     }
 }
 

@@ -103,6 +103,7 @@ extension AppViewModel {
             modelConfigurationStore.applyProviderAuthMethods(loadedAuthMethods)
             modelConfigurationStore.isLoadingProviders = false
             sanitizeComposerSelections()
+            scheduleWidgetSnapshotPublication(includeModelOptions: true)
         } catch {
             objectWillChange.send()
             modelConfigurationStore.isLoadingProviders = false

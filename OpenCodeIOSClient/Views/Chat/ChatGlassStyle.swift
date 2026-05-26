@@ -15,6 +15,39 @@ extension View {
     }
 
     @ViewBuilder
+    func opencodeConcentricGlassSurface<S: Shape>(
+        clear: Bool = false,
+        tint: Color? = nil,
+        isInteractive: Bool = false,
+        minimumCornerRadius: CGFloat,
+        in fallbackShape: S
+    ) -> some View {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            let shape = ConcentricRectangle(corners: .concentric(minimum: .fixed(minimumCornerRadius)), isUniform: true)
+            let baseGlass = clear ? Glass.clear : Glass.regular
+            let tintedGlass = tint.map { baseGlass.tint($0) } ?? baseGlass
+            let glass = tintedGlass.interactive(isInteractive)
+
+            self
+                .background(Color.clear, in: shape)
+                .glassEffect(glass, in: shape)
+        } else {
+            self.background(.thinMaterial, in: fallbackShape)
+        }
+        #elseif os(macOS)
+        self
+            .background(.ultraThinMaterial, in: fallbackShape)
+            .overlay {
+                fallbackShape
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            }
+        #else
+        self.background(.thinMaterial, in: fallbackShape)
+        #endif
+    }
+
+    @ViewBuilder
     func opencodeGlassSurface<S: Shape>(clear: Bool = false, in shape: S) -> some View {
         #if os(iOS) || targetEnvironment(macCatalyst)
         if #available(iOS 26.0, *) {
