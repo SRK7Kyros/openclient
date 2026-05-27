@@ -205,6 +205,7 @@ platform :ios do
       sh(
         [
           "OPENCLIENT_SCREENSHOT_OUTPUT_DIR=#{screenshot_output.shellescape}",
+          device.include?("iPad") ? "OPENCLIENT_SCREENSHOT_LANDSCAPE_OUTPUT=1" : nil,
           "xcodebuild",
           "test",
           "-project", File.join(repo_root, "OpenCodeIOSClient.xcodeproj").shellescape,
@@ -215,7 +216,7 @@ platform :ios do
           "-maximum-concurrent-test-simulator-destinations", "1",
           "-derivedDataPath", File.join(repo_root, ".derived-data-screenshots").shellescape,
           "ONLY_ACTIVE_ARCH=YES",
-        ].join(" ")
+        ].compact.join(" ")
       )
     end
   end

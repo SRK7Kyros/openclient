@@ -17,6 +17,22 @@ struct ScreenshotSceneView: View {
                 .padding(1)
                 .accessibilityIdentifier(scene.accessibilityIdentifier)
         }
+        .onAppear {
+            requestLandscapeForiPadScreenshots()
+        }
+    }
+
+    private func requestLandscapeForiPadScreenshots() {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
+
+        if #available(iOS 16.0, *) {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            for scene in scenes {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            }
+        } else {
+            UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+        }
     }
 
     @ViewBuilder
@@ -24,51 +40,8 @@ struct ScreenshotSceneView: View {
         switch scene {
         case .connection, .recentServers:
             RootView(viewModel: viewModel)
-        case .projects, .providerSetup:
-            if isRunningOniPad {
-                RootView(viewModel: viewModel)
-            } else {
-                NavigationStack {
-                    ProjectListView(viewModel: viewModel) {}
-                }
-            }
-        case .funGames:
-            if isRunningOniPad {
-                RootView(viewModel: viewModel)
-            } else {
-                NavigationStack {
-                    ProjectListView(viewModel: viewModel) {}
-                }
-            }
-        case .sessions, .sessionActions, .sessionPinned:
-            if isRunningOniPad {
-                RootView(viewModel: viewModel)
-            } else {
-                NavigationStack {
-                    SessionListView(viewModel: viewModel) {}
-                        .navigationTitle("Sessions")
-                }
-            }
-        case .chat, .permission, .question:
-            if isRunningOniPad {
-                RootView(viewModel: viewModel)
-            } else {
-                NavigationStack {
-                    ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
-                }
-            }
-        case .findPlaceGame:
-            NavigationStack {
-                ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.findPlaceSession.id)
-            }
-        case .findBugGame:
-            NavigationStack {
-                ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.findBugSession.id)
-            }
-        case .composerActions:
-            NavigationStack {
-                ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
-            }
+        case .projects, .newSession, .providerSetup, .funGames, .sessions, .sessionActions, .sessionPinned, .chat, .permission, .question, .findPlaceGame, .findBugGame, .composerActions:
+            RootView(viewModel: viewModel)
         case .paywall:
             OpenClientPaywallView(
                 viewModel: viewModel,
@@ -87,6 +60,13 @@ struct ScreenshotSceneView: View {
                 serverName: OpenClientScreenshotData.widgetServer.displayName,
                 sessions: OpenClientScreenshotData.pinnedWidgetSessions
             )
+        case .quickStartWidgets:
+            QuickStartWidgetScreenshotDashboardView(
+                serverName: OpenClientScreenshotData.widgetServer.displayName,
+                projects: OpenClientScreenshotData.projects.filter { $0.id != "global" },
+                action: OpenClientScreenshotData.projectActions[0],
+                model: OpenClientScreenshotData.openAIModel
+            )
         case .liveActivity:
             LiveActivityScreenshotView(
                 session: OpenClientScreenshotData.releaseSession,
@@ -97,9 +77,6 @@ struct ScreenshotSceneView: View {
         }
     }
 
-    private var isRunningOniPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
 }
 #endif
 #endif

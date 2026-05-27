@@ -124,6 +124,7 @@ struct ProjectListView: View {
         .listStyle(.sidebar)
         .scrollClipDisabled()
         .refreshable {
+            guard !isScreenshotScene else { return }
             await viewModel.refreshProjectList()
         }
         .safeAreaInset(edge: .bottom) {
@@ -141,9 +142,11 @@ struct ProjectListView: View {
             .padding(.top, 8)
         }
         .task(id: recentLoadKey) {
+            guard !isScreenshotScene else { return }
             await viewModel.loadRecentProjectSessionsAcrossProjects()
         }
         .task(id: viewModel.projectSessionSearchQuery) {
+            guard !isScreenshotScene else { return }
             let query = viewModel.projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(220))
@@ -212,6 +215,10 @@ struct ProjectListView: View {
             return "Global"
         }
         return project.name ?? project.worktree.split(separator: "/").last.map(String.init) ?? project.worktree
+    }
+
+    private var isScreenshotScene: Bool {
+        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
     }
 
     private func openProjectSession(_ recent: RecentProjectSession) {
@@ -436,6 +443,7 @@ private struct InlineSubtitleSelectTrigger: View {
 struct ProjectNewChatSheet: View {
     @ObservedObject var viewModel: AppViewModel
     let request: NewProjectChatSheetRequest
+    let autoFocusInput: Bool
     let onChatStarted: () -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var draftStore = MessageComposerDraftStore()
@@ -458,9 +466,10 @@ struct ProjectNewChatSheet: View {
     @State private var startingSnapshot: NewSessionStartingSnapshot?
     @FocusState private var isChatTitleFocused: Bool
 
-    init(viewModel: AppViewModel, request: NewProjectChatSheetRequest, onChatStarted: @escaping () -> Void) {
+    init(viewModel: AppViewModel, request: NewProjectChatSheetRequest, autoFocusInput: Bool = true, onChatStarted: @escaping () -> Void) {
         self.viewModel = viewModel
         self.request = request
+        self.autoFocusInput = autoFocusInput
         self.onChatStarted = onChatStarted
         _selectedProjectID = State(initialValue: request.projectID ?? "")
         _selectedAgentName = State(initialValue: request.composerSelection?.agentName)
@@ -502,7 +511,7 @@ struct ProjectNewChatSheet: View {
                             attachmentCount: attachments.count,
                             isSending: isStartingChat || viewModel.isLoading,
                             canSend: selectedProject != nil,
-                            autoFocus: !isEditingChatTitle && !isChatTitleFocused,
+                            autoFocus: autoFocusInput && !isEditingChatTitle && !isChatTitleFocused,
                             usesKeyboardBottomPadding: isEditingChatTitle || isChatTitleFocused,
                             onSend: startChat,
                             onAddAttachments: addAttachments

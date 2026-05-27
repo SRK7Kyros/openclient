@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(UIKit)
+import UIKit
+#endif
 
 final class OpenCodeIOSClientUITests: XCTestCase {
     private let environment = ProcessInfo.processInfo.environment
@@ -29,28 +32,44 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("connection", "01-connection"),
             ("recent-servers", "02-recent-servers"),
             ("projects", "03-projects"),
-            ("provider-setup", "04-provider-setup"),
-            ("sessions", "05-sessions"),
-            ("chat", "06-chat"),
-            ("permission", "07-permission"),
-            ("question", "08-question"),
-            ("fun-games", "09-fun-games"),
-            ("find-place-game", "10-find-place-game"),
-            ("find-bug-game", "11-find-bug-game"),
-            ("composer-actions", "12-composer-actions"),
-            ("paywall", "13-paywall"),
-            ("recent-widget", "14-recent-widget"),
-            ("pinned-widget", "15-pinned-widget"),
-            ("live-activity", "16-live-activity"),
-            ("session-actions", "17-session-actions"),
-            ("session-pinned", "18-session-pinned"),
+            ("new-session", "04-new-session"),
+            ("provider-setup", "05-provider-setup"),
+            ("sessions", "06-sessions"),
+            ("chat", "07-chat"),
+            ("permission", "08-permission"),
+            ("question", "09-question"),
+            ("fun-games", "10-fun-games"),
+            ("find-place-game", "11-find-place-game"),
+            ("find-bug-game", "12-find-bug-game"),
+            ("composer-actions", "13-composer-actions"),
+            ("paywall", "14-paywall"),
+            ("recent-widget", "15-recent-widget"),
+            ("pinned-widget", "16-pinned-widget"),
+            ("quick-start-widgets", "17-quick-start-widgets"),
+            ("live-activity", "18-live-activity"),
+            ("session-actions", "19-session-actions"),
+            ("session-pinned", "20-session-pinned"),
         ]
 
+        let simulatorDeviceName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
+        #if canImport(UIKit)
+        let capturesLandscape = UIDevice.current.userInterfaceIdiom == .pad || simulatorDeviceName.localizedCaseInsensitiveContains("iPad")
+        #else
+        let capturesLandscape = simulatorDeviceName.localizedCaseInsensitiveContains("iPad")
+        #endif
+        setSnapshotLandscapeOutput(capturesLandscape)
+
         for (scene, screenshotName) in scenes {
+            XCUIDevice.shared.orientation = capturesLandscape ? .landscapeLeft : .portrait
+
             let app = XCUIApplication()
             setupSnapshot(app)
             app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = scene
             app.launch()
+            XCUIDevice.shared.orientation = capturesLandscape ? .landscapeLeft : .portrait
+            if capturesLandscape {
+                sleep(1)
+            }
 
             let sceneMarker = app.staticTexts["screenshot.scene.\(scene)"]
             XCTAssertTrue(sceneMarker.waitForExistence(timeout: 10), "Expected screenshot scene \(scene) to load")
@@ -61,6 +80,17 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
             if scene == "projects" || scene == "provider-setup" {
                 XCTAssertTrue(app.scrollViews["projects.recentSessions"].waitForExistence(timeout: 10), "Expected recent sessions rail to load")
+            }
+
+            if scene == "projects" {
+                XCTAssertTrue(app.textFields["projects.searchChats"].waitForExistence(timeout: 10), "Expected project chat search bar to load")
+                XCTAssertTrue(app.buttons["projects.newChat"].waitForExistence(timeout: 10), "Expected project new chat button to load")
+            }
+
+            if scene == "new-session" {
+                XCTAssertTrue(app.navigationBars["New Session"].waitForExistence(timeout: 10), "Expected new session sheet to load")
+                let projectPicker = app.descendants(matching: .any)["projects.newChat.project"]
+                XCTAssertTrue(projectPicker.waitForExistence(timeout: 10), "Expected project picker in new session sheet")
             }
 
             if scene == "composer-actions" {

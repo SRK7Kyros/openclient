@@ -86,6 +86,251 @@ struct WidgetScreenshotDashboardView: View {
     }
 }
 
+struct QuickStartWidgetScreenshotDashboardView: View {
+    let serverName: String
+    let projects: [OpenCodeProject]
+    let action: OpenCodeAction
+    let model: OpenCodeModel
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.035, green: 0.055, blue: 0.11), Color.black, Color(red: 0.05, green: 0.09, blue: 0.16)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                VStack(spacing: 13) {
+                    Text("Quick Start Widgets")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .textCase(.uppercase)
+
+                    Text("Start Anywhere")
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    Text("Create sessions or run saved slash commands straight from widgets and Control Center.")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 560)
+                }
+
+                VStack(spacing: 18) {
+                    HStack(spacing: 14) {
+                        actionShortcutWidget
+                        newSessionSmallWidget
+                    }
+
+                    newSessionMediumWidget
+                    controlWidgetsPreview
+                }
+                .frame(maxWidth: 650)
+            }
+            .padding(.horizontal, 26)
+            .padding(.vertical, 38)
+        }
+    }
+
+    private var actionShortcutWidget: some View {
+        screenshotWidgetChrome(width: 166, height: 166, contentPadding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                widgetShortcutHeader(title: "Command", systemImage: action.iconName, tint: .orange)
+
+                Spacer(minLength: 0)
+
+                Text("/\(action.commandName)")
+                    .font(.headline.weight(.semibold))
+                    .lineLimit(1)
+                Text("\(primaryProjectTitle) - \(model.name)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                Spacer(minLength: 0)
+
+                widgetShortcutButton(title: "Start", systemImage: action.iconName, tint: .orange)
+            }
+        }
+    }
+
+    private var newSessionSmallWidget: some View {
+        screenshotWidgetChrome(width: 166, height: 166, contentPadding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                widgetShortcutHeader(title: "Session", systemImage: "plus.message.fill", tint: .blue)
+
+                Spacer(minLength: 0)
+
+                Text(primaryProjectTitle)
+                    .font(.headline.weight(.semibold))
+                    .lineLimit(2)
+                Text(model.name)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                widgetShortcutButton(title: "New", systemImage: "plus", tint: .blue)
+            }
+        }
+    }
+
+    private var newSessionMediumWidget: some View {
+        screenshotWidgetChrome(width: 360, height: 178, contentPadding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    widgetShortcutHeader(title: "New Session", systemImage: "plus.message.fill", tint: .blue)
+                    Spacer(minLength: 0)
+                    Text(model.name)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2),
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(Array(projects.prefix(4))) { project in
+                        projectShortcut(project, compact: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private var controlWidgetsPreview: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Control Center")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.58))
+                .textCase(.uppercase)
+            Text(serverName)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.44))
+                .lineLimit(1)
+
+            HStack(spacing: 12) {
+                controlWidget(title: "New Session", status: primaryProjectTitle, systemImage: "plus.message.fill", tint: .blue)
+                controlWidget(title: "/\(action.commandName)", status: primaryProjectTitle, systemImage: action.iconName, tint: .orange)
+            }
+        }
+        .frame(width: 360, alignment: .leading)
+    }
+
+    private func screenshotWidgetChrome<Content: View>(width: CGFloat, height: CGFloat, contentPadding: CGFloat, @ViewBuilder content: () -> Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+        return content()
+            .padding(contentPadding)
+            .frame(width: width, height: height, alignment: .topLeading)
+            .opencodeGlassSurface(in: shape)
+            .shadow(color: .black.opacity(0.42), radius: 28, x: 0, y: 20)
+    }
+
+    private func widgetShortcutHeader(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .lineLimit(1)
+        }
+    }
+
+    private func widgetShortcutButton(title: String, systemImage: String, tint: Color) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.bold))
+            .labelStyle(.titleAndIcon)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(tint.opacity(0.16), in: Capsule())
+            .foregroundStyle(tint)
+    }
+
+    private func projectShortcut(_ project: OpenCodeProject, compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 8) {
+            Image(systemName: "plus.circle.fill")
+                .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(projectTitle(project))
+                    .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if !compact {
+                    Text(projectSubtitle(project))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: compact ? 30 : 38, alignment: .leading)
+        .padding(.horizontal, compact ? 8 : 10)
+        .padding(.vertical, compact ? 5 : 6)
+        .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: compact ? 13 : 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: compact ? 13 : 15, style: .continuous)
+                .strokeBorder(.blue.opacity(0.18), lineWidth: 1)
+        }
+    }
+
+    private func controlWidget(title: String, status: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(tint, in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
+        .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var primaryProjectTitle: String {
+        projects.first.map(projectTitle) ?? "OpenClient"
+    }
+
+    private func projectTitle(_ project: OpenCodeProject) -> String {
+        if project.id == "global" { return "Global" }
+        let trimmedName = project.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedName, !trimmedName.isEmpty { return trimmedName }
+        return URL(fileURLWithPath: project.worktree).lastPathComponent
+    }
+
+    private func projectSubtitle(_ project: OpenCodeProject) -> String {
+        URL(fileURLWithPath: project.worktree).lastPathComponent
+    }
+}
+
 struct LiveActivityScreenshotView: View {
     let session: OpenCodeSession
     let project: OpenCodeProject

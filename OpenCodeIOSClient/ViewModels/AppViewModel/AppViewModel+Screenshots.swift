@@ -5,6 +5,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case connection
     case recentServers = "recent-servers"
     case projects
+    case newSession = "new-session"
     case sessions
     case chat
     case permission
@@ -17,6 +18,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case paywall
     case recentWidget = "recent-widget"
     case pinnedWidget = "pinned-widget"
+    case quickStartWidgets = "quick-start-widgets"
     case liveActivity = "live-activity"
     case sessionActions = "session-actions"
     case sessionPinned = "session-pinned"
@@ -42,6 +44,8 @@ extension AppViewModel {
             return screenshotRecentServers()
         case .projects:
             return screenshotProjects()
+        case .newSession:
+            return screenshotNewSession()
         case .sessions:
             return screenshotSessions()
         case .sessionActions:
@@ -52,7 +56,7 @@ extension AppViewModel {
             return screenshotChat()
         case .permission:
             return screenshotPermission()
-        case .question, .recentWidget, .pinnedWidget, .liveActivity:
+        case .question, .recentWidget, .pinnedWidget, .quickStartWidgets, .liveActivity:
             return screenshotQuestion()
         case .funGames:
             return screenshotFunGames()
@@ -84,27 +88,78 @@ extension AppViewModel {
     }
 
     private static func screenshotProjects() -> AppViewModel {
-        let viewModel = baseConnectedScreenshotViewModel()
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.currentProject = nil
+        viewModel.selectedDirectory = nil
+        viewModel.selectedSession = nil
         return viewModel
     }
 
+    private static func screenshotNewSession() -> AppViewModel {
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.currentProject = OpenClientScreenshotData.repoProject
+        viewModel.selectedDirectory = OpenClientScreenshotData.repoProject.worktree
+        viewModel.projectWorkspacesEnabledByScope = [
+            screenshotProjectPreferenceScopeKey(
+                config: viewModel.config,
+                directory: OpenClientScreenshotData.repoProject.worktree
+            ): true
+        ]
+        viewModel.newSessionDefaults = NewSessionDefaults(
+            agentName: "build",
+            providerID: OpenClientScreenshotData.openAIModel.providerID,
+            modelID: OpenClientScreenshotData.openAIModel.id,
+            reasoningVariant: "balanced"
+        )
+        viewModel.currentProject = nil
+        viewModel.selectedDirectory = nil
+        viewModel.selectedSession = nil
+        viewModel.presentNewProjectChatSheet(
+            projectID: OpenClientScreenshotData.repoProject.id,
+            workspaceDirectory: OpenClientScreenshotData.repoProject.worktree,
+            locksProject: false,
+            composerSelection: NewProjectChatComposerSelection(
+                agentName: "build",
+                modelReference: OpenCodeModelReference(
+                    providerID: OpenClientScreenshotData.openAIModel.providerID,
+                    modelID: OpenClientScreenshotData.openAIModel.id
+                ),
+                reasoningVariant: "balanced"
+            )
+        )
+        return viewModel
+    }
+
+    private static func screenshotProjectPreferenceScopeKey(config: OpenCodeServerConfig, directory: String?) -> String {
+        [
+            "server",
+            config.recentServerID,
+            directory ?? "global",
+        ].joined(separator: "|")
+    }
+
     private static func screenshotSessions() -> AppViewModel {
-        let viewModel = baseConnectedScreenshotViewModel()
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
         viewModel.pinnedSessionIDsByScope = [viewModel.currentPinScopeKey: [OpenClientScreenshotData.releaseSession.id]]
         return viewModel
     }
 
     private static func screenshotSessionActions() -> AppViewModel {
-        let viewModel = baseConnectedScreenshotViewModel()
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
         viewModel.projectActionsByScope = [viewModel.currentProjectPreferenceScopeKey: OpenClientScreenshotData.projectActions]
         viewModel.pinnedSessionIDsByScope = [viewModel.currentPinScopeKey: [OpenClientScreenshotData.releaseSession.id]]
         return viewModel
     }
 
     private static func screenshotSessionPinned() -> AppViewModel {
-        let viewModel = baseConnectedScreenshotViewModel(sessions: OpenClientScreenshotData.pinnedSectionSessions)
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil, sessions: OpenClientScreenshotData.pinnedSectionSessions)
         viewModel.projectActionsByScope = [viewModel.currentProjectPreferenceScopeKey: OpenClientScreenshotData.projectActions]
-        viewModel.setProjectWorkspacesEnabled(true)
+        viewModel.projectWorkspacesEnabledByScope = [
+            screenshotProjectPreferenceScopeKey(
+                config: viewModel.config,
+                directory: OpenClientScreenshotData.repoProject.worktree
+            ): true
+        ]
         viewModel.pinnedSessionIDsByScope = [
             viewModel.currentPinScopeKey: [
                 OpenClientScreenshotData.releaseSession.id,
@@ -135,6 +190,9 @@ extension AppViewModel {
 
     private static func screenshotFunGames() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.currentProject = nil
+        viewModel.selectedDirectory = nil
+        viewModel.selectedSession = nil
         viewModel.funAndGamesPreferences.showsSection = true
         return viewModel
     }
@@ -185,6 +243,9 @@ extension AppViewModel {
 
     private static func screenshotProviderSetup() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.currentProject = nil
+        viewModel.selectedDirectory = nil
+        viewModel.selectedSession = nil
         viewModel.allProviders = OpenClientScreenshotData.allProviders
         viewModel.availableProviders = OpenClientScreenshotData.connectedProviders
         viewModel.connectedProviderIDs = Set(OpenClientScreenshotData.connectedProviders.map(\.id))
@@ -216,9 +277,11 @@ extension AppViewModel {
         )
         viewModel.config = OpenClientScreenshotData.secureConfig
         viewModel.backendMode = .server
+        viewModel.errorMessage = nil
         viewModel.projects = OpenClientScreenshotData.projects
         viewModel.currentProject = OpenClientScreenshotData.repoProject
         viewModel.selectedDirectory = OpenClientScreenshotData.repoProject.worktree
+        viewModel.projectWorkspacesEnabledByScope = [:]
         viewModel.sessionPreviews = OpenClientScreenshotData.sessionPreviews
         viewModel.sessionListStore.setRecentSessions(OpenClientScreenshotData.recentRepoSessions, for: OpenClientScreenshotData.repoProject.worktree)
         viewModel.sessionListStore.setRecentSessions(OpenClientScreenshotData.recentDocsSessions, for: OpenClientScreenshotData.docsProject.worktree)

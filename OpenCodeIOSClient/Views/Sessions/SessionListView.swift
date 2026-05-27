@@ -53,7 +53,7 @@ extension AppViewModel {
             unpinnedRows: unpinnedRows,
             showsWorkspaces: showsWorkspaces,
             workspaceSections: workspaceSections,
-            errorMessage: errorMessage,
+            errorMessage: isScreenshotScene ? nil : errorMessage,
             hasProUnlock: hasProUnlock,
             currentProjectActions: currentProjectActions.map { action in
                 ProjectActionSnapshot(
@@ -99,6 +99,10 @@ extension AppViewModel {
             displayTitle: session.displayTitle(),
             shimmersTitle: session.isDefaultGeneratedTitle
         )
+    }
+
+    private var isScreenshotScene: Bool {
+        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
     }
 }
 
@@ -246,9 +250,14 @@ private struct SessionListContent: View {
             Text("Enter a new title for this session.")
         }
         .task(id: snapshot.workspaceTaskID) {
+            guard !isScreenshotScene else { return }
             await viewModel.loadWorkspaceSessionsIfNeeded()
         }
         .animation(opencodeSelectionAnimation, value: snapshot.selectedSessionID)
+    }
+
+    private var isScreenshotScene: Bool {
+        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
     }
 
     private var renameAlertBinding: Binding<Bool> {

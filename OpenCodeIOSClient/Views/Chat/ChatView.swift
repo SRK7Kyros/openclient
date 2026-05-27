@@ -1909,6 +1909,10 @@ struct ChatView: View {
         findPlaceGame(for: sessionID) != nil || findBugGame(for: sessionID) != nil
     }
 
+    private var isScreenshotScene: Bool {
+        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
+    }
+
     private var chatItemChangeAnimation: Animation? {
         if !hasCompletedInitialHydrationSnap { return nil }
         if isSendChoreographyActive { return nil }
@@ -2674,6 +2678,7 @@ struct ChatView: View {
     }
 
     private func scheduleEagerChatRefresh(reason: String) {
+        guard !isScreenshotScene else { return }
         guard connectionStore.isConnected else { return }
         guard viewModel.activeChatSessionID == sessionID || directoryStore.selectedSession?.id == sessionID else { return }
         guard shouldRunEagerChatRefresh else { return }
@@ -3511,13 +3516,15 @@ struct ChatView: View {
                 }
             } else {
                 #if DEBUG
-                ToolbarItem(placement: .opencodeTrailing) {
-                    Button {
-                        chatPresentationStore.isShowingDebugProbe = true
-                    } label: {
-                        Image(systemName: "waveform.path.ecg")
+                if OpenClientScreenshotScene.current == nil {
+                    ToolbarItem(placement: .opencodeTrailing) {
+                        Button {
+                            chatPresentationStore.isShowingDebugProbe = true
+                        } label: {
+                            Image(systemName: "waveform.path.ecg")
+                        }
+                        .accessibilityLabel("Open Streaming Debug Log")
                     }
-                    .accessibilityLabel("Open Streaming Debug Log")
                 }
                 #endif
 

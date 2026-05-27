@@ -1,5 +1,16 @@
 import Foundation
 import XCTest
+#if canImport(UIKit)
+import UIKit
+#endif
+
+@MainActor
+private var rotatesSnapshotLandscapeOutput = false
+
+@MainActor
+func setSnapshotLandscapeOutput(_ enabled: Bool) {
+    rotatesSnapshotLandscapeOutput = enabled
+}
 
 @MainActor
 func setupSnapshot(_ app: XCUIApplication) {
@@ -18,7 +29,52 @@ func snapshot(_ name: String, waitForLoadingIndicator: Bool = true) {
         activity.add(attachment)
     }
 
-    writeScreenshotPNG(screenshot.pngRepresentation, name: sanitizedName)
+    writeScreenshotPNG(landscapeAdjustedPNGData(from: screenshot.pngRepresentation), name: sanitizedName)
+}
+
+@MainActor
+private func landscapeAdjustedPNGData(from data: Data) -> Data {
+    #if canImport(UIKit)
+    guard isIPadScreenshotTarget(),
+          let image = UIImage(data: data),
+          let cgImage = image.cgImage,
+          cgImage.width < cgImage.height else {
+        return data
+    }
+
+    let rotatedSize = CGSize(width: cgImage.height, height: cgImage.width)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(size: rotatedSize, format: format)
+    let rawImage = UIImage(cgImage: cgImage, scale: 1, orientation: .up)
+    let rotatedImage = renderer.image { context in
+        context.cgContext.translateBy(x: 0, y: rotatedSize.height)
+        context.cgContext.rotate(by: -.pi / 2)
+        rawImage.draw(at: .zero)
+    }
+    return rotatedImage.pngData() ?? data
+    #else
+    return data
+    #endif
+}
+
+@MainActor
+private func isIPadScreenshotTarget() -> Bool {
+    if rotatesSnapshotLandscapeOutput {
+        return true
+    }
+
+    let environment = ProcessInfo.processInfo.environment
+    if environment["OPENCLIENT_SCREENSHOT_LANDSCAPE_OUTPUT"] == "1" {
+        return true
+    }
+
+    return [
+        environment["SIMULATOR_DEVICE_NAME"],
+        environment["SIMULATOR_MODEL_IDENTIFIER"],
+    ]
+    .compactMap { $0 }
+    .contains { $0.localizedCaseInsensitiveContains("iPad") }
 }
 
 private func writeScreenshotPNG(_ data: Data, name: String) {

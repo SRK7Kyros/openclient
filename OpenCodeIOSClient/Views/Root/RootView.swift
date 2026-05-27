@@ -36,6 +36,14 @@ struct RootView: View {
         !viewModel.isConnected || viewModel.isShowingConnectionOverlay
     }
 
+    private var shouldAutoFocusNewChatInput: Bool {
+        #if DEBUG
+        OpenClientScreenshotScene.current == nil
+        #else
+        true
+        #endif
+    }
+
     var body: some View {
         ZStack {
             if isShowingConnectionExperience {
@@ -51,7 +59,7 @@ struct RootView: View {
             case .connection:
                 ConnectionSheetView(viewModel: viewModel)
             case let .newProjectChat(request):
-                ProjectNewChatSheet(viewModel: viewModel, request: request) {
+                ProjectNewChatSheet(viewModel: viewModel, request: request, autoFocusInput: shouldAutoFocusNewChatInput) {
                     withAnimation(opencodeSelectionAnimation) {
                         showDetailColumn()
                     }
@@ -147,9 +155,18 @@ struct RootView: View {
             }
         }
         .onAppear {
-            showProjectSidebarIfNeeded()
+            showCurrentRoute()
         }
         .animation(opencodeSelectionAnimation, value: viewModel.selectedSession?.id)
+    }
+
+    private func showCurrentRoute() {
+        guard viewModel.currentProject != nil else {
+            showProjectSidebarIfNeeded()
+            return
+        }
+
+        showProjectContentOrDetail()
     }
 
     private func showProjectSidebarIfNeeded() {
