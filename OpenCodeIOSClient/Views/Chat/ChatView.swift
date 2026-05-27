@@ -1487,6 +1487,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
     let bottomRefreshRenderSnapshot: BottomRefreshRenderSnapshot
     let isRefreshingChatData: Bool
     let isSessionBusy: Bool
+    let contentInvalidationToken: String
     let makeDisplaySnapshot: () -> TimedChatDisplaySnapshot
     let makeRows: (ChatDisplaySnapshot) -> [ChatTranscriptRow]
     let makeAnimatedRowIDs: (ChatDisplaySnapshot) -> Set<String>
@@ -1517,6 +1518,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
                 bottomRefreshHeight: messageBottomPadding + bottomRefreshIndicatorHeight * bottomRefreshRenderSnapshot.progress,
                 isRefreshing: isRefreshingChatData,
                 isStreaming: isSessionBusy,
+                contentInvalidationToken: contentInvalidationToken,
                 animatedRowIDs: animatedRowIDs,
                 onBottomPullChanged: onBottomPullChanged,
                 onBottomPullEnded: onBottomPullEnded,
@@ -1941,6 +1943,7 @@ struct ChatView: View {
                 bottomRefreshRenderSnapshot: bottomRefreshRenderSnapshot,
                 isRefreshingChatData: isRefreshingChatData,
                 isSessionBusy: isSessionBusy,
+                contentInvalidationToken: expandedReasoningPartIDs.sorted().joined(separator: "|"),
                 makeDisplaySnapshot: { timedChatDisplaySnapshot },
                 makeRows: { transcriptRows(for: $0) },
                 makeAnimatedRowIDs: { animatedTranscriptRowIDs(for: $0) },
@@ -4307,6 +4310,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
     let bottomRefreshHeight: CGFloat
     let isRefreshing: Bool
     let isStreaming: Bool
+    let contentInvalidationToken: String
     let animatedRowIDs: Set<String>
     let onBottomPullChanged: (CGFloat) -> Void
     let onBottomPullEnded: (Bool) -> Void
@@ -4323,6 +4327,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             bottomRefreshHeight: bottomRefreshHeight,
             isRefreshing: isRefreshing,
             isStreaming: isStreaming,
+            contentInvalidationToken: contentInvalidationToken,
             animatedRowIDs: animatedRowIDs,
             onBottomPullChanged: onBottomPullChanged,
             onBottomPullEnded: onBottomPullEnded,
@@ -4353,11 +4358,16 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         context.coordinator.bottomRefreshHeight = bottomRefreshHeight
         context.coordinator.isRefreshing = isRefreshing
         context.coordinator.isStreaming = isStreaming
+        let shouldInvalidateContent = context.coordinator.contentInvalidationToken != contentInvalidationToken
+        context.coordinator.contentInvalidationToken = contentInvalidationToken
         context.coordinator.animatedRowIDs = animatedRowIDs
         context.coordinator.onBottomPullChanged = onBottomPullChanged
         context.coordinator.onBottomPullEnded = onBottomPullEnded
         context.coordinator.updateBottomContentInset(bottomContentInset, in: collectionView)
         context.coordinator.updateRows(rows, in: collectionView)
+        if shouldInvalidateContent {
+            context.coordinator.configureVisibleHostingCells(in: collectionView)
+        }
         context.coordinator.scrollToBottomIfNeeded(token: bottomScrollToken, in: collectionView)
     }
 
@@ -4388,6 +4398,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         var bottomRefreshHeight: CGFloat
         var isRefreshing: Bool
         var isStreaming: Bool
+        var contentInvalidationToken: String
         var animatedRowIDs: Set<String>
         var onBottomPullChanged: (CGFloat) -> Void
         var onBottomPullEnded: (Bool) -> Void
@@ -4413,6 +4424,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             bottomRefreshHeight: CGFloat,
             isRefreshing: Bool,
             isStreaming: Bool,
+            contentInvalidationToken: String,
             animatedRowIDs: Set<String>,
             onBottomPullChanged: @escaping (CGFloat) -> Void,
             onBottomPullEnded: @escaping (Bool) -> Void,
@@ -4427,6 +4439,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             self.bottomRefreshHeight = bottomRefreshHeight
             self.isRefreshing = isRefreshing
             self.isStreaming = isStreaming
+            self.contentInvalidationToken = contentInvalidationToken
             self.animatedRowIDs = animatedRowIDs
             self.onBottomPullChanged = onBottomPullChanged
             self.onBottomPullEnded = onBottomPullEnded
@@ -4564,11 +4577,24 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             }()
             cell.configure(
                 rowID: row.id,
-                renderSignature: row.renderSignature,
+                renderSignature: rowContentRenderSignature(for: row),
                 AnyView(rowContent(row)),
                 disablesAnimations: !allowsAnimations,
                 thinkingEntryGeneration: thinkingEntryGeneration
             )
+        }
+
+        private func rowContentRenderSignature(for row: ChatTranscriptRow) -> String {
+            "\(row.renderSignature)\u{1f}\(contentInvalidationToken)"
+        }
+
+        func configureVisibleHostingCells(in collectionView: UICollectionView) {
+            for case let cell as ChatTranscriptHostingCell in collectionView.visibleCells {
+                guard let indexPath = collectionView.indexPath(for: cell), rows.indices.contains(indexPath.item) else { continue }
+                UIView.performWithoutAnimation {
+                    configure(cell, at: indexPath)
+                }
+            }
         }
 
         private func configureVisibleHostingCells(in collectionView: UICollectionView, changedRowIDs: Set<String>) {
