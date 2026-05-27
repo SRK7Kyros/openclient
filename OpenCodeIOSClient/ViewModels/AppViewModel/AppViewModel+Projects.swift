@@ -23,12 +23,18 @@ struct NewProjectChatComposerSelection: Equatable, Sendable {
     let reasoningVariant: String?
 }
 
+struct NewProjectChatInitialContent: Equatable, Sendable {
+    let text: String
+    let attachments: [OpenCodeComposerAttachment]
+}
+
 struct NewProjectChatSheetRequest: Identifiable, Sendable {
     let id: UUID
     let projectID: String?
     let workspaceDirectory: String?
     let locksProject: Bool
     let composerSelection: NewProjectChatComposerSelection?
+    let initialContent: NewProjectChatInitialContent?
     let presentsAboveConnection: Bool
 
     init(
@@ -37,6 +43,7 @@ struct NewProjectChatSheetRequest: Identifiable, Sendable {
         workspaceDirectory: String?,
         locksProject: Bool,
         composerSelection: NewProjectChatComposerSelection?,
+        initialContent: NewProjectChatInitialContent? = nil,
         presentsAboveConnection: Bool = false
     ) {
         self.id = id
@@ -44,6 +51,7 @@ struct NewProjectChatSheetRequest: Identifiable, Sendable {
         self.workspaceDirectory = workspaceDirectory
         self.locksProject = locksProject
         self.composerSelection = composerSelection
+        self.initialContent = initialContent
         self.presentsAboveConnection = presentsAboveConnection
     }
 }
@@ -153,6 +161,7 @@ extension AppViewModel {
         workspaceDirectory: String? = nil,
         locksProject: Bool = false,
         composerSelection: NewProjectChatComposerSelection? = nil,
+        initialContent: NewProjectChatInitialContent? = nil,
         presentsAboveConnection: Bool = false
     ) {
         newProjectChatSheetRequest = NewProjectChatSheetRequest(
@@ -160,6 +169,7 @@ extension AppViewModel {
             workspaceDirectory: workspaceDirectory,
             locksProject: locksProject,
             composerSelection: composerSelection,
+            initialContent: initialContent,
             presentsAboveConnection: presentsAboveConnection
         )
     }
@@ -507,6 +517,8 @@ extension AppViewModel {
         prompt: String,
         agentMentions: [OpenCodeAgentMention] = [],
         attachments: [OpenCodeComposerAttachment] = [],
+        messageID: String? = nil,
+        partID: String? = nil,
         composerSelection: NewProjectChatComposerSelection? = nil,
         projectID: String,
         workspaceDirectory: String? = nil,
@@ -562,6 +574,8 @@ extension AppViewModel {
                 attachments: attachments,
                 in: session,
                 userVisible: true,
+                messageID: messageID,
+                partID: partID,
                 meterPrompt: false
             )
             if !didSend {

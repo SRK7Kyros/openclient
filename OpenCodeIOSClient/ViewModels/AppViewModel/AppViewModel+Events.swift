@@ -540,6 +540,9 @@ extension AppViewModel {
         if directoryStore.applyReducedEventState(state, scopedSessions: scopedSessions) {
             objectWillChange.send()
         }
+        if sessionListStore.reconcileWorkspaceSessions(with: state.sessions) {
+            objectWillChange.send()
+        }
         if updatesSelectedMessages {
             let projectedMessages: [OpenCodeMessageEnvelope]
             if let selectedSessionID = state.selectedSession?.id,

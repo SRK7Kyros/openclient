@@ -1404,6 +1404,38 @@ private struct TimedChatDisplaySnapshot {
     let snapshot: ChatDisplaySnapshot
 }
 
+struct OpenCodeChatTranscriptWindow: Equatable {
+    let messages: [OpenCodeMessageEnvelope]
+    let hiddenMessageCount: Int
+}
+
+enum OpenCodeChatTranscriptWindowing {
+    static func window(
+        from messages: [OpenCodeMessageEnvelope],
+        requestedCount: Int,
+        batchSize: Int,
+        hasDisplayableContent: ([OpenCodeMessageEnvelope]) -> Bool
+    ) -> OpenCodeChatTranscriptWindow {
+        guard !messages.isEmpty else {
+            return OpenCodeChatTranscriptWindow(messages: [], hiddenMessageCount: 0)
+        }
+
+        let minimumBatchSize = max(1, batchSize)
+        var count = min(messages.count, max(requestedCount, minimumBatchSize))
+        var window = Array(messages.suffix(count))
+
+        while count < messages.count, !hasDisplayableContent(window) {
+            count = min(messages.count, count + minimumBatchSize)
+            window = Array(messages.suffix(count))
+        }
+
+        return OpenCodeChatTranscriptWindow(
+            messages: window,
+            hiddenMessageCount: max(0, messages.count - window.count)
+        )
+    }
+}
+
 private struct EquatableMessageBubbleHost: View, Equatable {
     let snapshot: MessageBubbleSnapshot
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
@@ -1543,6 +1575,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
     let onLoadMCP: () -> Void
     let onToggleMCP: (String) -> Void
     let onAddAttachments: ([OpenCodeComposerAttachment]) -> Void
+    let glassNamespace: Namespace.ID
 
     nonisolated static func == (lhs: EquatableMessageComposerHost, rhs: EquatableMessageComposerHost) -> Bool {
         lhs.snapshot == rhs.snapshot
@@ -1578,7 +1611,8 @@ private struct EquatableMessageComposerHost: View, Equatable {
             onForkMessage: onForkMessage,
             onLoadMCP: onLoadMCP,
             onToggleMCP: onToggleMCP,
-            onAddAttachments: onAddAttachments
+            onAddAttachments: onAddAttachments,
+            glassNamespace: glassNamespace
         )
     }
 }
@@ -1618,6 +1652,7 @@ struct ChatView: View {
     }
 
     @Namespace private var toolbarGlassNamespace
+    @Namespace private var composerGlassNamespace
     @State private var copiedDebugLog = false
     @State private var selectedMessageDebugPayload: MessageDebugPayload?
     @State private var selectedCompactionSummary: CompactionSummaryPayload?
@@ -1737,8 +1772,9 @@ struct ChatView: View {
             session: liveSession,
             isChildSession: liveSession.parentID != nil,
             parentSession: parent,
-            parentTitle: parent?.title ?? "Session",
-            childTitle: childSessionTitle(for: liveSession)
+            parentTitle: parent?.displayTitle(fallback: "Session") ?? "Session",
+            childTitle: childSessionTitle(for: liveSession),
+            shimmersNavigationTitle: liveSession.isDefaultGeneratedTitle && latestTaskDescription(for: liveSession) == nil
         )
     }
 
@@ -1843,8 +1879,8 @@ struct ChatView: View {
             return description
         }
 
-        if let title = session.title, !title.isEmpty {
-            return title.replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
+        if session.title?.isEmpty == false {
+            return session.displayTitle(fallback: "New Session").replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
         }
 
         return "New Session"
@@ -2355,7 +2391,8 @@ struct ChatView: View {
             },
             onAddAttachments: { attachments in
                 viewModel.addDraftAttachments(attachments)
-            }
+            },
+            glassNamespace: composerGlassNamespace
         )
 
         composer
@@ -2729,13 +2766,19 @@ struct ChatView: View {
     private var messageBottomPadding: CGFloat { 20 }
 
     private var timedChatDisplaySnapshot: TimedChatDisplaySnapshot {
-        let sourceMessageCount = chatSourceMessageCount
-        let messages = visibleChatMessages
+        let window = OpenCodeChatTranscriptWindowing.window(
+            from: allChatMessages,
+            requestedCount: visibleMessageCount,
+            batchSize: messageWindowSize
+        ) { messages in
+            !displayedChatItems(for: messages).isEmpty || shouldShowThinking(in: messages)
+        }
+        let messages = window.messages
         let items = displayedChatItems(for: messages)
         let showsThinking = shouldShowThinking(in: messages)
         let snapshot = ChatDisplaySnapshot(
             messages: messages,
-            hiddenMessageCount: max(0, sourceMessageCount - messages.count),
+            hiddenMessageCount: window.hiddenMessageCount,
             items: items,
             showsThinking: showsThinking
         )
@@ -2748,11 +2791,15 @@ struct ChatView: View {
     }
 
     private var visibleChatMessages: [OpenCodeMessageEnvelope] {
+        Array(allChatMessages.suffix(visibleMessageCount))
+    }
+
+    private var allChatMessages: [OpenCodeMessageEnvelope] {
         if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
-            return directoryStore.syncStore.messageEnvelopes(forSessionID: sessionID, suffix: visibleMessageCount)
+            return directoryStore.syncStore.state.messageEnvelopes(forSessionID: sessionID)
         }
 
-        return Array(chatStore.messages.suffix(visibleMessageCount))
+        return chatStore.messages
     }
 
     private var reasoningPartKeySignature: String {
@@ -2925,7 +2972,8 @@ struct ChatView: View {
                 .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
         case let .olderMessages(count):
             Button {
-                visibleMessageCount = min(chatSourceMessageCount, visibleMessageCount + messageWindowSize)
+                let renderedMessageCount = timedChatDisplaySnapshot.snapshot.messages.count
+                visibleMessageCount = min(chatSourceMessageCount, max(visibleMessageCount, renderedMessageCount) + messageWindowSize)
             } label: {
                 Text("View older messages (\(count))")
                     .font(.subheadline.weight(.medium))
@@ -3570,15 +3618,59 @@ private struct ChatNavigationTitle: View {
                     .lineLimit(1)
             }
 
-            Text(snapshot.navigationTitle)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            ShimmeringChatNavigationTitle(text: snapshot.navigationTitle, active: snapshot.shimmersNavigationTitle)
                 .minimumScaleFactor(0.82)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(snapshot.navigationTitle)
+    }
+}
+
+private struct ShimmeringChatNavigationTitle: View {
+    let text: String
+    let active: Bool
+
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(active ? Color.primary.opacity(0.72) : Color.primary)
+            .lineLimit(1)
+            .overlay {
+                if active {
+                    GeometryReader { geometry in
+                        LinearGradient(
+                            colors: [Color.clear, Color.white.opacity(0.85), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .frame(width: max(geometry.size.width * 0.8, 36))
+                        .offset(x: geometry.size.width * phase)
+                        .blendMode(.plusLighter)
+                    }
+                    .mask(
+                        Text(text)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+            .onAppear { updateAnimation(active: active) }
+            .onChange(of: active) { _, isActive in updateAnimation(active: isActive) }
+    }
+
+    private func updateAnimation(active: Bool) {
+        guard active else {
+            phase = -1
+            return
+        }
+        phase = -1
+        withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) {
+            phase = 1.35
+        }
     }
 }
 

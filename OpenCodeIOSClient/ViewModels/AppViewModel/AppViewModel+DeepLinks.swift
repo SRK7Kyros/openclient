@@ -1,7 +1,32 @@
 import Foundation
 
+struct OpenClientShareDeepLink: Equatable, Sendable {
+    let payloadID: String
+    let serverID: String?
+
+    init?(url: URL) {
+        guard url.scheme == "openclient", url.host() == "share",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let payloadID = components.queryItems?.first(where: { $0.name == "id" })?.value,
+              !payloadID.isEmpty else {
+            return nil
+        }
+        self.payloadID = payloadID
+        self.serverID = components.queryItems?.first(where: { $0.name == "server" })?.value
+    }
+}
+
 extension AppViewModel {
     func prepareOpenURLPresentation(_ url: URL) {
+        if let shareRequest = OpenClientShareDeepLink(url: url),
+           let initialContent = shareInitialContent(payloadID: shareRequest.payloadID, deletesAfterLoad: false) {
+            presentNewProjectChatSheet(
+                initialContent: initialContent,
+                presentsAboveConnection: true
+            )
+            return
+        }
+
         guard let widgetRequest = OpenCodeWidgetDeepLink.request(from: url),
               case .newSession = widgetRequest.kind else { return }
 
@@ -12,12 +37,61 @@ extension AppViewModel {
     }
 
     func handleOpenURL(_ url: URL) async {
+        if let shareRequest = OpenClientShareDeepLink(url: url) {
+            await handleShareDeepLink(shareRequest)
+            return
+        }
+
         if let widgetRequest = OpenCodeWidgetDeepLink.request(from: url) {
             await handleWidgetDeepLink(widgetRequest)
             return
         }
 
         await handleLiveActivityURL(url)
+    }
+
+    private func handleShareDeepLink(_ request: OpenClientShareDeepLink) async {
+        let initialContent = shareInitialContent(payloadID: request.payloadID, deletesAfterLoad: true)
+        if let serverID = request.serverID,
+           config.recentServerID != serverID {
+            guard let serverConfig = recentServerConfigs.first(where: { $0.recentServerID == serverID }) else {
+                errorMessage = "Open the app once before sharing to this connection."
+                return
+            }
+            await connect(to: serverConfig)
+        } else if !isConnected, hasSavedServer {
+            await connect()
+        }
+
+        guard isConnected else { return }
+        if projects.isEmpty {
+            do {
+                try await refreshProjects()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        presentNewProjectChatSheet(
+            initialContent: initialContent,
+            presentsAboveConnection: true
+        )
+    }
+
+    private func shareInitialContent(payloadID: String, deletesAfterLoad: Bool) -> NewProjectChatInitialContent? {
+        guard let payload = try? OpenClientSharePayloadStore.load(id: payloadID, deletesAfterLoad: deletesAfterLoad) else {
+            return nil
+        }
+        let attachments = payload.attachments.map { attachment in
+            OpenCodeComposerAttachment(
+                id: OpenCodeIdentifier.part(),
+                kind: attachment.mime.lowercased().hasPrefix("image/") ? .image : .file,
+                filename: attachment.filename,
+                mime: attachment.mime,
+                dataURL: attachment.dataURL
+            )
+        }
+        return NewProjectChatInitialContent(text: payload.text, attachments: attachments)
     }
 
     private func handleWidgetDeepLink(_ request: OpenCodeWidgetDeepLink.Request) async {

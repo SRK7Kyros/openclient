@@ -63,9 +63,10 @@ extension AppViewModel {
         let parentSession: OpenCodeSession?
         let parentTitle: String
         let childTitle: String
+        let shimmersNavigationTitle: Bool
 
         var navigationTitle: String {
-            isChildSession ? childTitle : (session.title ?? "Session")
+            isChildSession ? childTitle : session.displayTitle(fallback: "Session")
         }
     }
 
@@ -718,6 +719,7 @@ extension AppViewModel {
                 client: client,
                 submission: abortSubmission
             )
+            sessionStatuses[selectedSession.id] = "idle"
             appendDebugLog("abort accepted session=\(debugSessionLabel(selectedSession))")
         } catch {
             appendDebugLog("abort error: \(error.localizedDescription)")
@@ -725,9 +727,8 @@ extension AppViewModel {
         }
 
         do {
-            async let statuses: Void = reloadSessionStatuses()
-            async let messages: Void = loadMessages(for: selectedSession)
-            _ = try await (statuses, messages)
+            try await reloadSessionStatuses()
+            try await loadMessages(for: selectedSession)
         } catch {
             appendDebugLog("post-abort refresh error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
@@ -1606,8 +1607,8 @@ extension AppViewModel {
             return description
         }
 
-        if let title = session.title, !title.isEmpty {
-            return title.replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
+        if session.title?.isEmpty == false {
+            return session.displayTitle(fallback: "New Session").replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
         }
 
         return "New Session"
@@ -1623,8 +1624,9 @@ extension AppViewModel {
             session: session,
             isChildSession: session.parentID != nil,
             parentSession: parent,
-            parentTitle: parent?.title ?? "Session",
-            childTitle: childSessionTitle(for: session)
+            parentTitle: parent?.displayTitle(fallback: "Session") ?? "Session",
+            childTitle: childSessionTitle(for: session),
+            shimmersNavigationTitle: session.isDefaultGeneratedTitle && latestTaskDescription(for: session) == nil
         )
     }
 

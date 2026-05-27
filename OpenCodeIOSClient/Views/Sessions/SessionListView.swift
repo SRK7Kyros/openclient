@@ -95,7 +95,9 @@ extension AppViewModel {
             isBusy: sessionStatuses[session.id] == "busy",
             hasLiveActivity: isLiveActivityActive(for: session),
             hasDraft: hasMessageDraft(for: session),
-            hasPermissionRequest: hasPermissionRequest(for: session)
+            hasPermissionRequest: hasPermissionRequest(for: session),
+            displayTitle: session.displayTitle(),
+            shimmersTitle: session.isDefaultGeneratedTitle
         )
     }
 }
@@ -334,7 +336,9 @@ private struct SessionListContent: View {
             isBusy: row.isBusy,
             hasLiveActivity: row.hasLiveActivity,
             hasDraft: row.hasDraft,
-            hasPermissionRequest: row.hasPermissionRequest
+            hasPermissionRequest: row.hasPermissionRequest,
+            displayTitle: row.displayTitle,
+            shimmersTitle: row.shimmersTitle
         )
         .equatable()
         .matchedGeometryEffect(id: row.session.id, in: sessionRowNamespace)
@@ -658,6 +662,8 @@ private struct SessionRowSnapshot: Identifiable, Equatable {
     var hasLiveActivity = false
     var hasDraft = false
     var hasPermissionRequest = false
+    var displayTitle: String
+    var shimmersTitle: Bool
 
     var id: String { session.id }
 }

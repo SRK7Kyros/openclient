@@ -139,13 +139,37 @@ final class SessionListStore: ObservableObject {
         guard let directory = session.directory, !directory.isEmpty else { return }
         var workspaceState = workspaceSessionsByDirectory[directory] ?? OpenCodeWorkspaceSessionState()
         if let index = workspaceState.sessions.firstIndex(where: { $0.id == session.id }) {
-            workspaceState.sessions[index] = session
+            workspaceState.sessions[index] = workspaceState.sessions[index].merged(with: session)
         } else {
             workspaceState.sessions.insert(session, at: 0)
             workspaceState.sessionTotal = max(workspaceState.sessionTotal, workspaceState.rootSessions.count)
         }
         workspaceState.isLoading = false
         workspaceSessionsByDirectory[directory] = workspaceState
+    }
+
+    func reconcileWorkspaceSessions(with canonicalSessions: [OpenCodeSession]) -> Bool {
+        let sessionsByID = Dictionary(uniqueKeysWithValues: canonicalSessions.map { ($0.id, $0) })
+        var changed = false
+
+        for (directory, var state) in workspaceSessionsByDirectory {
+            var nextSessions = state.sessions
+            for index in nextSessions.indices {
+                guard let canonical = sessionsByID[nextSessions[index].id] else { continue }
+                let merged = nextSessions[index].merged(with: canonical)
+                if merged != nextSessions[index] {
+                    nextSessions[index] = merged
+                    changed = true
+                }
+            }
+
+            if changed, nextSessions != state.sessions {
+                state.sessions = nextSessions
+                workspaceSessionsByDirectory[directory] = state
+            }
+        }
+
+        return changed
     }
 
     func ensureWorkspaceStateExists(for directory: String, defaultState: OpenCodeWorkspaceSessionState = OpenCodeWorkspaceSessionState()) {

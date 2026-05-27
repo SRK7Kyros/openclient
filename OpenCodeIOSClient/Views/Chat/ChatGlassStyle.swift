@@ -2,7 +2,7 @@ import SwiftUI
 
 extension View {
     @ViewBuilder
-    func opencodeToolbarGlassID<ID: Hashable & Sendable>(_ id: ID, in namespace: Namespace.ID) -> some View {
+    func opencodeToolbarGlassID<ID: Hashable & Sendable>(_ id: ID?, in namespace: Namespace.ID) -> some View {
         #if os(iOS) || targetEnvironment(macCatalyst)
         if #available(iOS 26.0, *) {
             self.glassEffectID(id, in: namespace)
@@ -11,6 +11,54 @@ extension View {
         }
         #else
         self
+        #endif
+    }
+
+    @ViewBuilder
+    func opencodeMatchedGlassTransition() -> some View {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            self.glassEffectTransition(.matchedGeometry)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func opencodeActionGlass<S: Shape>(clear: Bool = false, tint: Color? = nil, size: CGFloat = 40, in shape: S) -> some View {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            let baseGlass = clear ? Glass.clear : Glass.regular
+            let tintedGlass = tint.map { baseGlass.tint($0) } ?? baseGlass
+
+            self
+                .buttonStyle(.plain)
+                .frame(width: size, height: size)
+                .background(Color.clear, in: shape)
+                .glassEffect(tintedGlass.interactive(), in: shape)
+        } else {
+            self
+                .buttonStyle(.plain)
+                .frame(width: size, height: size)
+                .background(tint ?? .clear, in: shape)
+        }
+        #elseif os(macOS)
+        self
+            .buttonStyle(.plain)
+            .frame(width: size, height: size)
+            .background(tint ?? .clear, in: shape)
+            .overlay {
+                shape
+                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            }
+        #else
+        self
+            .buttonStyle(.plain)
+            .frame(width: size, height: size)
+            .background(tint ?? .clear, in: shape)
         #endif
     }
 

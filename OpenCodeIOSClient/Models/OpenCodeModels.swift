@@ -79,6 +79,27 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
         return directory == "/"
     }
 
+    var defaultGeneratedTitleDisplayName: String? {
+        guard let title else { return nil }
+        if title.range(of: #"^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"#, options: .regularExpression) != nil {
+            return "New session"
+        }
+        if title.range(of: #"^Child session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"#, options: .regularExpression) != nil {
+            return "Child session"
+        }
+        return nil
+    }
+
+    var isDefaultGeneratedTitle: Bool {
+        defaultGeneratedTitleDisplayName != nil
+    }
+
+    func displayTitle(fallback: String = "Untitled Session") -> String {
+        if let defaultGeneratedTitleDisplayName { return defaultGeneratedTitleDisplayName }
+        if let title, !title.isEmpty { return title }
+        return fallback
+    }
+
     func merged(with incoming: OpenCodeSession) -> OpenCodeSession {
         var session = OpenCodeSession(
             id: incoming.id,
@@ -652,6 +673,42 @@ struct OpenCodeMessageModelReference: Codable, Hashable, Sendable {
     let providerID: String
     let modelID: String
     let variant: String?
+
+    enum CodingKeys: String, CodingKey {
+        case providerID
+        case modelID
+        case id
+        case variant
+    }
+
+    init(providerID: String, modelID: String, variant: String?) {
+        self.providerID = providerID
+        self.modelID = modelID
+        self.variant = variant
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        providerID = try container.decode(String.self, forKey: .providerID)
+        if let modelID = try container.decodeIfPresent(String.self, forKey: .modelID) {
+            self.modelID = modelID
+        } else if let id = try container.decodeIfPresent(String.self, forKey: .id) {
+            modelID = id
+        } else {
+            throw DecodingError.keyNotFound(
+                CodingKeys.modelID,
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Expected modelID or id")
+            )
+        }
+        variant = try container.decodeIfPresent(String.self, forKey: .variant)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(providerID, forKey: .providerID)
+        try container.encode(modelID, forKey: .modelID)
+        try container.encodeIfPresent(variant, forKey: .variant)
+    }
 }
 
 struct OpenCodeMessageTime: Codable, Hashable, Sendable {

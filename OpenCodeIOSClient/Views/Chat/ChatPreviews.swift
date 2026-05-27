@@ -47,9 +47,10 @@ private struct QuestionPanelPreviewHost: View {
 private struct MessageComposerPreviewHost: View {
     @State private var draftStore = MessageComposerDraftStore(text: "Can you tighten the vertical rhythm in this screen?")
     @State private var isAccessoryMenuOpen = false
+    @Namespace private var glassNamespace
 
     var body: some View {
-        MessageComposer(draftStore: draftStore, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, mentionableAgents: OpenCodePreviewData.agents.filter { $0.mode != "primary" }, pinnedCommands: Array(OpenCodePreviewData.commands.prefix(2)), pinnedCommandNames: Set(OpenCodePreviewData.commands.prefix(2).map(\.name)), attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onFocusChange: { _ in }, onTextChange: { _ in }, onAgentMentionsChange: { _ in }, onHeightChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onPinCommand: { _ in }, onUnpinCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in })
+        MessageComposer(draftStore: draftStore, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, mentionableAgents: OpenCodePreviewData.agents.filter { $0.mode != "primary" }, pinnedCommands: Array(OpenCodePreviewData.commands.prefix(2)), pinnedCommandNames: Set(OpenCodePreviewData.commands.prefix(2).map(\.name)), attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onFocusChange: { _ in }, onTextChange: { _ in }, onAgentMentionsChange: { _ in }, onHeightChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onPinCommand: { _ in }, onUnpinCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in }, glassNamespace: glassNamespace)
             .padding()
             .background(OpenCodePlatformColor.groupedBackground)
     }

@@ -16,6 +16,8 @@ struct SessionRow: View, Equatable {
     var hasLiveActivity = false
     var hasDraft = false
     var hasPermissionRequest = false
+    var displayTitle: String? = nil
+    var shimmersTitle = false
 
     nonisolated static func == (lhs: SessionRow, rhs: SessionRow) -> Bool {
         lhs.session == rhs.session
@@ -28,6 +30,12 @@ struct SessionRow: View, Equatable {
             && lhs.hasLiveActivity == rhs.hasLiveActivity
             && lhs.hasDraft == rhs.hasDraft
             && lhs.hasPermissionRequest == rhs.hasPermissionRequest
+            && lhs.displayTitle == rhs.displayTitle
+            && lhs.shimmersTitle == rhs.shimmersTitle
+    }
+
+    private var titleText: String {
+        displayTitle ?? session.displayTitle()
     }
 
     var body: some View {
@@ -56,7 +64,7 @@ struct SessionRow: View, Equatable {
 
     private var regularContent: some View {
         HStack(spacing: 12) {
-            SessionAvatar(title: session.title ?? "Untitled Session")
+            SessionAvatar(title: titleText)
 
             VStack(alignment: .leading, spacing: 3) {
                 if let workspaceOverline, !workspaceOverline.isEmpty {
@@ -115,24 +123,17 @@ struct SessionRow: View, Equatable {
                 }
             }
 
-            SessionAvatar(title: session.title ?? "Untitled Session")
+            SessionAvatar(title: titleText)
                 .frame(maxWidth: .infinity)
 
-            Text(session.title ?? "Untitled Session")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+            ShimmeringSessionTitle(text: titleText, active: shimmersTitle, font: .subheadline.weight(.medium), lineLimit: 2, alignment: .center)
                 .frame(maxWidth: .infinity)
         }
     }
 
     private var titleLine: some View {
         Group {
-            Text(session.title ?? "Untitled Session")
-                .font(.body.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            ShimmeringSessionTitle(text: titleText, active: shimmersTitle, font: .body.weight(.medium), lineLimit: 1)
 
             if isBusy {
                 Circle()
@@ -169,5 +170,57 @@ struct SessionRow: View, Equatable {
 
     private var rowBorder: Color {
         isSelected ? Color.blue.opacity(0.28) : Color.primary.opacity(0.06)
+    }
+}
+
+private struct ShimmeringSessionTitle: View {
+    let text: String
+    let active: Bool
+    let font: Font
+    let lineLimit: Int
+    var alignment: TextAlignment = .leading
+
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(active ? Color.primary.opacity(0.72) : Color.primary)
+            .lineLimit(lineLimit)
+            .multilineTextAlignment(alignment)
+            .overlay {
+                if active {
+                    GeometryReader { geometry in
+                        LinearGradient(
+                            colors: [Color.clear, Color.white.opacity(0.85), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .frame(width: max(geometry.size.width * 0.8, 36))
+                        .offset(x: geometry.size.width * phase)
+                        .blendMode(.plusLighter)
+                    }
+                    .mask(
+                        Text(text)
+                            .font(font)
+                            .lineLimit(lineLimit)
+                            .multilineTextAlignment(alignment)
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+            .onAppear { updateAnimation(active: active) }
+            .onChange(of: active) { _, isActive in updateAnimation(active: isActive) }
+    }
+
+    private func updateAnimation(active: Bool) {
+        guard active else {
+            phase = -1
+            return
+        }
+        phase = -1
+        withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) {
+            phase = 1.35
+        }
     }
 }

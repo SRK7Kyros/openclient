@@ -455,6 +455,7 @@ struct ProjectNewChatSheet: View {
     @State private var hasInitializedComposerSettings = false
     @State private var chatTitleDraft = ""
     @State private var isEditingChatTitle = false
+    @State private var startingSnapshot: NewSessionStartingSnapshot?
     @FocusState private var isChatTitleFocused: Bool
 
     init(viewModel: AppViewModel, request: NewProjectChatSheetRequest, onChatStarted: @escaping () -> Void) {
@@ -465,6 +466,7 @@ struct ProjectNewChatSheet: View {
         _selectedAgentName = State(initialValue: request.composerSelection?.agentName)
         _selectedModelReference = State(initialValue: request.composerSelection?.modelReference)
         _selectedReasoningVariant = State(initialValue: request.composerSelection?.reasoningVariant)
+        _attachments = State(initialValue: request.initialContent?.attachments ?? [])
     }
 
     var body: some View {
@@ -476,34 +478,36 @@ struct ProjectNewChatSheet: View {
 
                 newChatBody
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, startingSnapshot == nil ? 96 : 0)
 
-                VStack(spacing: 6) {
-                    if !attachments.isEmpty {
-                        ComposerAccessoryArea(
-                            todos: [],
-                            attachments: attachments,
-                            expansion: $composerAccessoryExpansion,
-                            onTapTodo: {},
-                            onTapAttachment: { attachment in
-                                selectedAttachmentPreview = attachment
-                            },
-                            onRemoveAttachment: removeAttachment
+                if startingSnapshot == nil {
+                    VStack(spacing: 6) {
+                        if !attachments.isEmpty {
+                            ComposerAccessoryArea(
+                                todos: [],
+                                attachments: attachments,
+                                expansion: $composerAccessoryExpansion,
+                                onTapTodo: {},
+                                onTapAttachment: { attachment in
+                                    selectedAttachmentPreview = attachment
+                                },
+                                onRemoveAttachment: removeAttachment
+                            )
+                            .padding(.horizontal, 16)
+                        }
+
+                        NewChatInputBar(
+                            draftStore: draftStore,
+                            isAccessoryMenuOpen: $isComposerMenuOpen,
+                            attachmentCount: attachments.count,
+                            isSending: isStartingChat || viewModel.isLoading,
+                            canSend: selectedProject != nil,
+                            autoFocus: !isEditingChatTitle && !isChatTitleFocused,
+                            usesKeyboardBottomPadding: isEditingChatTitle || isChatTitleFocused,
+                            onSend: startChat,
+                            onAddAttachments: addAttachments
                         )
-                        .padding(.horizontal, 16)
                     }
-
-                    NewChatInputBar(
-                        draftStore: draftStore,
-                        isAccessoryMenuOpen: $isComposerMenuOpen,
-                        attachmentCount: attachments.count,
-                        isSending: isStartingChat || viewModel.isLoading,
-                        canSend: selectedProject != nil,
-                        autoFocus: !isEditingChatTitle && !isChatTitleFocused,
-                        usesKeyboardBottomPadding: isEditingChatTitle || isChatTitleFocused,
-                        onSend: startChat,
-                        onAddAttachments: addAttachments
-                    )
                 }
             }
             .sheet(item: $selectedAttachmentPreview) { attachment in
@@ -521,6 +525,7 @@ struct ProjectNewChatSheet: View {
             .toolbar {
                 ToolbarItem(placement: .opencodeLeading) {
                     Button("Cancel") { dismissSheet() }
+                        .disabled(startingSnapshot != nil)
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -530,6 +535,11 @@ struct ProjectNewChatSheet: View {
         }
         .presentationDetents([.large])
         .onAppear {
+            if let initialContent = request.initialContent,
+               !initialContent.text.isEmpty,
+               draftStore.text.isEmpty {
+                draftStore.text = initialContent.text
+            }
             initializeSelectionIfNeeded()
             initializeComposerSettingsIfNeeded()
         }
@@ -554,7 +564,10 @@ struct ProjectNewChatSheet: View {
 
     @ViewBuilder
     private var newChatBody: some View {
-        if viewModel.projects.isEmpty {
+        if let startingSnapshot {
+            NewSessionStartingPreview(snapshot: startingSnapshot)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.projects.isEmpty {
             ContentUnavailableView("No Projects", systemImage: "folder", description: Text("Refresh projects before starting a new chat."))
                 .frame(maxWidth: .infinity)
         } else {
@@ -1058,15 +1071,38 @@ struct ProjectNewChatSheet: View {
         let prompt = draftStore.text
         let agentMentions = draftStore.agentMentions
         let currentAttachments = attachments
+        let messageID = OpenCodeIdentifier.message()
+        let partID = OpenCodeIdentifier.part()
+
+        withAnimation(.snappy(duration: 0.28, extraBounce: 0.02)) {
+            startingSnapshot = NewSessionStartingSnapshot(
+                title: visibleChatTitle,
+                subtitle: startingPreviewSubtitle(for: selectedProject),
+                promptPreview: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+                attachmentCount: currentAttachments.count,
+                phase: workspaceSelection == .createNew ? .creatingWorktree : .creatingSession
+            )
+            composerAccessoryExpansion = .collapsed
+            isComposerMenuOpen = false
+        }
 
         Task {
             isStartingChat = true
             defer { isStartingChat = false }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(700))
+                guard isStartingChat, startingSnapshot != nil else { return }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    startingSnapshot?.phase = .sendingMessage
+                }
+            }
             let didStart = await viewModel.startNewProjectChat(
                 title: submittedChatTitle,
                 prompt: prompt,
                 agentMentions: agentMentions,
                 attachments: currentAttachments,
+                messageID: messageID,
+                partID: partID,
                 composerSelection: NewProjectChatComposerSelection(
                     agentName: selectedAgentName,
                     modelReference: selectedModelReference,
@@ -1078,12 +1114,25 @@ struct ProjectNewChatSheet: View {
                 newWorkspaceName: newWorkspaceName
             )
             if didStart {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    startingSnapshot?.phase = .waitingForOpenCode
+                }
                 dismissSheet()
                 onChatStarted()
             } else if viewModel.paywallReason != nil {
                 dismissSheet()
+            } else {
+                withAnimation(.snappy(duration: 0.22, extraBounce: 0.02)) {
+                    startingSnapshot = nil
+                }
             }
         }
+    }
+
+    private func startingPreviewSubtitle(for project: OpenCodeProject) -> String {
+        guard project.id != "global" else { return "Global" }
+        let workspace = workspaceSelectionTitle
+        return "\(projectTitle(project)) • \(workspace)"
     }
 
     private var workspaceDirectoryForSelection: String? {
@@ -1155,6 +1204,7 @@ private struct NewChatInputBar: View {
     @ObservedObject var draftStore: MessageComposerDraftStore
     @Binding var isAccessoryMenuOpen: Bool
     @State private var isComposerFocused = false
+    @Namespace private var glassNamespace
     let attachmentCount: Int
     let isSending: Bool
     let canSend: Bool
@@ -1197,6 +1247,7 @@ private struct NewChatInputBar: View {
             onLoadMCP: {},
             onToggleMCP: { _ in },
             onAddAttachments: onAddAttachments,
+            glassNamespace: glassNamespace,
             allowsTextTools: false,
             allowsSessionTools: false,
             autoFocus: autoFocus

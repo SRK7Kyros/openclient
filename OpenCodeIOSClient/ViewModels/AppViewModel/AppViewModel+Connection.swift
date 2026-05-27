@@ -445,6 +445,7 @@ extension AppViewModel {
     func loadRecentServerConfigs() -> [OpenCodeServerConfig] {
         if let data = UserDefaults.standard.data(forKey: StorageKey.recentServerConfigs),
            let savedServers = loadSavedServers(from: data) {
+            OpenClientSharePayloadStore.mirrorRecentServersData(data)
             return Array(savedServers.prefix(Self.maxRecentServerCount)).map { savedServer in
                 let password = passwordStore.loadPassword(for: savedServer.recentServerID) ?? ""
                 return savedServer.serverConfig(password: password)
@@ -477,6 +478,7 @@ extension AppViewModel {
         // Rewrite the cleaned payload so a single bad entry does not keep wiping recents on launch.
         if let cleanedData = try? JSONEncoder().encode(recoveredServers) {
             UserDefaults.standard.set(cleanedData, forKey: StorageKey.recentServerConfigs)
+            OpenClientSharePayloadStore.mirrorRecentServersData(cleanedData)
         }
 
         return recoveredServers
@@ -506,6 +508,7 @@ extension AppViewModel {
 
         if recentServerConfigs.isEmpty {
             UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
+            OpenClientSharePayloadStore.mirrorRecentServersData(nil)
             passwordStore.deletePassword(for: serverConfig.recentServerID)
             return
         }
@@ -518,6 +521,7 @@ extension AppViewModel {
         }
 
         UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
+        OpenClientSharePayloadStore.mirrorRecentServersData(recentData)
     }
 
     private func upsertSavedServer(config: OpenCodeServerConfig, replacingServerID originalServerID: String? = nil) {
@@ -560,6 +564,7 @@ extension AppViewModel {
         }
 
         UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
+        OpenClientSharePayloadStore.mirrorRecentServersData(recentData)
     }
 
     func configureUITestEnvironmentIfNeeded() -> Bool {
@@ -569,6 +574,7 @@ extension AppViewModel {
         }
 
         UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
+        OpenClientSharePayloadStore.mirrorRecentServersData(nil)
         config.baseURL = environment["OPENCODE_UI_TEST_BASE_URL"] ?? "http://127.0.0.1:4096"
         config.username = environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"
         config.password = environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""

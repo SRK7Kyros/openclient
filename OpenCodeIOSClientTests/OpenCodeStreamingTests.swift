@@ -346,6 +346,36 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(part.type, "text")
     }
 
+    func testManagedEventDecodeBuildsSessionUpdatedWhenModelUsesIDAlias() {
+        let result = OpenCodeEventManager.decodeManagedEvent(
+            from: #"{"directory":"/tmp/project","project":"proj_1","payload":{"id":"evt_title","type":"session.updated","properties":{"sessionID":"ses_test","info":{"id":"ses_test","slug":"curious-mountain","projectID":"proj_1","directory":"/tmp/project","path":"","title":"Whitelabeling app plan","agent":"plan","model":{"id":"gpt-5.5","providerID":"openai","variant":"medium"},"version":"1.15.6","summary":{"additions":0,"deletions":0,"files":0},"cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1779843899535,"updated":1779843902424}}}}}"#
+        )
+
+        guard case let .event(managed) = result else {
+            return XCTFail("Expected managed session.updated event")
+        }
+        XCTAssertEqual(managed.directory, "/tmp/project")
+        XCTAssertEqual(managed.envelope.type, "session.updated")
+        guard case let .sessionUpdated(session) = managed.typed else {
+            return XCTFail("Expected sessionUpdated typed event")
+        }
+
+        XCTAssertEqual(session.id, "ses_test")
+        XCTAssertEqual(session.title, "Whitelabeling app plan")
+        XCTAssertEqual(session.directory, "/tmp/project")
+    }
+
+    func testMessageModelReferenceDecodesIDAliasAsModelID() throws {
+        let model = try JSONDecoder().decode(
+            OpenCodeMessageModelReference.self,
+            from: Data(#"{"id":"gpt-5.5","providerID":"openai","variant":"medium"}"#.utf8)
+        )
+
+        XCTAssertEqual(model.providerID, "openai")
+        XCTAssertEqual(model.modelID, "gpt-5.5")
+        XCTAssertEqual(model.variant, "medium")
+    }
+
     func testToolLikeTextPartUpdatedNormalizesToToolPart() throws {
         let payload = try decodeEvent(
             #"{"type":"message.part.updated","properties":{"sessionID":"ses_test","messageID":"msg_assistant","partID":"prt_tool","part":{"id":"prt_tool","messageID":"msg_assistant","sessionID":"ses_test","type":"text","tool":"bash","callID":"call_1","text":"bash"}}}"#

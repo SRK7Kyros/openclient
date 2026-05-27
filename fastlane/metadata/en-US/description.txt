@@ -1,14 +1,42 @@
-OpenClient is a native iPhone client for connecting to your own OpenCode server.
+OpenClient brings the deepest native iPhone and iPad integration available for OpenCode to your own self-hosted server.
 
-Keep your coding sessions within reach when you are away from your desk. Browse projects, resume chats, answer permission and question prompts, and follow ongoing activity from a fast native interface built for iPhone.
+Keep coding sessions within reach when you are away from your desk. Browse projects, resume chats, review tool activity, answer permission and question prompts, and follow ongoing work from a fast native interface built around the way iOS and iPadOS actually work.
 
-OpenClient includes:
+OpenClient is designed for developers who already run OpenCode and want more than a remote chat window. It is a mobile command center for active agent work, long-running tasks, quick follow-ups, and remote check-ins.
+
+Core OpenCode features:
 
 - Connect to your own self-hosted OpenCode server
-- Browse projects and sessions
-- Continue chats from a native mobile UI
-- Respond to permission and question prompts
-- Follow active work with Live Activities
-- Reconnect quickly to saved servers
+- Save recent servers and reconnect quickly
+- Browse projects, workspaces, and session history
+- Open existing sessions or start new ones
+- Continue chat conversations from iPhone or iPad
+- Stream assistant responses and tool activity live
+- Review reasoning, messages, command output, and file references
+- Send text prompts and attach supported files from iOS
+- Sketch ideas, UI notes, and architecture diagrams with the built-in Excalidraw drawing board
+- Dictate prompts by voice when typing is not convenient
+- Use commands, agent mentions, model choices, and session options when available from your server
+- Track session-local todos while work is in progress
+- Respond to permission requests without returning to your computer
+- Answer multiple-choice and custom question prompts in a first-party UI
+- View and manage MCP server status when supported by your OpenCode setup
+- Inspect project files and source-control context from the app
 
-OpenClient is designed for private, self-hosted use. You choose which server it connects to, and your session data stays tied to your own OpenCode setup.
+iOS and iPadOS integrations:
+
+- Native SwiftUI interface optimized for iPhone and iPad
+- Multi-column iPad layout for projects, sessions, and chat
+- Live Activities for following active sessions from the Lock Screen and Dynamic Island
+- Home Screen widgets for recent and pinned sessions
+- Shortcut and control widgets for faster access to common OpenClient actions
+- Secure Keychain storage for saved server passwords
+- App-group sharing for widget snapshots without storing your server password in widget data
+- Native file picker support for adding compatible attachments
+- Local Excalidraw-powered sketch attachments exported directly into chat
+- Voice dictation-friendly composer controls
+- Deep links from widgets back into the right server, project, and session
+
+Privacy and self-hosting:
+
+OpenClient is built for private, self-hosted use. You choose which OpenCode server it connects to, and your session data stays tied to your own OpenCode setup. Server credentials are stored securely on device, and OpenClient does not provide or proxy an OpenCode backend.

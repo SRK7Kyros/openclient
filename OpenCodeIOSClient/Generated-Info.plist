@@ -38,8 +38,12 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenClient uses the microphone to dictate chat messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>OpenClient uses your photo library to show recent photos and attach selected images to messages.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>OpenClient uses speech recognition to transcribe dictated chat messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>OpenCodeSharedKeychainAccessGroup</key>
