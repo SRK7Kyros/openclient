@@ -95,8 +95,21 @@ actor OpenCodeManagedEventBatcher {
     }
 }
 
+private actor OpenCodeStreamHeartbeat {
+    private var lastEventAt = Date.now
+
+    func markEvent() {
+        lastEventAt = .now
+    }
+
+    func isTimedOut(timeout: TimeInterval) -> Bool {
+        Date.now.timeIntervalSince(lastEventAt) >= timeout
+    }
+}
+
 @MainActor
 final class OpenCodeEventManager {
+    private static let heartbeatTimeoutSeconds: TimeInterval = 15
     private var task: Task<Void, Never>?
 
     nonisolated static func decodeManagedEvent(from rawData: String) -> OpenCodeManagedEventDecodeResult {
@@ -254,20 +267,37 @@ final class OpenCodeEventManager {
             }
 
             let startedAt = Date.now
-            await OpenCodeEventStream.consume(
-                client: client,
-                url: url,
-                onStatus: onStatus,
-                onRawLine: onRawLine,
-                onEvent: { event in
-                    switch Self.decodeManagedEvent(from: event.data) {
-                    case let .event(managed):
-                        await batcher.enqueue(managed)
-                    case let .dropped(message):
-                        await onDroppedEvent?(message)
+            let heartbeat = OpenCodeStreamHeartbeat()
+            let streamTask = Task {
+                await OpenCodeEventStream.consume(
+                    client: client,
+                    url: url,
+                    onStatus: onStatus,
+                    onRawLine: onRawLine,
+                    onEvent: { event in
+                        await heartbeat.markEvent()
+                        switch Self.decodeManagedEvent(from: event.data) {
+                        case let .event(managed):
+                            await batcher.enqueue(managed)
+                        case let .dropped(message):
+                            await onDroppedEvent?(message)
+                        }
                     }
+                )
+            }
+            let heartbeatTask = Task { [streamTask] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(Int(Self.heartbeatTimeoutSeconds)))
+                    guard !Task.isCancelled else { return }
+                    guard await heartbeat.isTimedOut(timeout: Self.heartbeatTimeoutSeconds) else { continue }
+                    await onStatus("stream heartbeat timeout")
+                    streamTask.cancel()
+                    return
                 }
-            )
+            }
+
+            await streamTask.value
+            heartbeatTask.cancel()
 
             await batcher.flush()
 

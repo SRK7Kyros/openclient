@@ -346,6 +346,24 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(part.type, "text")
     }
 
+    func testManagedEventDecodeKeepsPartStateWhenPartUpdatedHasNumericEventTime() throws {
+        let raw = #"{"directory":"/tmp/project","payload":{"type":"message.part.updated","properties":{"sessionID":"ses_test","time":1779843902424,"part":{"id":"prt_tool","messageID":"msg_assistant","sessionID":"ses_test","type":"tool","tool":"bash","callID":"call_1","state":{"status":"completed","title":"Run build","output":"done"}}}}}"#
+
+        guard case let .event(managed) = OpenCodeEventManager.decodeManagedEvent(from: raw) else {
+            return XCTFail("Expected managed event")
+        }
+        guard case let .messagePartUpdated(part) = managed.typed else {
+            return XCTFail("Expected message.part.updated")
+        }
+
+        XCTAssertEqual(managed.directory, "/tmp/project")
+        XCTAssertEqual(part.id, "prt_tool")
+        XCTAssertEqual(part.messageID, "msg_assistant")
+        XCTAssertEqual(part.sessionID, "ses_test")
+        XCTAssertEqual(part.type, "tool")
+        XCTAssertEqual(part.state?.output, "done")
+    }
+
     func testManagedEventDecodeBuildsSessionUpdatedWhenModelUsesIDAlias() {
         let result = OpenCodeEventManager.decodeManagedEvent(
             from: #"{"directory":"/tmp/project","project":"proj_1","payload":{"id":"evt_title","type":"session.updated","properties":{"sessionID":"ses_test","info":{"id":"ses_test","slug":"curious-mountain","projectID":"proj_1","directory":"/tmp/project","path":"","title":"Whitelabeling app plan","agent":"plan","model":{"id":"gpt-5.5","providerID":"openai","variant":"medium"},"version":"1.15.6","summary":{"additions":0,"deletions":0,"files":0},"cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1779843899535,"updated":1779843902424}}}}}"#

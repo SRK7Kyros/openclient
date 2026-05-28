@@ -2535,6 +2535,63 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case version
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        worktree = Self.decode(String.self, from: container, forKey: .worktree)
+        vcs = Self.decode(String.self, from: container, forKey: .vcs)
+        name = Self.decode(String.self, from: container, forKey: .name)
+        sandboxes = Self.decode([String].self, from: container, forKey: .sandboxes)
+        icon = Self.decode(OpenCodeProject.Icon.self, from: container, forKey: .icon)
+        time = Self.decode(OpenCodeProject.Time.self, from: container, forKey: .time)
+        sessionID = Self.decode(String.self, from: container, forKey: .sessionID)
+        info = Self.decode(OpenCodeEventInfo.self, from: container, forKey: .info)
+        part = Self.decode(OpenCodePart.self, from: container, forKey: .part)
+        state = Self.decode(OpenCodeToolState.self, from: container, forKey: .state)
+        text = Self.decode(String.self, from: container, forKey: .text)
+        mime = Self.decode(String.self, from: container, forKey: .mime)
+        filename = Self.decode(String.self, from: container, forKey: .filename)
+        url = Self.decode(String.self, from: container, forKey: .url)
+        source = Self.decode(OpenCodePartSource.self, from: container, forKey: .source)
+        reason = Self.decode(String.self, from: container, forKey: .reason)
+        status = Self.decode(OpenCodeSessionStatus.self, from: container, forKey: .status)
+        todos = Self.decode([OpenCodeTodo].self, from: container, forKey: .todos)
+        diff = Self.decode([OpenCodeSnapshotFileDiff].self, from: container, forKey: .diff)
+        messageID = Self.decode(String.self, from: container, forKey: .messageID)
+        partID = Self.decode(String.self, from: container, forKey: .partID)
+        field = Self.decode(String.self, from: container, forKey: .field)
+        delta = Self.decode(String.self, from: container, forKey: .delta)
+        id = Self.decode(String.self, from: container, forKey: .id)
+        permission = Self.decode(String.self, from: container, forKey: .permission)
+        permissionType = Self.decode(String.self, from: container, forKey: .permissionType)
+        patterns = Self.decode([String].self, from: container, forKey: .patterns)
+        pattern = Self.decode(OpenCodePermissionPattern.self, from: container, forKey: .pattern)
+        always = Self.decode([String].self, from: container, forKey: .always)
+        tool = Self.decode(OpenCodePermissionTool.self, from: container, forKey: .tool)
+        callID = Self.decode(String.self, from: container, forKey: .callID)
+        title = Self.decode(String.self, from: container, forKey: .title)
+        metadata = Self.decode([String: OpenCodeJSONValue].self, from: container, forKey: .metadata)
+        questions = Self.decode([OpenCodeQuestion].self, from: container, forKey: .questions)
+        requestID = Self.decode(String.self, from: container, forKey: .requestID)
+        permissionID = Self.decode(String.self, from: container, forKey: .permissionID)
+        response = Self.decode(String.self, from: container, forKey: .response)
+        reply = Self.decode(String.self, from: container, forKey: .reply)
+        message = Self.decode(String.self, from: container, forKey: .message)
+        error = Self.decode(OpenCodeSessionErrorPayload.self, from: container, forKey: .error)
+        branch = Self.decode(String.self, from: container, forKey: .branch)
+        file = Self.decode(String.self, from: container, forKey: .file)
+        directory = Self.decode(String.self, from: container, forKey: .directory)
+        version = Self.decode(String.self, from: container, forKey: .version)
+    }
+
+    private static func decode<T: Decodable>(
+        _ type: T.Type,
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> T? {
+        try? container.decodeIfPresent(type, forKey: key)
+    }
+
     func reconstructedPartFromFlatEvent() -> OpenCodePart? {
         let toolName = tool?.name
         let inferredType: String?
