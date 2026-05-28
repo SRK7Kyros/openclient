@@ -1900,11 +1900,11 @@ struct ChatView: View {
     }
 
     private func findPlaceGame(for sessionID: String) -> FindPlaceGameSession? {
-        funAndGamesStore.findPlaceSessionsByID[sessionID]
+        funAndGamesStore.findPlaceGame(for: sessionID)
     }
 
     private func findBugGame(for sessionID: String) -> FindBugGameSession? {
-        funAndGamesStore.findBugSessionsByID[sessionID]
+        funAndGamesStore.findBugGame(for: sessionID)
     }
 
     private func isFunAndGamesSession(_ sessionID: String) -> Bool {
@@ -3207,8 +3207,38 @@ struct ChatView: View {
         largeMessageChunkCache.prune(keeping: displayedMessageIDs)
         let findPlaceGame = findPlaceGame(for: sessionID)
         let findBugGame = findBugGame(for: sessionID)
+
+        func isGameSetupMessage(_ message: OpenCodeMessageEnvelope) -> Bool {
+            (findPlaceGame != nil && message.containsText(FindPlaceGame.setupMarker)) ||
+                (findBugGame != nil && message.containsText(FindBugGame.setupMarker))
+        }
+
+        let hiddenGameSetupMessageIDs = Set(messages.compactMap { message in
+            isGameSetupMessage(message) ? message.id : nil
+        })
+
+        func gameCompletionDisplayItem(for message: OpenCodeMessageEnvelope) -> ChatDisplayItem? {
+            guard message.isAssistantMessage else { return nil }
+
+            if message.containsText(FindPlaceGame.winMarker), let game = findPlaceGame {
+                return .findPlaceReveal(game.city)
+            }
+
+            if message.containsText(FindBugGame.winMarker), findBugGame != nil {
+                return .findBugSolved
+            }
+
+            return nil
+        }
+
+        let gameCompletionMessageIDs = Set(messages.compactMap { message in
+            gameCompletionDisplayItem(for: message) == nil ? nil : message.id
+        })
         let assistantChildrenByParentID = Dictionary(grouping: messages.filter { message in
-            (message.info.role ?? "").lowercased() == "assistant" && message.info.parentID?.isEmpty == false
+            (message.info.role ?? "").lowercased() == "assistant" &&
+                message.info.parentID?.isEmpty == false &&
+                !gameCompletionMessageIDs.contains(message.id) &&
+                !hiddenGameSetupMessageIDs.contains(message.info.parentID ?? "")
         }) { message in
             message.info.parentID ?? ""
         }
@@ -3225,21 +3255,12 @@ struct ChatView: View {
             }
 
             if findPlaceGame != nil || findBugGame != nil {
-                if findPlaceGame != nil, message.containsText(FindPlaceGame.setupMarker) {
+                if hiddenGameSetupMessageIDs.contains(message.id) {
                     continue
                 }
 
-                if findBugGame != nil, message.containsText(FindBugGame.setupMarker) {
-                    continue
-                }
-
-                if message.isAssistantMessage, message.containsText(FindPlaceGame.winMarker), let game = findPlaceGame {
-                    appendUnique(.findPlaceReveal(game.city))
-                    continue
-                }
-
-                if message.isAssistantMessage, message.containsText(FindBugGame.winMarker), findBugGame != nil {
-                    appendUnique(.findBugSolved)
+                if let gameCompletionItem = gameCompletionDisplayItem(for: message) {
+                    appendUnique(gameCompletionItem)
                     continue
                 }
             }

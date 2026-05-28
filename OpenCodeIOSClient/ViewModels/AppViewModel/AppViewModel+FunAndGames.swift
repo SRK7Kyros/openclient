@@ -59,7 +59,7 @@ extension AppViewModel {
             upsertVisibleSession(session)
 
             selectedModelsBySessionID[session.id] = reference
-            findPlaceSessionsByID[session.id] = FindPlaceGameSession(sessionID: session.id, city: city, weather: weather)
+            funAndGamesStore.recordFindPlaceSession(FindPlaceGameSession(sessionID: session.id, city: city, weather: weather))
             withAnimation(opencodeSelectionAnimation) {
                 selectedProjectContentTab = .sessions
                 selectedSession = session
@@ -114,7 +114,7 @@ extension AppViewModel {
             upsertVisibleSession(session)
 
             selectedModelsBySessionID[session.id] = reference
-            findBugSessionsByID[session.id] = FindBugGameSession(sessionID: session.id, language: language)
+            funAndGamesStore.recordFindBugSession(FindBugGameSession(sessionID: session.id, language: language))
             pendingFindBugLanguage = nil
             withAnimation(opencodeSelectionAnimation) {
                 selectedProjectContentTab = .sessions
@@ -140,19 +140,19 @@ extension AppViewModel {
     }
 
     func findPlaceGame(for sessionID: String) -> FindPlaceGameSession? {
-        if let game = findPlaceSessionsByID[sessionID] {
+        if let game = funAndGamesStore.findPlaceGame(for: sessionID) {
             return game
         }
 
-        return inferredFindPlaceGame(for: sessionID)
+        return FunAndGamesStore.inferredFindPlaceGame(in: gameInferenceMessages(for: sessionID), sessionID: sessionID)
     }
 
     func findBugGame(for sessionID: String) -> FindBugGameSession? {
-        if let game = findBugSessionsByID[sessionID] {
+        if let game = funAndGamesStore.findBugGame(for: sessionID) {
             return game
         }
 
-        return inferredFindBugGame(for: sessionID)
+        return FunAndGamesStore.inferredFindBugGame(in: gameInferenceMessages(for: sessionID), sessionID: sessionID)
     }
 
     func isFunAndGamesSession(_ sessionID: String) -> Bool {
@@ -167,84 +167,38 @@ extension AppViewModel {
         !isFunAndGamesSession(sessionID)
     }
 
-    private func inferredFindPlaceGame(for sessionID: String) -> FindPlaceGameSession? {
-        for message in messages where message.info.sessionID == sessionID || selectedSession?.id == sessionID {
-            for part in message.parts {
-                guard let text = part.text, text.contains(FindPlaceGame.setupMarker) else { continue }
-                guard let city = findPlaceCity(fromSetupPrompt: text) else { continue }
-                return FindPlaceGameSession(sessionID: sessionID, city: city, weather: findPlaceWeather(fromSetupPrompt: text))
-            }
+    @discardableResult
+    func inferFunAndGames(from messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) -> Bool {
+        let changed = funAndGamesStore.inferGames(from: messages, forSessionID: sessionID)
+        if changed {
+            objectWillChange.send()
         }
-
-        return nil
+        return changed
     }
 
-    private func inferredFindBugGame(for sessionID: String) -> FindBugGameSession? {
-        for message in messages where message.info.sessionID == sessionID || selectedSession?.id == sessionID {
-            for part in message.parts {
-                guard let text = part.text, text.contains(FindBugGame.setupMarker) else { continue }
-                guard let language = findBugLanguage(fromSetupPrompt: text) else { continue }
-                return FindBugGameSession(sessionID: sessionID, language: language)
-            }
+    @discardableResult
+    func inferFunAndGames(from event: OpenCodeTypedEvent) -> Bool {
+        let changed = funAndGamesStore.inferGame(from: event)
+        if changed {
+            objectWillChange.send()
         }
-
-        return nil
+        return changed
     }
 
-    private func findBugLanguage(fromSetupPrompt text: String) -> FindBugGameLanguage? {
-        let lines = text.components(separatedBy: .newlines)
-        guard let languageLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Markdown fence language:") }) else {
-            return nil
-        }
-        let id = languageLine
-            .replacingOccurrences(of: "Markdown fence language:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return FindBugGame.supportedLanguages.first { $0.id == id } ?? FindBugGameLanguage(id: id, title: id.capitalized)
-    }
-
-    private func findPlaceCity(fromSetupPrompt text: String) -> FindPlaceGameCity? {
-        let lines = text.components(separatedBy: .newlines)
-        let cityLine = lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Secret city:") }
-        let coordinatesLine = lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Coordinates:") }
-
-        guard let cityLine, let coordinatesLine else { return nil }
-
-        let cityValue = cityLine
-            .replacingOccurrences(of: "Secret city:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let cityParts = cityValue.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard cityParts.count == 2 else { return nil }
-
-        let coordinateValue = coordinatesLine
-            .replacingOccurrences(of: "Coordinates:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let coordinateParts = coordinateValue.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard coordinateParts.count == 2,
-              let latitude = Double(coordinateParts[0]),
-              let longitude = Double(coordinateParts[1]) else {
-            return nil
+    private func gameInferenceMessages(for sessionID: String) -> [OpenCodeMessageEnvelope] {
+        if selectedSession?.id == sessionID, !messages.isEmpty {
+            return messages
         }
 
-        return FindPlaceGameCity(name: cityParts[0], country: cityParts[1], latitude: latitude, longitude: longitude)
-    }
-
-    private func findPlaceWeather(fromSetupPrompt text: String) -> FindPlaceWeatherSummary? {
-        let lines = text.components(separatedBy: .newlines)
-        guard let clueLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Current clue:") }) else {
-            return nil
+        let syncedMessages = directoryStore.syncState.messageEnvelopes(forSessionID: sessionID)
+        if !syncedMessages.isEmpty {
+            return syncedMessages
         }
 
-        let clue = clueLine
-            .replacingOccurrences(of: "Current clue:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let diagnosticLine = lines.first { $0.contains("WeatherKit diagnostic:") }
-        let diagnostic = diagnosticLine?
-            .replacingOccurrences(of: "<!--", with: "")
-            .replacingOccurrences(of: "-->", with: "")
-            .replacingOccurrences(of: "WeatherKit diagnostic:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let errorDescription = diagnostic == "success" ? nil : diagnostic
-        let provider = errorDescription == nil && !clue.hasPrefix("Location clue:") ? "WeatherKit" : "Fallback"
-        return FindPlaceWeatherSummary(text: clue, provider: provider, errorDescription: errorDescription)
+        if let cachedMessages = cachedMessagesBySessionID[sessionID], !cachedMessages.isEmpty {
+            return cachedMessages
+        }
+
+        return messages.filter { $0.info.sessionID == sessionID }
     }
 }

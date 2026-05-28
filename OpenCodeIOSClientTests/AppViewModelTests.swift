@@ -117,6 +117,55 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(store.messages.first?.parts.first?.text, "Local response")
     }
 
+    func testPrepareSessionSelectionInfersFindPlaceGameFromCachedMarker() {
+        let viewModel = AppViewModel()
+        let session = makeSession(id: "ses_find_place")
+        let city = FindPlaceGameCity(name: "Reykjavik", country: "Iceland", latitude: 64.1466, longitude: -21.9426)
+        let weather = FindPlaceWeatherSummary(text: "2°C / 36°F, cloudy", provider: "WeatherKit", errorDescription: nil)
+        let setup = FindPlaceGame.starterPrompt(city: city, weather: weather)
+
+        viewModel.cachedMessagesBySessionID[session.id] = [makeMessage(id: "msg_setup", text: setup, sessionID: session.id, role: "user")]
+        viewModel.prepareSessionSelection(session)
+
+        XCTAssertTrue(viewModel.isKnownFunAndGamesSession(session.id))
+        XCTAssertEqual(viewModel.findPlaceSessionsByID[session.id]?.city, city)
+    }
+
+    func testLivePartUpdatedInfersFindBugGameFromMarker() {
+        let viewModel = AppViewModel()
+        let session = makeSession(id: "ses_find_bug")
+        let language = FindBugGameLanguage(id: "swift", title: "Swift")
+        let setup = FindBugGame.starterPrompt(language: language)
+        let part = OpenCodePart(
+            id: "part_setup",
+            messageID: "msg_setup",
+            sessionID: session.id,
+            type: "text",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: setup
+        )
+
+        viewModel.isConnected = true
+        viewModel.allSessions = [session]
+        viewModel.selectedSession = session
+        viewModel.handleManagedEvent(
+            OpenCodeManagedEvent(
+                directory: session.directory ?? "global",
+                envelope: OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(part: part)),
+                typed: .messagePartUpdated(part)
+            )
+        )
+
+        XCTAssertTrue(viewModel.isKnownFunAndGamesSession(session.id))
+        XCTAssertEqual(viewModel.findBugSessionsByID[session.id]?.language, language)
+    }
+
     func testPinnedCommandUnpinRemovesOnlySelectedScope() {
         let store = PinnedCommandStore(storageKey: pinnedCommandTestStorageKey)
         let build = makeCommand("build")

@@ -72,6 +72,7 @@ extension AppViewModel {
 
     func prepareSessionSelection(_ session: OpenCodeSession) {
         preserveCurrentMessageDraftForNavigation()
+        var selectedMessages: [OpenCodeMessageEnvelope] = []
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .sessions
             objectWillChange.send()
@@ -79,9 +80,13 @@ extension AppViewModel {
                 session,
                 cachedMessages: cachedMessagesBySessionID[session.id] ?? []
             )
+            selectedMessages = cachedMessages
             chatStore.beginSelectingSession(cachedMessages: cachedMessages)
             sessionInteractionStore.applySelectedSession(sessionID: session.id, syncState: directoryStore.syncState)
             selectedVCSFile = nil
+        }
+        if !selectedMessages.isEmpty {
+            inferFunAndGames(from: selectedMessages, forSessionID: session.id)
         }
         restoreMessageDraft(for: session)
         streamDirectory = session.directory
@@ -1130,6 +1135,7 @@ extension AppViewModel {
         let isActiveSession = selectedSession?.id == session.id
         chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
         directoryStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
+        inferFunAndGames(from: loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
         appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
         syncComposerSelections(for: session)

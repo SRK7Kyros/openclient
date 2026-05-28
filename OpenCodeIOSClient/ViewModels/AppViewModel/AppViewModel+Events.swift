@@ -270,6 +270,10 @@ extension AppViewModel {
         let currentSelectedSession = selectedSession
         let eventSessionID = managedEventSessionID(for: managed)
 
+        if inferFunAndGames(from: managed.typed) {
+            appendDebugLog("fun games inferred session=\(eventSessionID ?? "nil")")
+        }
+
         updateCachedMessagesForLiveActivityIfNeeded(payload: payload, sessionID: eventSessionID, selectedSessionID: currentSelectedSession?.id)
 
         let application = eventSyncCoordinator.applyDirectoryEvent(managed, to: directoryEventState())
