@@ -47,6 +47,37 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(window.hiddenMessageCount, 0)
     }
 
+    func testTranscriptWindowExpandsToIncludeParentForAssistantChildren() {
+        let sessionID = "ses_test"
+        let parent = message(id: "msg_parent", role: "user", text: "Start", sessionID: sessionID)
+        let children = (0..<60).map { index in
+            message(
+                id: String(format: "msg_child_%02d", index),
+                role: "assistant",
+                text: "Child \(index)",
+                sessionID: sessionID,
+                parentID: parent.id
+            )
+        }
+        let messages = [parent] + children
+
+        let window = OpenCodeChatTranscriptWindowing.window(
+            from: messages,
+            requestedCount: 50,
+            batchSize: 10
+        ) { messages in
+            messages.contains { message in
+                message.parts.contains { part in
+                    part.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                }
+            }
+        }
+
+        XCTAssertEqual(window.messages.first?.id, parent.id)
+        XCTAssertEqual(window.messages.count, 61)
+        XCTAssertEqual(window.hiddenMessageCount, 0)
+    }
+
     func testUpdateCachedMessagesForLiveActivityIfNeededAppliesOffscreenActiveSessionEvent() {
         let store = ChatStore(cachedMessagesBySessionID: [
             "ses_live": [message(id: "msg_assistant", role: "assistant", text: "Hello", sessionID: "ses_live")]
@@ -126,9 +157,9 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(store.cachedMessagesBySessionID["ses_live"]?.first?.parts.first?.text, "Hello")
     }
 
-    private func message(id: String, role: String, text: String, sessionID: String) -> OpenCodeMessageEnvelope {
+    private func message(id: String, role: String, text: String, sessionID: String, parentID: String? = nil) -> OpenCodeMessageEnvelope {
         OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: id, role: role, sessionID: sessionID, time: nil, agent: nil, model: nil),
+            info: OpenCodeMessage(id: id, role: role, sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: parentID),
             parts: [
                 OpenCodePart(id: "part_\(id)", messageID: id, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: text)
             ]

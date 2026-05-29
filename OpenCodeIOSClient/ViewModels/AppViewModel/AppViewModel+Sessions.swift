@@ -1138,7 +1138,7 @@ extension AppViewModel {
         inferFunAndGames(from: loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
         appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
-        syncComposerSelections(for: session)
+        syncComposerSelections(for: session, sourceMessages: loadedMessages)
         if prefetchToolDetails {
             prefetchToolMessageDetails(for: session, messages: messages)
         }

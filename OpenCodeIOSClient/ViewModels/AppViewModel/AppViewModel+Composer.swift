@@ -403,8 +403,16 @@ extension AppViewModel {
         return effectiveModel(for: session)?.name
     }
 
+    private func sessionMessageSource(for session: OpenCodeSession) -> [OpenCodeMessageEnvelope] {
+        let syncedMessages = directoryStore.syncState.messageEnvelopes(forSessionID: session.id)
+        if !syncedMessages.isEmpty { return syncedMessages }
+        if let cachedMessages = cachedMessagesBySessionID[session.id], !cachedMessages.isEmpty { return cachedMessages }
+        if selectedSession?.id == session.id { return messages }
+        return []
+    }
+
     private func lastUserMessage(for session: OpenCodeSession) -> OpenCodeMessageEnvelope? {
-        let source = selectedSession?.id == session.id ? messages : (cachedMessagesBySessionID[session.id] ?? [])
+        let source = sessionMessageSource(for: session)
         return source.reversed().first { message in
             message.info.sessionID == session.id && (message.info.role ?? "").lowercased() == "user"
         }
@@ -485,9 +493,10 @@ extension AppViewModel {
         modelConfigurationStore.seedSelectionsForNewSession(sessionID: session.id)
     }
 
-    func syncComposerSelections(for session: OpenCodeSession) {
-        let lastUserMessage = messages.reversed().first {
-            ($0.info.role ?? "").lowercased() == "user"
+    func syncComposerSelections(for session: OpenCodeSession, sourceMessages: [OpenCodeMessageEnvelope]? = nil) {
+        let source = sourceMessages ?? sessionMessageSource(for: session)
+        let lastUserMessage = source.reversed().first { message in
+            message.info.sessionID == session.id && (message.info.role ?? "").lowercased() == "user"
         }
 
         guard let lastUserMessage else {

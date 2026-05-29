@@ -1421,10 +1421,12 @@ enum OpenCodeChatTranscriptWindowing {
         }
 
         let minimumBatchSize = max(1, batchSize)
+        let messageIDs = Set(messages.map(\.id))
         var count = min(messages.count, max(requestedCount, minimumBatchSize))
         var window = Array(messages.suffix(count))
 
-        while count < messages.count, !hasDisplayableContent(window) {
+        while count < messages.count,
+              !hasDisplayableContent(window) || hasAssistantChildMissingParent(window, in: messageIDs) {
             count = min(messages.count, count + minimumBatchSize)
             window = Array(messages.suffix(count))
         }
@@ -1433,6 +1435,18 @@ enum OpenCodeChatTranscriptWindowing {
             messages: window,
             hiddenMessageCount: max(0, messages.count - window.count)
         )
+    }
+
+    private static func hasAssistantChildMissingParent(_ window: [OpenCodeMessageEnvelope], in messageIDs: Set<String>) -> Bool {
+        let windowIDs = Set(window.map(\.id))
+        return window.contains { message in
+            guard (message.info.role ?? "").lowercased() == "assistant",
+                  let parentID = message.info.parentID?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !parentID.isEmpty else {
+                return false
+            }
+            return messageIDs.contains(parentID) && !windowIDs.contains(parentID)
+        }
     }
 }
 

@@ -102,6 +102,37 @@ final class OpenCodeAPIClientTests: XCTestCase {
         XCTAssertEqual(part.source?.end, 12)
     }
 
+    func testListMessagesRepairsUnpairedUnicodeEscapesInToolOutput() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/session/ses_test/message")
+            expectation.fulfill()
+
+            let data = #"[{"info":{"id":"msg_user","role":"user","sessionID":"ses_test","model":{"providerID":"openai","modelID":"gpt-5.5","variant":"medium"}},"parts":[{"id":"prt_user","messageID":"msg_user","sessionID":"ses_test","type":"text","text":"Use the previous model"}]},{"info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test"},"parts":[{"id":"prt_tool","messageID":"msg_assistant","sessionID":"ses_test","type":"tool","tool":"bash","state":{"status":"completed","output":"valid pair \ud83d\ude96 and bad scalar \ude80"}}]}]"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let messages = try await client.listMessages(sessionID: "ses_test")
+
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertEqual(messages.first?.info.model?.modelID, "gpt-5.5")
+        let output = try XCTUnwrap(messages.last?.parts.first?.state?.output)
+        XCTAssertTrue(output.unicodeScalars.contains(UnicodeScalar(0x1F696)!))
+        XCTAssertTrue(output.unicodeScalars.contains(UnicodeScalar(0xFFFD)!))
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     func testUpdateProjectEncodesIconPreferences() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral

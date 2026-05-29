@@ -612,7 +612,98 @@ struct OpenCodeAPIClient: Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw OpenCodeAPIError.httpError(http.statusCode, body)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            guard let repairedData = Self.repairingInvalidUnicodeEscapes(in: data) else {
+                throw error
+            }
+            return try JSONDecoder().decode(T.self, from: repairedData)
+        }
+    }
+
+    private static func repairingInvalidUnicodeEscapes(in data: Data) -> Data? {
+        guard let text = String(data: data, encoding: .utf8), text.contains("\\u") else { return nil }
+
+        var repaired = ""
+        repaired.reserveCapacity(text.count)
+        var index = text.startIndex
+        var changed = false
+
+        while index < text.endIndex {
+            guard isActiveUnicodeEscapeStart(at: index, in: text),
+                  let escape = unicodeEscape(at: index, in: text) else {
+                repaired.append(text[index])
+                index = text.index(after: index)
+                continue
+            }
+
+            if isHighSurrogate(escape.value) {
+                let nextIndex = escape.endIndex
+                if let nextEscape = unicodeEscape(at: nextIndex, in: text), isLowSurrogate(nextEscape.value) {
+                    repaired.append(contentsOf: text[index ..< nextEscape.endIndex])
+                    index = nextEscape.endIndex
+                } else {
+                    repaired.append("\\uFFFD")
+                    index = escape.endIndex
+                    changed = true
+                }
+                continue
+            }
+
+            if isLowSurrogate(escape.value) {
+                repaired.append("\\uFFFD")
+                index = escape.endIndex
+                changed = true
+                continue
+            }
+
+            repaired.append(contentsOf: text[index ..< escape.endIndex])
+            index = escape.endIndex
+        }
+
+        guard changed else { return nil }
+        return repaired.data(using: .utf8)
+    }
+
+    private static func isActiveUnicodeEscapeStart(at index: String.Index, in text: String) -> Bool {
+        guard text[index] == "\\" else { return false }
+        let next = text.index(after: index)
+        guard next < text.endIndex, text[next] == "u" else { return false }
+
+        var backslashCount = 0
+        var cursor = index
+        while cursor > text.startIndex {
+            let previous = text.index(before: cursor)
+            guard text[previous] == "\\" else { break }
+            backslashCount += 1
+            cursor = previous
+        }
+
+        return backslashCount.isMultiple(of: 2)
+    }
+
+    private static func unicodeEscape(at index: String.Index, in text: String) -> (value: Int, endIndex: String.Index)? {
+        guard index < text.endIndex, text[index] == "\\" else { return nil }
+        let uIndex = text.index(after: index)
+        guard uIndex < text.endIndex, text[uIndex] == "u" else { return nil }
+
+        var cursor = text.index(after: uIndex)
+        var value = 0
+        for _ in 0 ..< 4 {
+            guard cursor < text.endIndex, let digit = text[cursor].hexDigitValue else { return nil }
+            value = value * 16 + digit
+            cursor = text.index(after: cursor)
+        }
+        return (value, cursor)
+    }
+
+    private static func isHighSurrogate(_ value: Int) -> Bool {
+        (0xD800 ... 0xDBFF).contains(value)
+    }
+
+    private static func isLowSurrogate(_ value: Int) -> Bool {
+        (0xDC00 ... 0xDFFF).contains(value)
     }
 
     private func resolvedURL(path: String, queryItems: [URLQueryItem]) -> URL? {
