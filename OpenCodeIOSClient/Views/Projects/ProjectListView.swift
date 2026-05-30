@@ -382,12 +382,10 @@ private struct ProjectListBottomBar: View {
                 .zIndex(1)
             } else {
                 Button(action: onNewChat) {
-                    Label("Chat", systemImage: "square.and.pencil")
+                    Image(systemName: "square.and.pencil")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(newChatButtonForeground)
-                        .labelStyle(.titleAndIcon)
-                        .padding(.horizontal, 14)
-                        .frame(height: ProjectListLayout.bottomBarHeight - 14)
+                        .frame(width: ProjectListLayout.bottomBarHeight - 14, height: ProjectListLayout.bottomBarHeight - 14)
                 }
                 .frame(height: ProjectListLayout.bottomBarHeight)
                 .opencodePrimaryGlassButton()
