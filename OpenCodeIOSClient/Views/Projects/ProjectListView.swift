@@ -325,7 +325,7 @@ private struct ProjectListBottomBar: View {
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ProjectListLayout.bottomBarControlSpacing) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 18, weight: .semibold))
@@ -359,8 +359,8 @@ private struct ProjectListBottomBar: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: ProjectListLayout.bottomBarHeight)
-            .opencodeConcentricGlassSurface(minimumCornerRadius: ProjectListLayout.bottomBarHeight / 2, in: Capsule())
+            .frame(height: ProjectListLayout.searchBarHeight)
+            .opencodeConcentricGlassSurface(minimumCornerRadius: ProjectListLayout.searchBarHeight / 2, in: Capsule())
             .shadow(color: .black.opacity(0.08), radius: 16, y: 5)
 
             if isSearchFocused {
@@ -369,12 +369,12 @@ private struct ProjectListBottomBar: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .bold))
-                        .frame(width: ProjectListLayout.bottomBarHeight, height: ProjectListLayout.bottomBarHeight)
+                        .frame(width: ProjectListLayout.searchBarHeight, height: ProjectListLayout.searchBarHeight)
                         .contentShape(Circle())
-                        .opencodeConcentricGlassSurface(minimumCornerRadius: ProjectListLayout.bottomBarHeight / 2, in: Circle())
+                        .opencodeConcentricGlassSurface(minimumCornerRadius: ProjectListLayout.searchBarHeight / 2, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .frame(width: ProjectListLayout.bottomBarHeight, height: ProjectListLayout.bottomBarHeight)
+                .frame(width: ProjectListLayout.searchBarHeight, height: ProjectListLayout.searchBarHeight)
                 .contentShape(Circle())
                 .accessibilityLabel("Dismiss Search")
                 .accessibilityIdentifier("projects.search.dismiss")
@@ -383,13 +383,14 @@ private struct ProjectListBottomBar: View {
             } else {
                 Button(action: onNewChat) {
                     Image(systemName: "square.and.pencil")
-                        .font(.headline.weight(.semibold))
+                        .font(.system(size: ProjectListLayout.newChatIconSize, weight: .semibold))
                         .foregroundStyle(newChatButtonForeground)
-                        .frame(width: ProjectListLayout.bottomBarHeight - 14, height: ProjectListLayout.bottomBarHeight - 14)
+                        .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
                 }
-                .frame(height: ProjectListLayout.bottomBarHeight)
+                .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
                 .opencodePrimaryGlassButton()
-                .buttonBorderShape(.capsule)
+                .buttonBorderShape(.circle)
+                .contentShape(Circle())
                 .accessibilityLabel("New Chat")
                 .accessibilityIdentifier("projects.newChat")
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -1420,7 +1421,10 @@ private enum ProjectListLayout {
     static let railContentOffset: CGFloat = 22
     static let sectionTitleFont = Font.system(.footnote, design: .default).weight(.semibold)
     static let roundedSectionTitleFont = Font.system(.footnote, design: .rounded).weight(.semibold)
-    static let bottomBarHeight: CGFloat = 48
+    static let searchBarHeight: CGFloat = 54
+    static let newChatButtonDiameter: CGFloat = 44
+    static let newChatIconSize: CGFloat = 22
+    static let bottomBarControlSpacing: CGFloat = 16
 }
 
 private struct ProjectColorPickerSheet: View {
