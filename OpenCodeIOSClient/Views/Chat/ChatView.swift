@@ -1020,6 +1020,58 @@ private enum ChatScrollTarget {
     static let bottomAnchor = "chat-bottom-anchor"
 }
 
+private final class ChatTranscriptScrollController {
+#if canImport(UIKit)
+    @MainActor private weak var collectionView: UICollectionView?
+
+    @MainActor
+    func attach(_ collectionView: UICollectionView) {
+        self.collectionView = collectionView
+    }
+
+    @MainActor
+    @discardableResult
+    func scrollToBottom(animated: Bool) -> Bool {
+        guard let collectionView else { return false }
+        return Self.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: true)
+    }
+
+    @MainActor
+    @discardableResult
+    static func scrollToBottom(in collectionView: UICollectionView, animated: Bool, interruptsCurrentScroll: Bool) -> Bool {
+        collectionView.layoutIfNeeded()
+        guard collectionView.bounds.height > 0 else { return false }
+
+        let targetY = max(
+            -collectionView.adjustedContentInset.top,
+            collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom
+        )
+        let targetOffset = CGPoint(x: collectionView.contentOffset.x, y: targetY)
+
+        if interruptsCurrentScroll {
+            interruptCurrentScroll(in: collectionView)
+        }
+
+        collectionView.setContentOffset(targetOffset, animated: animated)
+        return true
+    }
+
+    @MainActor
+    private static func interruptCurrentScroll(in collectionView: UICollectionView) {
+        collectionView.layer.removeAllAnimations()
+        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+
+        guard collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating else { return }
+        let wasScrollEnabled = collectionView.isScrollEnabled
+        collectionView.isScrollEnabled = false
+        collectionView.isScrollEnabled = wasScrollEnabled
+    }
+#else
+    @discardableResult
+    func scrollToBottom(animated: Bool) -> Bool { false }
+#endif
+}
+
 private struct PendingOutgoingSend {
     let text: String
     let agentMentions: [OpenCodeAgentMention]
@@ -1492,6 +1544,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
     @Binding var isScrollGeometryAtBottom: Bool
     @Binding var chatViewportHeight: CGFloat
 
+    let scrollController: ChatTranscriptScrollController
     let bottomReadjustmentToken: Int
     let animatedBottomScrollToken: Int
     let composerMeasuredHeight: CGFloat
@@ -1524,6 +1577,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
             ChatTranscriptCollectionView(
                 rows: rows,
                 isAtBottom: $isScrollGeometryAtBottom,
+                scrollController: scrollController,
                 bottomScrollToken: bottomReadjustmentToken,
                 animatedBottomScrollToken: animatedBottomScrollToken,
                 bottomContentInset: composerMeasuredHeight + keyboardMeasuredHeight + messageBottomPadding,
@@ -1710,6 +1764,7 @@ struct ChatView: View {
     @State private var chatViewportHeight: CGFloat = 0
     @State private var composerMeasuredHeight: CGFloat = 0
     @State private var keyboardMeasuredHeight: CGFloat = 0
+    @State private var transcriptScrollController = ChatTranscriptScrollController()
     @State private var bottomReadjustmentToken = 0
     @State private var animatedBottomScrollToken = 0
     @State private var largeMessageChunkCache = OpenCodeLargeMessageChunkCache()
@@ -1951,6 +2006,7 @@ struct ChatView: View {
                 syncStore: directoryStore.syncStore,
                 isScrollGeometryAtBottom: $isScrollGeometryAtBottom,
                 chatViewportHeight: $chatViewportHeight,
+                scrollController: transcriptScrollController,
                 bottomReadjustmentToken: bottomReadjustmentToken,
                 animatedBottomScrollToken: animatedBottomScrollToken,
                 composerMeasuredHeight: composerMeasuredHeight,
@@ -2737,7 +2793,11 @@ struct ChatView: View {
 
     private func scrollToBottomFromButton() {
         OpenCodeHaptics.impact(.soft)
-        animatedBottomScrollToken &+= 1
+        if transcriptScrollController.scrollToBottom(animated: true) {
+            isScrollGeometryAtBottom = true
+        } else {
+            animatedBottomScrollToken &+= 1
+        }
     }
 
     private func scheduleEagerChatRefresh(reason: String) {
@@ -4382,6 +4442,7 @@ private struct UIKitRefreshActivityIndicator: UIViewRepresentable {
 private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentable {
     let rows: [ChatTranscriptRow]
     @Binding var isAtBottom: Bool
+    let scrollController: ChatTranscriptScrollController
     let bottomScrollToken: Int
     let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
@@ -4427,10 +4488,12 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         collectionView.delegate = context.coordinator
         collectionView.register(ChatTranscriptHostingCell.self, forCellWithReuseIdentifier: ChatTranscriptHostingCell.reuseIdentifier)
         context.coordinator.collectionView = collectionView
+        scrollController.attach(collectionView)
         return collectionView
     }
 
     func updateUIView(_ collectionView: UICollectionView, context: Context) {
+        scrollController.attach(collectionView)
         context.coordinator.rowContent = rowContent
         context.coordinator.isAtBottom = $isAtBottom
         context.coordinator.bottomRefreshThreshold = bottomRefreshThreshold
@@ -4650,7 +4713,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
                 guard lastBottomScrollToken != token else { return }
             }
 
-            guard !isUserScrolling(collectionView) else {
+            guard !shouldDeferBottomScroll(animated: animated, in: collectionView) else {
                 pendingBottomScroll = (token, animated)
                 return
             }
@@ -4659,18 +4722,25 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             scrollToBottom(in: collectionView, animated: animated)
             DispatchQueue.main.async { [weak self, weak collectionView] in
                 guard let self, let collectionView else { return }
-                guard !self.isUserScrolling(collectionView) else { return }
+                guard !self.shouldDeferBottomScroll(animated: animated, in: collectionView) else { return }
                 self.scrollToBottom(in: collectionView, animated: animated)
             }
         }
 
         private func applyPendingBottomScrollIfNeeded(in scrollView: UIScrollView) {
             guard let collectionView = scrollView as? UICollectionView,
-                  !isUserScrolling(collectionView),
-                  let pendingBottomScroll else { return }
+                  let pendingBottomScroll,
+                  !shouldDeferBottomScroll(animated: pendingBottomScroll.animated, in: collectionView) else { return }
             self.pendingBottomScroll = nil
             markBottomScrollTokenHandled(pendingBottomScroll.token, animated: pendingBottomScroll.animated)
             scrollToBottom(in: collectionView, animated: pendingBottomScroll.animated)
+        }
+
+        private func shouldDeferBottomScroll(animated: Bool, in collectionView: UICollectionView) -> Bool {
+            if animated {
+                return collectionView.isTracking || collectionView.isDragging
+            }
+            return isUserScrolling(collectionView)
         }
 
         private func markBottomScrollTokenHandled(_ token: Int, animated: Bool) {
@@ -4743,22 +4813,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
         private func scrollToBottom(in collectionView: UICollectionView, animated: Bool) {
             guard !rows.isEmpty else { return }
-            collectionView.layoutIfNeeded()
-            let targetY = max(
-                -collectionView.adjustedContentInset.top,
-                collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom
-            )
-            if animated {
-                UIView.animate(
-                    withDuration: 0.18,
-                    delay: 0,
-                    options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]
-                ) {
-                    collectionView.contentOffset.y = targetY
-                }
-            } else {
-                collectionView.contentOffset.y = targetY
-            }
+            ChatTranscriptScrollController.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: animated)
             isAtBottom.wrappedValue = true
         }
 
@@ -4913,6 +4968,7 @@ private final class ChatTranscriptHostingCell: UICollectionViewCell {
 private struct ChatTranscriptCollectionView<RowContent: View>: View {
     let rows: [ChatTranscriptRow]
     @Binding var isAtBottom: Bool
+    let scrollController: ChatTranscriptScrollController
     let bottomScrollToken: Int
     let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
