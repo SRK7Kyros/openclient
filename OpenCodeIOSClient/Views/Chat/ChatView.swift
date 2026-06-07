@@ -1493,6 +1493,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
     @Binding var chatViewportHeight: CGFloat
 
     let bottomReadjustmentToken: Int
+    let animatedBottomScrollToken: Int
     let composerMeasuredHeight: CGFloat
     let keyboardMeasuredHeight: CGFloat
     let messageBottomPadding: CGFloat
@@ -1524,6 +1525,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
                 rows: rows,
                 isAtBottom: $isScrollGeometryAtBottom,
                 bottomScrollToken: bottomReadjustmentToken,
+                animatedBottomScrollToken: animatedBottomScrollToken,
                 bottomContentInset: composerMeasuredHeight + keyboardMeasuredHeight + messageBottomPadding,
                 bottomRefreshThreshold: bottomRefreshThreshold,
                 bottomRefreshProgress: bottomRefreshRenderSnapshot.progress,
@@ -1709,6 +1711,7 @@ struct ChatView: View {
     @State private var composerMeasuredHeight: CGFloat = 0
     @State private var keyboardMeasuredHeight: CGFloat = 0
     @State private var bottomReadjustmentToken = 0
+    @State private var animatedBottomScrollToken = 0
     @State private var largeMessageChunkCache = OpenCodeLargeMessageChunkCache()
     @State private var chatDisplayItemCache = ChatDisplayItemCache()
     @State private var cachedContextMetrics: OpenCodeSessionContextMetrics?
@@ -1949,6 +1952,7 @@ struct ChatView: View {
                 isScrollGeometryAtBottom: $isScrollGeometryAtBottom,
                 chatViewportHeight: $chatViewportHeight,
                 bottomReadjustmentToken: bottomReadjustmentToken,
+                animatedBottomScrollToken: animatedBottomScrollToken,
                 composerMeasuredHeight: composerMeasuredHeight,
                 keyboardMeasuredHeight: keyboardMeasuredHeight,
                 messageBottomPadding: messageBottomPadding,
@@ -2025,6 +2029,7 @@ struct ChatView: View {
                 delayedLoadingOverlay
             }
             bottomRefreshFloatingIndicator
+            scrollToBottomButtonOverlay
         }
         .overlay(alignment: .bottom) {
             composerOverlay
@@ -2616,6 +2621,42 @@ struct ChatView: View {
         )
     }
 
+    private var showsScrollToBottomButton: Bool {
+        !isScrollGeometryAtBottom && !chatStore.messages.isEmpty && !bottomRefreshRenderSnapshot.showsIndicator
+    }
+
+    @ViewBuilder
+    private var scrollToBottomButtonOverlay: some View {
+        if showsScrollToBottomButton {
+            VStack {
+                Spacer(minLength: 0)
+
+                Button {
+                    scrollToBottomFromButton()
+                } label: {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Circle())
+                }
+                .opencodeActionGlass(
+                    clear: false,
+                    tint: OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.72),
+                    size: 38,
+                    in: Circle()
+                )
+                .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
+                .padding(.bottom, composerMeasuredHeight + 12)
+                .accessibilityLabel("Scroll to bottom")
+                .accessibilityIdentifier("chat.scrollToBottom")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .animation(.snappy(duration: 0.2, extraBounce: 0.04), value: showsScrollToBottomButton)
+        }
+    }
+
     private func bottomRefreshIndicator(snapshot: BottomRefreshRenderSnapshot) -> some View {
         BottomRefreshSpinner(
             progress: snapshot.progress,
@@ -2692,6 +2733,11 @@ struct ChatView: View {
 
     private func requestBottomReadjustment() {
         bottomReadjustmentToken &+= 1
+    }
+
+    private func scrollToBottomFromButton() {
+        OpenCodeHaptics.impact(.soft)
+        animatedBottomScrollToken &+= 1
     }
 
     private func scheduleEagerChatRefresh(reason: String) {
@@ -4337,6 +4383,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
     let rows: [ChatTranscriptRow]
     @Binding var isAtBottom: Bool
     let bottomScrollToken: Int
+    let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
     let bottomRefreshThreshold: CGFloat
     let bottomRefreshProgress: CGFloat
@@ -4403,7 +4450,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         if shouldInvalidateContent {
             context.coordinator.configureVisibleHostingCells(in: collectionView)
         }
-        context.coordinator.scrollToBottomIfNeeded(token: bottomScrollToken, in: collectionView)
+        context.coordinator.scrollToBottomIfNeeded(token: bottomScrollToken, animated: false, in: collectionView)
+        context.coordinator.scrollToBottomIfNeeded(token: animatedBottomScrollToken, animated: true, in: collectionView)
     }
 
     private static func makeLayout() -> UICollectionViewLayout {
@@ -4446,6 +4494,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         private var isThinkingVisible = false
         private var thinkingEntryGeneration = 0
         private var lastBottomScrollToken: Int?
+        private var lastAnimatedBottomScrollToken: Int?
+        private var pendingBottomScroll: (token: Int, animated: Bool)?
         private var bottomContentInset: CGFloat = 0
         private var isBottomPullTracking = false
 
@@ -4505,6 +4555,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             updateBottomState(for: scrollView)
             finishBottomPull(for: scrollView)
+            applyPendingBottomScrollIfNeeded(in: scrollView)
             applyPendingRowsIfNeeded(in: scrollView)
         }
 
@@ -4512,11 +4563,13 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             finishBottomPull(for: scrollView)
             guard !decelerate else { return }
             updateBottomState(for: scrollView)
+            applyPendingBottomScrollIfNeeded(in: scrollView)
             applyPendingRowsIfNeeded(in: scrollView)
         }
 
         func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
             updateBottomState(for: scrollView)
+            applyPendingBottomScrollIfNeeded(in: scrollView)
             applyPendingRowsIfNeeded(in: scrollView)
         }
 
@@ -4588,15 +4641,43 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             collectionView.verticalScrollIndicatorInsets.bottom = inset
         }
 
-        func scrollToBottomIfNeeded(token: Int, in collectionView: UICollectionView) {
-            guard lastBottomScrollToken != token else { return }
-            lastBottomScrollToken = token
-            guard !isUserScrolling(collectionView) else { return }
-            scrollToBottom(in: collectionView, animated: false)
+        func scrollToBottomIfNeeded(token: Int, animated: Bool, in collectionView: UICollectionView) {
+            guard !animated || token > 0 else { return }
+
+            if animated {
+                guard lastAnimatedBottomScrollToken != token else { return }
+            } else {
+                guard lastBottomScrollToken != token else { return }
+            }
+
+            guard !isUserScrolling(collectionView) else {
+                pendingBottomScroll = (token, animated)
+                return
+            }
+
+            markBottomScrollTokenHandled(token, animated: animated)
+            scrollToBottom(in: collectionView, animated: animated)
             DispatchQueue.main.async { [weak self, weak collectionView] in
                 guard let self, let collectionView else { return }
                 guard !self.isUserScrolling(collectionView) else { return }
-                self.scrollToBottom(in: collectionView, animated: false)
+                self.scrollToBottom(in: collectionView, animated: animated)
+            }
+        }
+
+        private func applyPendingBottomScrollIfNeeded(in scrollView: UIScrollView) {
+            guard let collectionView = scrollView as? UICollectionView,
+                  !isUserScrolling(collectionView),
+                  let pendingBottomScroll else { return }
+            self.pendingBottomScroll = nil
+            markBottomScrollTokenHandled(pendingBottomScroll.token, animated: pendingBottomScroll.animated)
+            scrollToBottom(in: collectionView, animated: pendingBottomScroll.animated)
+        }
+
+        private func markBottomScrollTokenHandled(_ token: Int, animated: Bool) {
+            if animated {
+                lastAnimatedBottomScrollToken = token
+            } else {
+                lastBottomScrollToken = token
             }
         }
 
@@ -4833,6 +4914,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: View {
     let rows: [ChatTranscriptRow]
     @Binding var isAtBottom: Bool
     let bottomScrollToken: Int
+    let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
     let bottomRefreshThreshold: CGFloat
     let bottomRefreshProgress: CGFloat
