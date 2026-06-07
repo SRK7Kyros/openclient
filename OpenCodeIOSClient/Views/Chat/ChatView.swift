@@ -1023,6 +1023,7 @@ private enum ChatScrollTarget {
 private final class ChatTranscriptScrollController {
 #if canImport(UIKit)
     @MainActor private weak var collectionView: UICollectionView?
+    @MainActor private var bottomChaseTask: Task<Void, Never>?
 
     @MainActor
     func attach(_ collectionView: UICollectionView) {
@@ -1033,7 +1034,12 @@ private final class ChatTranscriptScrollController {
     @discardableResult
     func scrollToBottom(animated: Bool) -> Bool {
         guard let collectionView else { return false }
-        return Self.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: true)
+        bottomChaseTask?.cancel()
+        let didScroll = Self.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: true)
+        if didScroll {
+            scheduleBottomChase(animated: animated)
+        }
+        return didScroll
     }
 
     @MainActor
@@ -1042,10 +1048,7 @@ private final class ChatTranscriptScrollController {
         collectionView.layoutIfNeeded()
         guard collectionView.bounds.height > 0 else { return false }
 
-        let targetY = max(
-            -collectionView.adjustedContentInset.top,
-            collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom
-        )
+        let targetY = bottomTargetY(in: collectionView)
         let targetOffset = CGPoint(x: collectionView.contentOffset.x, y: targetY)
 
         if interruptsCurrentScroll {
@@ -1054,6 +1057,33 @@ private final class ChatTranscriptScrollController {
 
         collectionView.setContentOffset(targetOffset, animated: animated)
         return true
+    }
+
+    @MainActor
+    private func scheduleBottomChase(animated: Bool) {
+        bottomChaseTask = Task { @MainActor [weak self] in
+            defer { self?.bottomChaseTask = nil }
+            for delay in [90, 180, 320, 520, 800, 1_200] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !Task.isCancelled, let collectionView = self?.collectionView else { return }
+                collectionView.layoutIfNeeded()
+                guard Self.distanceFromBottom(in: collectionView) > 3 else { return }
+                Self.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: false)
+            }
+        }
+    }
+
+    @MainActor
+    private static func bottomTargetY(in collectionView: UICollectionView) -> CGFloat {
+        max(
+            -collectionView.adjustedContentInset.top,
+            collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom
+        )
+    }
+
+    @MainActor
+    private static func distanceFromBottom(in collectionView: UICollectionView) -> CGFloat {
+        max(0, bottomTargetY(in: collectionView) - collectionView.contentOffset.y)
     }
 
     @MainActor
