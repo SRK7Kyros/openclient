@@ -102,6 +102,25 @@ final class OpenCodeAPIClientTests: XCTestCase {
         XCTAssertEqual(part.source?.end, 12)
     }
 
+    func testDecodesCommandsWhenMCPSourceReturnsObjectTemplate() throws {
+        // opencode returns `template: {}` for MCP-sourced commands; the whole `/command`
+        // array must still decode instead of failing with a DecodingError.typeMismatch.
+        let data = """
+        [
+          { "name": "init", "description": "Init", "source": "command", "template": "Create AGENTS.md", "hints": ["$ARGUMENTS"] },
+          { "name": "websearch:web_search_help", "description": "Get help with web search", "source": "mcp", "template": {}, "hints": [] }
+        ]
+        """.data(using: .utf8)!
+
+        let commands = try JSONDecoder().decode([OpenCodeCommand].self, from: data)
+
+        XCTAssertEqual(commands.count, 2)
+        XCTAssertEqual(commands[0].template, "Create AGENTS.md")
+        XCTAssertEqual(commands[1].name, "websearch:web_search_help")
+        XCTAssertEqual(commands[1].source, "mcp")
+        XCTAssertEqual(commands[1].template, "")
+    }
+
     func testListMessagesRepairsUnpairedUnicodeEscapesInToolOutput() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral
