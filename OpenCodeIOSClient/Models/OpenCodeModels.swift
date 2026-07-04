@@ -1293,6 +1293,33 @@ struct OpenCodeCommand: Codable, Identifiable, Hashable, Sendable {
     var id: String { name }
 }
 
+extension OpenCodeCommand {
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case agent
+        case model
+        case source
+        case template
+        case subtask
+        case hints
+    }
+
+    // opencode returns `template: {}` (an object) for MCP-sourced commands. Decode it
+    // leniently so one such command can't fail the entire `/command` response array.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        template = (try? container.decode(String.self, forKey: .template)) ?? ""
+        subtask = try container.decodeIfPresent(Bool.self, forKey: .subtask)
+        hints = try container.decodeIfPresent([String].self, forKey: .hints) ?? []
+    }
+}
+
 struct OpenCodeComposerAttachment: Identifiable, Hashable, Sendable {
     enum Kind: String, Hashable, Sendable {
         case image
