@@ -53,6 +53,11 @@ struct RootView: View {
 
             appShell
                 .opacity(isShowingConnectionExperience ? 0 : 1)
+
+            if let message = viewModel.openURLNavigationMessage {
+                RootDeepLinkProgressOverlay(message: message)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
         .sheet(item: primarySheet) { sheet in
             switch sheet {
@@ -275,5 +280,32 @@ private struct ConnectionSheetBackdrop: View {
             .frame(width: size, height: size)
             .offset(x: x, y: y)
             .blendMode(.plusLighter)
+    }
+}
+
+private struct RootDeepLinkProgressOverlay: View {
+    let message: String
+
+    var body: some View {
+        VStack {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+
+                Text(message)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+            .padding(.top, 18)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityLabel(message)
     }
 }

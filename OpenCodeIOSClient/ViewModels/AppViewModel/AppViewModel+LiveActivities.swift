@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 #if canImport(ActivityKit) && os(iOS)
 import ActivityKit
@@ -171,6 +172,9 @@ extension AppViewModel {
 
     func handleLiveActivityURL(_ url: URL) async {
         guard let deepLink = LiveActivityCoordinator.deepLink(from: url) else { return }
+        openURLNavigationMessage = "Opening chat..."
+        defer { openURLNavigationMessage = nil }
+        appendDebugLog("live activity deep link session=\(deepLink.sessionID) dir=\(debugDirectoryLabel(deepLink.directory)) action=\(deepLink.action)")
 
         if !isConnected {
             guard hasSavedServer else { return }
@@ -244,8 +248,23 @@ extension AppViewModel {
         )
         let openedSession = resolution.session
         let resolvedDirectory = openedSession.directory ?? deepLink.directory
-        if !isUsingAppleIntelligence, currentProject == nil || effectiveSelectedDirectory != resolvedDirectory {
+        let shouldSwitchDirectory = !isUsingAppleIntelligence && (currentProject == nil || effectiveSelectedDirectory != resolvedDirectory)
+        let routeProject = resolvedDirectory.flatMap(projectContainingDirectory)
+        if let routeProject {
+            withAnimation(opencodeSelectionAnimation) {
+                currentProject = routeProject
+                selectedProjectContentTab = .sessions
+            }
+        }
+
+        if shouldSwitchDirectory {
             await selectDirectory(resolvedDirectory)
+            if let routeProject {
+                withAnimation(opencodeSelectionAnimation) {
+                    currentProject = routeProject
+                    selectedProjectContentTab = .sessions
+                }
+            }
         }
 
         if case .fallback = resolution {
@@ -253,6 +272,15 @@ extension AppViewModel {
         }
         await selectSession(openedSession)
         return openedSession
+    }
+
+    private func projectContainingDirectory(_ directory: String) -> OpenCodeProject? {
+        let key = workspaceKey(directory)
+        return projects.first { project in
+            guard project.id != "global" else { return false }
+            if workspaceKey(project.worktree) == key { return true }
+            return project.sandboxes?.contains { workspaceKey($0) == key } == true
+        }
     }
 
     #if canImport(ActivityKit) && os(iOS)

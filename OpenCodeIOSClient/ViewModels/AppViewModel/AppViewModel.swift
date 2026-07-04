@@ -522,6 +522,7 @@ final class AppViewModel: ObservableObject {
     @Published var isShowingFindPlaceModelSheet = false
     @Published var isShowingFindBugLanguageSheet = false
     @Published var isShowingFindBugModelSheet = false
+    @Published var openURLNavigationMessage: String?
     var isShowingForkSessionSheet: Bool {
         get { chatPresentationStore.isShowingForkSessionSheet }
         set {
