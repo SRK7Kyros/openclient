@@ -112,6 +112,33 @@ struct OpenCodeAPIClient: Sendable {
         )
     }
 
+    func removeWorktree(rootDirectory: String, worktreeDirectory: String) async throws -> Bool {
+        try await send(
+            path: "/experimental/worktree",
+            method: "DELETE",
+            queryItems: [URLQueryItem(name: "directory", value: rootDirectory)],
+            body: WorktreeDirectoryRequest(directory: worktreeDirectory)
+        )
+    }
+
+    func resetWorktree(rootDirectory: String, worktreeDirectory: String) async throws -> Bool {
+        try await send(
+            path: "/experimental/worktree/reset",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "directory", value: rootDirectory)],
+            body: WorktreeDirectoryRequest(directory: worktreeDirectory)
+        )
+    }
+
+    func disposeInstance(directory: String? = nil, workspaceID: String? = nil) async throws -> Bool {
+        try await send(
+            path: "/instance/dispose",
+            method: "POST",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
     func findFiles(query: String, directory: String) async throws -> [String] {
         return try await send(path: "/find/file", method: "GET", queryItems: [
             URLQueryItem(name: "query", value: query),
@@ -879,6 +906,10 @@ private struct ProviderOAuthCallbackRequest: Encodable {
 private struct WorktreeCreateRequest: Encodable {
     let name: String?
     let startCommand: String?
+}
+
+private struct WorktreeDirectoryRequest: Encodable {
+    let directory: String
 }
 
 private struct SendCommandRequest: Encodable {

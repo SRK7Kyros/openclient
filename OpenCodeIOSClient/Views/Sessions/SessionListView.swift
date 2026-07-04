@@ -72,9 +72,11 @@ extension AppViewModel {
             return WorkspaceSessionDisplaySection(
                 directory: directory,
                 title: workspaceDisplayName(for: directory) ?? URL(fileURLWithPath: directory).lastPathComponent,
+                isMain: currentProject.map { workspaceKey($0.worktree) == workspaceKey(directory) } ?? false,
                 rows: sessions.map { sessionListRowSnapshot(for: $0) },
                 isLoading: state.isLoading,
-                hasMore: state.hasMore
+                hasMore: state.hasMore,
+                operation: sessionListStore.workspaceOperation(for: directory)
             )
         }
     }
@@ -121,6 +123,8 @@ private struct SessionListContent: View {
     @Namespace private var sessionRowNamespace
     @State private var renamingSession: OpenCodeSession?
     @State private var renameTitle = ""
+    @State private var isShowingCreateWorkspaceAlert = false
+    @State private var createWorkspaceName = ""
     let onSessionChosen: () -> Void
 
     var body: some View {
@@ -249,6 +253,23 @@ private struct SessionListContent: View {
         } message: {
             Text("Enter a new title for this session.")
         }
+        .alert("New Workspace", isPresented: $isShowingCreateWorkspaceAlert) {
+            TextField("Name (optional)", text: $createWorkspaceName)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            Button("Cancel", role: .cancel) {
+                createWorkspaceName = ""
+            }
+
+            Button("Create Workspace") {
+                let name = createWorkspaceName
+                createWorkspaceName = ""
+                Task { await viewModel.createWorkspace(name: name) }
+            }
+        } message: {
+            Text("OpenCode will create a separate git worktree for this project.")
+        }
         .task(id: snapshot.workspaceTaskID) {
             guard !isScreenshotScene else { return }
             await viewModel.loadWorkspaceSessionsIfNeeded()
@@ -281,6 +302,13 @@ private struct SessionListContent: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
+            } else if case let .failed(message) = section.operation, section.rows.isEmpty {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } else if section.rows.isEmpty {
                 Text("No sessions in this workspace.")
                     .font(.subheadline)
@@ -318,11 +346,26 @@ private struct SessionListContent: View {
                 .listRowSeparator(.hidden)
             }
         } header: {
-            SessionSectionHeader(
-                title: section.title,
-                systemImage: "arrow.triangle.branch",
-                accessory: URL(fileURLWithPath: section.directory).lastPathComponent
+            WorkspaceSectionHeader(
+                section: section,
+                onNewSession: {
+                    viewModel.presentNewSession(inWorkspace: section.directory)
+                },
+                onCreateWorkspace: {
+                    createWorkspaceName = ""
+                    isShowingCreateWorkspaceAlert = true
+                },
+                onRefresh: {
+                    Task { await viewModel.refreshWorkspaceSessions(directory: section.directory) }
+                },
+                onResetConfirmed: { directory in
+                    Task { await viewModel.resetWorktree(directory: directory) }
+                },
+                onDeleteConfirmed: { directory in
+                    Task { await viewModel.deleteWorktree(directory: directory) }
+                }
             )
+            .id(section.directory)
         }
     }
 
@@ -680,11 +723,44 @@ private struct SessionRowSnapshot: Identifiable, Equatable {
 private struct WorkspaceSessionDisplaySection: Identifiable, Equatable {
     let directory: String
     let title: String
+    let isMain: Bool
     let rows: [SessionRowSnapshot]
     let isLoading: Bool
     let hasMore: Bool
+    let operation: OpenCodeWorkspaceOperation?
 
     var id: String { directory }
+
+    var isBusy: Bool {
+        isLoading || operation?.isBusy == true
+    }
+
+    var isWorkspaceOperationBusy: Bool {
+        operation?.isBusy == true
+    }
+}
+
+private enum WorkspaceActionConfirmation: Identifiable, Equatable {
+    case reset(directory: String, title: String)
+    case delete(directory: String, title: String)
+
+    var id: String {
+        switch self {
+        case let .reset(directory, _):
+            return "reset:\(directory)"
+        case let .delete(directory, _):
+            return "delete:\(directory)"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case let .reset(_, title):
+            return "Reset \(title) to the default branch and archive its sessions. Local changes in that worktree will be discarded."
+        case let .delete(_, title):
+            return "Delete \(title), remove its git worktree, and delete its branch. This cannot be undone."
+        }
+    }
 }
 
 private struct SessionRowSkeleton: View {
@@ -710,6 +786,147 @@ private struct SessionRowSkeleton: View {
         .padding(.vertical, 12)
         .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .redacted(reason: .placeholder)
+    }
+}
+
+private struct WorkspaceSectionHeader: View {
+    @State private var actionConfirmation: WorkspaceActionConfirmation?
+
+    let section: WorkspaceSessionDisplaySection
+    let onNewSession: () -> Void
+    let onCreateWorkspace: () -> Void
+    let onRefresh: () -> Void
+    let onResetConfirmed: (String) -> Void
+    let onDeleteConfirmed: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(section.title, systemImage: "arrow.triangle.branch")
+                .font(.headline)
+
+            if section.isMain {
+                Text("Local")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if let operation = section.operation {
+                operationLabel(operation)
+            } else {
+                Text(URL(fileURLWithPath: section.directory).lastPathComponent)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Menu {
+                Button(action: onNewSession) {
+                    Label("New Session Here", systemImage: "square.and.pencil")
+                }
+                .disabled(section.isBusy)
+
+                Button(action: onCreateWorkspace) {
+                    Label("New Workspace", systemImage: "plus.square")
+                }
+                .disabled(section.isWorkspaceOperationBusy)
+
+                Button(action: onRefresh) {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(section.isBusy)
+
+                if !section.isMain {
+                    Divider()
+
+                    Button {
+                        actionConfirmation = .reset(directory: section.directory, title: section.title)
+                    } label: {
+                        Label("Reset Worktree", systemImage: "arrow.counterclockwise")
+                    }
+                    .disabled(section.isWorkspaceOperationBusy)
+
+                    Button(role: .destructive) {
+                        actionConfirmation = .delete(directory: section.directory, title: section.title)
+                    } label: {
+                        Label("Delete Worktree", systemImage: "trash")
+                    }
+                    .disabled(section.isWorkspaceOperationBusy)
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+            }
+            .opencodeGlassButton(clear: false)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Workspace Actions")
+            .accessibilityIdentifier("workspace.actions.\(section.directory)")
+            .confirmationDialog(
+                "Manage Worktree",
+                isPresented: actionConfirmationBinding,
+                titleVisibility: .visible
+            ) {
+                if let actionConfirmation {
+                    confirmationButton(for: actionConfirmation)
+                }
+            } message: {
+                if let actionConfirmation {
+                    Text(actionConfirmation.message)
+                }
+            }
+        }
+        .textCase(nil)
+    }
+
+    private var actionConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { actionConfirmation != nil },
+            set: { isPresented in
+                if !isPresented {
+                    actionConfirmation = nil
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func confirmationButton(for confirmation: WorkspaceActionConfirmation) -> some View {
+        switch confirmation {
+        case let .reset(directory, _):
+            Button("Reset Worktree", role: .destructive) {
+                actionConfirmation = nil
+                onResetConfirmed(directory)
+            }
+        case let .delete(directory, _):
+            Button("Delete Worktree", role: .destructive) {
+                actionConfirmation = nil
+                onDeleteConfirmed(directory)
+            }
+        }
+
+        Button("Cancel", role: .cancel) {
+            actionConfirmation = nil
+        }
+    }
+
+    @ViewBuilder
+    private func operationLabel(_ operation: OpenCodeWorkspaceOperation) -> some View {
+        HStack(spacing: 5) {
+            if operation.isBusy {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+            }
+
+            Text(operation.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(operation.isBusy ? Color.secondary : Color.red)
+        }
     }
 }
 

@@ -568,6 +568,8 @@ extension AppViewModel {
             prepareSessionSelection(session)
             await selectSession(session)
 
+            try await waitForWorktreeReadyIfNeeded(directory: targetDirectory)
+
             let didSend = await sendMessage(
                 text,
                 agentMentions: agentMentions,
@@ -625,6 +627,7 @@ extension AppViewModel {
                 for: created.directory,
                 defaultState: OpenCodeWorkspaceSessionState(isLoading: true)
             )
+            sessionListStore.setWorkspaceOperation(.preparing, for: created.directory)
             return created.directory
         }
     }
@@ -1111,12 +1114,52 @@ extension AppViewModel {
         let existingSandboxes = project.sandboxes ?? []
         guard !existingSandboxes.contains(where: { workspaceKey($0) == key }) else { return }
 
+        replaceSandboxDirectories(existingSandboxes + [directory], for: project)
+    }
+
+    func removeSandboxDirectory(_ directory: String, from project: OpenCodeProject) {
+        let removedKey = workspaceKey(directory)
+        let nextSandboxes = (project.sandboxes ?? []).filter { workspaceKey($0) != removedKey }
+
+        replaceSandboxDirectories(nextSandboxes, for: project)
+        sessionListStore.removeWorkspaceState(for: directory)
+    }
+
+    func refreshCurrentProjectWorktreesIfNeeded() async {
+        guard let project = currentProject,
+              project.id != "global",
+              project.vcs == "git" else { return }
+
+        do {
+            let directories = try await client.listWorktrees(directory: project.worktree)
+            replaceSandboxDirectories(directories, for: project)
+        } catch {
+            appendDebugLog("worktree list failed dir=\(project.worktree) error=\(error.localizedDescription)")
+        }
+    }
+
+    private func replaceSandboxDirectories(_ directories: [String], for project: OpenCodeProject) {
+        let rootKey = workspaceKey(project.worktree)
+        var seen = Set<String>()
+        let sandboxes = directories.compactMap { directory -> String? in
+            let key = workspaceKey(directory)
+            guard key != rootKey else { return nil }
+            guard seen.insert(key).inserted else { return nil }
+            return directory
+        }
+
+        let existingSandboxes = project.sandboxes ?? []
+        let nextKeys = Set(sandboxes.map(workspaceKey))
+        for existing in existingSandboxes where !nextKeys.contains(workspaceKey(existing)) {
+            sessionListStore.removeWorkspaceState(for: existing)
+        }
+
         let updatedProject = OpenCodeProject(
             id: project.id,
             worktree: project.worktree,
             vcs: project.vcs,
             name: project.name,
-            sandboxes: existingSandboxes + [directory],
+            sandboxes: sandboxes,
             icon: project.icon,
             time: project.time
         )

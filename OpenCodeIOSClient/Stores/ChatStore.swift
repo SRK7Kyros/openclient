@@ -151,10 +151,51 @@ final class ChatStore: ObservableObject {
     }
 
     func applyCanonicalMessages(_ loadedMessages: [OpenCodeMessageEnvelope], forSessionID sessionID: String, isActiveSession: Bool) {
-        cacheMessages(loadedMessages, forSessionID: sessionID)
+        let canonicalMessages = isActiveSession
+            ? mergingCanonicalMessages(loadedMessages, withExistingMessages: messages)
+            : loadedMessages
+
+        cacheMessages(canonicalMessages, forSessionID: sessionID)
         guard isActiveSession else { return }
-        replaceActiveMessagesWithCanonical(loadedMessages)
+        replaceActiveMessagesWithCanonical(canonicalMessages)
         finishLoadingSelectedSession()
+    }
+
+    private func mergingCanonicalMessages(
+        _ canonicalMessages: [OpenCodeMessageEnvelope],
+        withExistingMessages existingMessages: [OpenCodeMessageEnvelope]
+    ) -> [OpenCodeMessageEnvelope] {
+        let existingByID = Dictionary(uniqueKeysWithValues: existingMessages.map { ($0.id, $0) })
+
+        return canonicalMessages.map { canonical in
+            guard let existing = existingByID[canonical.id] else { return canonical }
+
+            var merged = canonical
+            merged.parts = canonical.parts.map { canonicalPart in
+                guard let partID = canonicalPart.id,
+                      let existingPart = existing.parts.first(where: { $0.id == partID }),
+                      let existingText = existingPart.text,
+                      !existingText.isEmpty else {
+                    return canonicalPart
+                }
+
+                guard let canonicalText = canonicalPart.text,
+                      !canonicalText.isEmpty else {
+                    var part = canonicalPart
+                    part.text = existingText
+                    return part
+                }
+
+                guard existingText.hasPrefix(canonicalText) else {
+                    return canonicalPart
+                }
+
+                var part = canonicalPart
+                part.text = existingText
+                return part
+            }
+            return merged
+        }
     }
 
     func cacheMessages(_ messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {

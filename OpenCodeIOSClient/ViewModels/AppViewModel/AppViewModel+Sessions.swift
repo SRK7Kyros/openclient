@@ -5,6 +5,26 @@ import SwiftUI
 import FoundationModels
 #endif
 
+private enum OpenCodeWorktreeOperationError: LocalizedError {
+    case missingProject
+    case primaryWorkspace
+    case failed(String)
+    case timedOut
+
+    var errorDescription: String? {
+        switch self {
+        case .missingProject:
+            return "No git project is selected."
+        case .primaryWorkspace:
+            return "The primary workspace cannot be reset or deleted."
+        case let .failed(message):
+            return message
+        case .timedOut:
+            return "OpenCode is still preparing this worktree. Try again in a moment."
+        }
+    }
+}
+
 private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
@@ -200,6 +220,8 @@ extension AppViewModel {
     }
 
     func loadWorkspaceSessions() async {
+        await refreshCurrentProjectWorktreesIfNeeded()
+
         let directories = workspaceDirectories()
         guard !directories.isEmpty else { return }
 
@@ -247,9 +269,115 @@ extension AppViewModel {
         await loadWorkspaceSessions(directory: directory, client: client, force: true)
     }
 
+    func refreshWorkspaceSessions(directory: String) async {
+        await loadWorkspaceSessions(directory: directory, client: client, force: true)
+    }
+
+    @discardableResult
+    func createWorkspace(name: String) async -> Bool {
+        do {
+            _ = try await createManagedWorktree(name: name)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func presentNewSession(inWorkspace directory: String) {
+        presentNewProjectChatSheet(
+            projectID: currentProject?.id,
+            workspaceDirectory: directory,
+            locksProject: true
+        )
+    }
+
+    func deleteWorktree(directory: String) async {
+        do {
+            let project = try projectForManagedWorktree(directory)
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(.deleting, for: directory)
+
+            let removed = try await client.removeWorktree(rootDirectory: project.worktree, worktreeDirectory: directory)
+            guard removed else { throw OpenCodeWorktreeOperationError.failed("OpenCode did not remove this worktree.") }
+
+            withAnimation(opencodeSelectionAnimation) {
+                objectWillChange.send()
+                let removedSessionIDs = allSessions
+                    .filter { $0.directory.map { workspaceKey($0) } == workspaceKey(directory) }
+                    .map(\.id)
+                removeLocalSessions(removedSessionIDs, fromWorkspace: directory, leavesEmptyWorkspaceState: false)
+                removeSandboxDirectory(directory, from: project)
+            }
+            await clearSelectionIfNeeded(afterRemovingWorkspace: directory, fallbackDirectory: project.worktree)
+            errorMessage = nil
+        } catch {
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(.failed(error.localizedDescription), for: directory)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func resetWorktree(directory: String) async {
+        do {
+            let project = try projectForManagedWorktree(directory)
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(.resetting, for: directory)
+
+            let sessions = (try? await client.listSessions(directory: directory)) ?? []
+            _ = try? await client.disposeInstance(directory: directory)
+            let reset = try await client.resetWorktree(rootDirectory: project.worktree, worktreeDirectory: directory)
+            guard reset else { throw OpenCodeWorktreeOperationError.failed("OpenCode did not reset this worktree.") }
+
+            let archivedAt = Date()
+            for session in sessions where !session.isArchived {
+                _ = try? await client.archiveSession(
+                    sessionID: session.id,
+                    directory: session.directory,
+                    workspaceID: session.workspaceID,
+                    archivedAt: archivedAt
+                )
+            }
+
+            withAnimation(opencodeSelectionAnimation) {
+                objectWillChange.send()
+                removeLocalSessions(sessions.map(\.id), fromWorkspace: directory)
+                sessionListStore.setWorkspaceOperation(nil, for: directory)
+            }
+            await refreshWorkspaceSessions(directory: directory)
+            await clearSelectionIfNeeded(afterRemovingWorkspace: directory, fallbackDirectory: project.worktree)
+            errorMessage = nil
+        } catch {
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(.failed(error.localizedDescription), for: directory)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func waitForWorktreeReadyIfNeeded(directory: String?) async throws {
+        guard let directory, !directory.isEmpty else { return }
+        let deadline = Date().addingTimeInterval(5 * 60)
+
+        while Date() < deadline {
+            guard let operation = sessionListStore.workspaceOperation(for: directory) else { return }
+            if case let .failed(message) = operation {
+                throw OpenCodeWorktreeOperationError.failed(message)
+            }
+            guard operation.isBusy else { return }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+
+        throw OpenCodeWorktreeOperationError.timedOut
+    }
+
     private func loadWorkspaceSessions(directory: String, client: OpenCodeAPIClient, force: Bool = false) async {
-        let state = sessionListStore.workspaceSessionState(for: directory)
-        if state.isLoading { return }
+        var state = sessionListStore.workspaceSessionState(for: directory)
+        if state.isLoading {
+            guard force else { return }
+            state.isLoading = false
+            sessionListStore.setWorkspaceSessionState(state, for: directory)
+        }
         if !force, !state.sessions.isEmpty, state.rootSessions.count >= state.limit { return }
 
         guard let loadingState = sessionListStore.markWorkspaceSessionsLoading(for: directory) else { return }
@@ -522,17 +650,77 @@ extension AppViewModel {
         case let .directory(directory):
             return directory
         case .createNew:
-            let name = newWorkspaceName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let created = try await client.createWorktree(
-                directory: project.worktree,
-                name: name.isEmpty ? nil : name
-            )
-            appendSandboxDirectory(created.directory, to: project)
-            sessionListStore.ensureWorkspaceStateExists(
-                for: created.directory,
-                defaultState: OpenCodeWorkspaceSessionState(isLoading: true)
-            )
+            let created = try await createManagedWorktree(name: newWorkspaceName)
             return created.directory
+        }
+    }
+
+    private func createManagedWorktree(name rawName: String?) async throws -> OpenCodeWorktree {
+        guard isProjectWorkspacesEnabled,
+              hasGitProject,
+              let project = currentProject,
+              project.id != "global" else {
+            throw OpenCodeWorktreeOperationError.missingProject
+        }
+
+        let name = rawName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let created = try await client.createWorktree(directory: project.worktree, name: name)
+        appendSandboxDirectory(created.directory, to: project)
+        sessionListStore.ensureWorkspaceStateExists(for: created.directory)
+        sessionListStore.setWorkspaceOperation(.preparing, for: created.directory)
+        return created
+    }
+
+    private func projectForManagedWorktree(_ directory: String) throws -> OpenCodeProject {
+        guard let project = currentProject,
+              project.id != "global",
+              project.vcs == "git" else {
+            throw OpenCodeWorktreeOperationError.missingProject
+        }
+
+        guard workspaceKey(directory) != workspaceKey(project.worktree) else {
+            throw OpenCodeWorktreeOperationError.primaryWorkspace
+        }
+
+        return project
+    }
+
+    private func clearSelectionIfNeeded(afterRemovingWorkspace directory: String, fallbackDirectory: String) async {
+        let removedKey = workspaceKey(directory)
+        let selectedKey = selectedDirectory.map { workspaceKey($0) }
+        let sessionKey = selectedSession?.directory.map { workspaceKey($0) }
+        let streamKey = streamDirectory.map { workspaceKey($0) }
+        guard selectedKey == removedKey || sessionKey == removedKey || streamKey == removedKey else { return }
+
+        prepareDirectorySelection(fallbackDirectory)
+        do {
+            try await reloadSessions()
+            await loadComposerOptions()
+        } catch {
+            isLoadingSessions = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func removeLocalSessions(_ sessionIDs: [String], fromWorkspace directory: String, leavesEmptyWorkspaceState: Bool = true) {
+        guard !sessionIDs.isEmpty else {
+            if leavesEmptyWorkspaceState {
+                sessionListStore.finishWorkspaceSessionsLoading([], estimatedTotal: 0, limit: sessionListStore.workspaceSessionState(for: directory).limit, directory: directory)
+            }
+            return
+        }
+
+        let ids = Set(sessionIDs)
+        allSessions.removeAll { ids.contains($0.id) }
+        for sessionID in ids {
+            sessionStatuses[sessionID] = nil
+            chatStore.clearCachedMessages(forSessionID: sessionID)
+            sessionListStore.removeSessionFromWorkspaceStates(sessionID: sessionID)
+            removeSessionPreview(for: sessionID)
+            clearPersistedMessageDraft(forSessionID: sessionID)
+        }
+        if leavesEmptyWorkspaceState {
+            sessionListStore.finishWorkspaceSessionsLoading([], estimatedTotal: 0, limit: sessionListStore.workspaceSessionState(for: directory).limit, directory: directory)
         }
     }
 
@@ -1366,7 +1554,11 @@ extension AppViewModel {
     }
 
     func permissions(for sessionID: String) -> [OpenCodePermission] {
-        sessionInteractionStore.permissions(forSessionID: sessionID)
+        let visiblePermissions = sessionInteractionStore.permissions(forSessionID: sessionID)
+        if !visiblePermissions.isEmpty {
+            return visiblePermissions
+        }
+        return directoryStore.syncState.permissionsBySessionID[sessionID] ?? []
     }
 
     var selectedSessionQuestions: [OpenCodeQuestionRequest] {
@@ -1375,7 +1567,11 @@ extension AppViewModel {
     }
 
     func questions(for sessionID: String) -> [OpenCodeQuestionRequest] {
-        sessionInteractionStore.questions(forSessionID: sessionID)
+        let visibleQuestions = sessionInteractionStore.questions(forSessionID: sessionID)
+        if !visibleQuestions.isEmpty {
+            return visibleQuestions
+        }
+        return directoryStore.syncState.questionsBySessionID[sessionID] ?? []
     }
 
     func hasPermissionRequest(for session: OpenCodeSession) -> Bool {

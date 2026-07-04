@@ -227,6 +227,10 @@ extension AppViewModel {
             return
         }
 
+        if handleWorktreeLifecycleEvent(managed) {
+            return
+        }
+
         guard shouldApplyDirectoryEvent(from: managed) else {
             appendDebugLog("drop \(managed.envelope.type): scope mismatch \(managed.directory) selected=\(debugDirectoryLabel(effectiveSelectedDirectory)) stream=\(debugDirectoryLabel(streamDirectory)) session=\(debugSessionLabel(selectedSession))")
             return
@@ -367,6 +371,26 @@ extension AppViewModel {
         )
         if eventSyncCoordinator.shouldPublishWidgetSnapshots(after: result) {
             scheduleWidgetSnapshotPublication()
+        }
+    }
+
+    private func handleWorktreeLifecycleEvent(_ managed: OpenCodeManagedEvent) -> Bool {
+        switch managed.typed {
+        case let .worktreeReady(name, branch):
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(nil, for: managed.directory)
+            appendDebugLog("worktree ready dir=\(managed.directory) name=\(name) branch=\(branch)")
+            Task { [weak self] in
+                await self?.refreshWorkspaceSessions(directory: managed.directory)
+            }
+            return true
+        case let .worktreeFailed(message):
+            objectWillChange.send()
+            sessionListStore.setWorkspaceOperation(.failed(message), for: managed.directory)
+            appendDebugLog("worktree failed dir=\(managed.directory) message=\(message)")
+            return true
+        default:
+            return false
         }
     }
 

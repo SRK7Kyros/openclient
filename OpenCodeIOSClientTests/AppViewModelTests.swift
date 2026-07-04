@@ -454,14 +454,33 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(scoped.map(\.id), ["ses_current"])
     }
 
-    func testSessionListStoreFiltersGlobalSessionsWhenNoDirectoryIsActive() {
+    func testSessionListStorePreservesLoadedSessionsWhenNoDirectoryIsActive() {
         let store = SessionListStore()
         let global = OpenCodeSession(id: "ses_global", title: "Global", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
         let project = OpenCodeSession(id: "ses_project", title: "Project", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
 
         let scoped = store.sessions([global, project], scopedTo: nil)
 
-        XCTAssertEqual(scoped.map(\.id), ["ses_global"])
+        XCTAssertEqual(scoped.map(\.id), ["ses_global", "ses_project"])
+    }
+
+    func testSessionListStoreTracksWorkspaceOperationsSeparatelyFromSessions() {
+        let store = SessionListStore()
+        let directory = "/tmp/project-worktree"
+
+        store.ensureWorkspaceStateExists(for: directory)
+        store.setWorkspaceOperation(.preparing, for: directory)
+
+        XCTAssertEqual(store.workspaceOperation(for: directory), .preparing)
+        XCTAssertTrue(store.workspaceOperation(for: directory)?.isBusy == true)
+
+        store.setWorkspaceOperation(.failed("checkout failed"), for: directory)
+        XCTAssertEqual(store.workspaceOperation(for: directory), .failed("checkout failed"))
+        XCTAssertFalse(store.workspaceOperation(for: directory)?.isBusy == true)
+
+        store.removeWorkspaceState(for: directory)
+        XCTAssertNil(store.workspaceOperation(for: directory))
+        XCTAssertNil(store.workspaceSessionsByDirectory[directory])
     }
 
     func testSessionListStoreRecentProjectSessionsSortsAndFiltersLikeUpstream() {
@@ -1178,6 +1197,9 @@ final class AppViewModelTests: XCTestCase {
         viewModel.selectedDirectory = "/tmp/selected-project"
         viewModel.selectedSession = selected
         viewModel.activeLiveActivitySessionIDs = [live.id]
+        viewModel.cachedMessagesBySessionID[live.id] = [
+            makeMessage(id: "msg_live_assistant", text: "", sessionID: live.id),
+        ]
 
         viewModel.handleManagedEvent(
             OpenCodeManagedEvent(
@@ -1187,7 +1209,7 @@ final class AppViewModelTests: XCTestCase {
                     properties: OpenCodeEventProperties(
                         sessionID: live.id,
                         messageID: "msg_live_assistant",
-                        partID: "prt_live_text",
+                        partID: "part_msg_live_assistant",
                         field: "text",
                         delta: "Streaming live"
                     )
@@ -1195,7 +1217,7 @@ final class AppViewModelTests: XCTestCase {
                 typed: .messagePartDelta(
                     sessionID: live.id,
                     messageID: "msg_live_assistant",
-                    partID: "prt_live_text",
+                    partID: "part_msg_live_assistant",
                     field: "text",
                     delta: "Streaming live"
                 )

@@ -155,6 +155,7 @@ struct ProjectContentView: View {
                     .accessibilityIdentifier("sessions.create")
             }
         }
+        .opencodeSearchTabSelectionActivation()
     }
 
     @available(iOS 18.0, *)

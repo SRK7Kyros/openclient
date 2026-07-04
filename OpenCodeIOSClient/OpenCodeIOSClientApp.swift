@@ -39,6 +39,7 @@ struct OpenCodeIOSClientApp: App {
                 RootView(viewModel: viewModel)
 #endif
             }
+            .opencodeSoftScrollEdgeEffect()
             .onOpenURL { url in
                 viewModel.prepareOpenURLPresentation(url)
                 Task { await viewModel.handleOpenURL(url) }

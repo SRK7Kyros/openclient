@@ -1,11 +1,41 @@
 import Combine
 import Foundation
 
+enum OpenCodeWorkspaceOperation: Equatable, Sendable {
+    case preparing
+    case resetting
+    case deleting
+    case failed(String)
+
+    var isBusy: Bool {
+        switch self {
+        case .preparing, .resetting, .deleting:
+            return true
+        case .failed:
+            return false
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .preparing:
+            return "Preparing"
+        case .resetting:
+            return "Resetting"
+        case .deleting:
+            return "Deleting"
+        case .failed:
+            return "Failed"
+        }
+    }
+}
+
 @MainActor
 final class SessionListStore: ObservableObject {
     @Published var previews: [String: SessionPreview]
     @Published var pinnedSessionIDsByScope: [String: [String]]
     @Published var workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState]
+    @Published var workspaceOperationsByDirectory: [String: OpenCodeWorkspaceOperation]
     @Published var pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun]
     @Published var recentSessionsByDirectory: [String: [OpenCodeSession]]
     @Published var isLoadingRecentProjectSessions: Bool
@@ -17,6 +47,7 @@ final class SessionListStore: ObservableObject {
         previews: [String: SessionPreview] = [:],
         pinnedSessionIDsByScope: [String: [String]] = [:],
         workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState] = [:],
+        workspaceOperationsByDirectory: [String: OpenCodeWorkspaceOperation] = [:],
         pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] = [:],
         recentSessionsByDirectory: [String: [OpenCodeSession]] = [:],
         isLoadingRecentProjectSessions: Bool = false,
@@ -27,6 +58,7 @@ final class SessionListStore: ObservableObject {
         self.previews = previews
         self.pinnedSessionIDsByScope = pinnedSessionIDsByScope
         self.workspaceSessionsByDirectory = workspaceSessionsByDirectory
+        self.workspaceOperationsByDirectory = workspaceOperationsByDirectory
         self.pendingActionRunsBySessionID = pendingActionRunsBySessionID
         self.recentSessionsByDirectory = recentSessionsByDirectory
         self.isLoadingRecentProjectSessions = isLoadingRecentProjectSessions
@@ -100,6 +132,23 @@ final class SessionListStore: ObservableObject {
 
     func setWorkspaceSessionState(_ state: OpenCodeWorkspaceSessionState, for directory: String) {
         workspaceSessionsByDirectory[directory] = state
+    }
+
+    func workspaceOperation(for directory: String) -> OpenCodeWorkspaceOperation? {
+        workspaceOperationsByDirectory[directory]
+    }
+
+    func setWorkspaceOperation(_ operation: OpenCodeWorkspaceOperation?, for directory: String) {
+        if let operation {
+            workspaceOperationsByDirectory[directory] = operation
+        } else {
+            workspaceOperationsByDirectory[directory] = nil
+        }
+    }
+
+    func removeWorkspaceState(for directory: String) {
+        workspaceSessionsByDirectory[directory] = nil
+        workspaceOperationsByDirectory[directory] = nil
     }
 
     func workspaceSessionState(for directory: String) -> OpenCodeWorkspaceSessionState {

@@ -584,6 +584,43 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(project.sandboxes, ["/tmp/project-wt"])
     }
 
+    func testTypedWorktreeLifecycleEventsDecode() throws {
+        let readyPayload = try decodeEvent(
+            #"{"type":"worktree.ready","properties":{"name":"demo","branch":"opencode/demo"}}"#
+        )
+
+        guard case let .worktreeReady(name, branch) = OpenCodeTypedEvent(envelope: readyPayload) else {
+            return XCTFail("Expected worktree.ready")
+        }
+        XCTAssertEqual(name, "demo")
+        XCTAssertEqual(branch, "opencode/demo")
+
+        let failedPayload = try decodeEvent(
+            #"{"type":"worktree.failed","properties":{"message":"checkout failed"}}"#
+        )
+
+        guard case let .worktreeFailed(message) = OpenCodeTypedEvent(envelope: failedPayload) else {
+            return XCTFail("Expected worktree.failed")
+        }
+        XCTAssertEqual(message, "checkout failed")
+    }
+
+    func testManagedWorktreeReadyEventUsesGlobalEnvelopeDirectory() throws {
+        let raw = #"{"directory":"/tmp/project-wt","payload":{"type":"worktree.ready","properties":{"name":"demo","branch":"opencode/demo"}}}"#
+
+        switch OpenCodeEventManager.decodeManagedEvent(from: raw) {
+        case let .event(managed):
+            XCTAssertEqual(managed.directory, "/tmp/project-wt")
+            guard case let .worktreeReady(name, branch) = managed.typed else {
+                return XCTFail("Expected worktree.ready")
+            }
+            XCTAssertEqual(name, "demo")
+            XCTAssertEqual(branch, "opencode/demo")
+        case let .dropped(message):
+            XCTFail(message)
+        }
+    }
+
     func testSessionDiffDecodesSnapshotFileDiffPayload() throws {
         let payload = try decodeEvent(
             #"{"type":"session.diff","properties":{"sessionID":"ses_test","diff":[{"file":"Sources/App.swift","patch":"@@ -1 +1 @@","additions":2,"deletions":1,"status":"modified"}]}}"#

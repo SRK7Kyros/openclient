@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 #if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
@@ -667,11 +668,13 @@ private struct ConnectionListStyleModifier: ViewModifier {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .background(.clear)
+                .opencodeSoftScrollEdgeEffect()
         } else {
             content
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .background(.clear)
+                .opencodeSoftScrollEdgeEffect()
         }
 #endif
     }

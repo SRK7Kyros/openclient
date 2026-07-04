@@ -2241,6 +2241,8 @@ enum OpenCodeTypedEvent: Sendable {
     case fileEdited(file: String)
     case installationUpdated(version: String)
     case installationUpdateAvailable(version: String)
+    case worktreeReady(name: String, branch: String)
+    case worktreeFailed(message: String)
     case sessionCreated(OpenCodeSession)
     case sessionUpdated(OpenCodeSession)
     case sessionDeleted(OpenCodeSession)
@@ -2286,6 +2288,13 @@ enum OpenCodeTypedEvent: Sendable {
         case "installation.update-available":
             guard let version = envelope.properties.version else { return nil }
             self = .installationUpdateAvailable(version: version)
+        case "worktree.ready":
+            guard let name = envelope.properties.name,
+                  let branch = envelope.properties.branch else { return nil }
+            self = .worktreeReady(name: name, branch: branch)
+        case "worktree.failed":
+            guard let message = envelope.properties.message else { return nil }
+            self = .worktreeFailed(message: message)
         case "session.created":
             guard let info = envelope.properties.info else { return nil }
             self = .sessionCreated(info.asSession())

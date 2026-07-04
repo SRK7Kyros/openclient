@@ -118,6 +118,32 @@ extension View {
         listStyle(.insetGrouped)
 #endif
     }
+
+    @ViewBuilder
+    func opencodeSoftScrollEdgeEffect() -> some View {
+#if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, macCatalyst 26.0, *) {
+            scrollEdgeEffectStyle(.soft, for: .all)
+        } else {
+            self
+        }
+#else
+        self
+#endif
+    }
+
+    @ViewBuilder
+    func opencodeSearchTabSelectionActivation() -> some View {
+#if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, macCatalyst 26.0, *) {
+            tabViewSearchActivation(.searchTabSelection)
+        } else {
+            self
+        }
+#else
+        self
+#endif
+    }
 }
 
 extension ToolbarItemPlacement {

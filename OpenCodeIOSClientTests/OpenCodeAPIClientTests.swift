@@ -203,6 +203,102 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testRemoveWorktreeUsesRootDirectoryQueryAndTargetBody() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/experimental/worktree")
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
+
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["directory"] as? String, "/tmp/project-worktree")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("true".utf8)
+            )
+        }
+
+        let removed = try await client.removeWorktree(rootDirectory: "/tmp/project", worktreeDirectory: "/tmp/project-worktree")
+        XCTAssertTrue(removed)
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testResetWorktreeUsesResetEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/experimental/worktree/reset")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            let body = try XCTUnwrap(Self.requestBodyData(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["directory"] as? String, "/tmp/project-worktree")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("true".utf8)
+            )
+        }
+
+        let reset = try await client.resetWorktree(rootDirectory: "/tmp/project", worktreeDirectory: "/tmp/project-worktree")
+        XCTAssertTrue(reset)
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testDisposeInstanceUsesDirectoryScope() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/instance/dispose")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project-worktree"),
+            ])
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project-worktree")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("true".utf8)
+            )
+        }
+
+        let disposed = try await client.disposeInstance(directory: "/tmp/project-worktree")
+        XCTAssertTrue(disposed)
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     func testProviderStateUsesProviderEndpoint() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral
