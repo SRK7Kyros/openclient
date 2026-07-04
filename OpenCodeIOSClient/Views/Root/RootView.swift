@@ -162,6 +162,11 @@ struct RootView: View {
     }
 
     private func showCurrentRoute() {
+        if viewModel.selectedSession != nil {
+            showDetailColumn()
+            return
+        }
+
         guard viewModel.currentProject != nil else {
             showProjectSidebarIfNeeded()
             return
