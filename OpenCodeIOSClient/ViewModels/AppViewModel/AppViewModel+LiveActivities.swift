@@ -271,6 +271,7 @@ extension AppViewModel {
             upsertVisibleSession(openedSession)
         }
         await selectSession(openedSession)
+        chatDetailPresentationRequest &+= 1
         return openedSession
     }
 

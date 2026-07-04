@@ -160,6 +160,12 @@ struct RootView: View {
                 }
             }
         }
+        .onChange(of: viewModel.chatDetailPresentationRequest) { _, _ in
+            guard viewModel.selectedSession != nil else { return }
+            withAnimation(opencodeSelectionAnimation) {
+                showDetailColumn()
+            }
+        }
         .onAppear {
             showCurrentRoute()
         }
