@@ -126,6 +126,13 @@ struct RootView: View {
             }
         }
         .onChange(of: viewModel.selectedSession?.id) { _, sessionID in
+            if sessionID != nil {
+                withAnimation(opencodeSelectionAnimation) {
+                    showDetailColumn()
+                }
+                return
+            }
+
             guard viewModel.currentProject != nil else {
                 withAnimation(opencodeSelectionAnimation) {
                     columnVisibility = .all
@@ -134,15 +141,9 @@ struct RootView: View {
                 return
             }
 
-            if sessionID == nil {
-                withAnimation(opencodeSelectionAnimation) {
-                    columnVisibility = .doubleColumn
-                    preferredCompactColumn = .content
-                }
-            } else {
-                withAnimation(opencodeSelectionAnimation) {
-                    showDetailColumn()
-                }
+            withAnimation(opencodeSelectionAnimation) {
+                columnVisibility = .doubleColumn
+                preferredCompactColumn = .content
             }
         }
         .onChange(of: viewModel.currentProject?.id) { _, projectID in
@@ -161,6 +162,11 @@ struct RootView: View {
     }
 
     private func showCurrentRoute() {
+        if viewModel.selectedSession != nil {
+            showDetailColumn()
+            return
+        }
+
         guard viewModel.currentProject != nil else {
             showProjectSidebarIfNeeded()
             return
@@ -170,7 +176,7 @@ struct RootView: View {
     }
 
     private func showProjectSidebarIfNeeded() {
-        guard viewModel.currentProject == nil else { return }
+        guard viewModel.currentProject == nil, viewModel.selectedSession == nil else { return }
 
         columnVisibility = .all
         preferredCompactColumn = .sidebar

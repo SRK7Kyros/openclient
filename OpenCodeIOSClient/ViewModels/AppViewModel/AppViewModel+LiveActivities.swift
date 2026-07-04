@@ -178,14 +178,7 @@ extension AppViewModel {
             guard isConnected else { return }
         }
 
-        let openedSession = await openLiveActivitySession(deepLink)
-        let resolvedDirectory = openedSession?.directory ?? deepLink.directory
-        if !isUsingAppleIntelligence, currentProject == nil || effectiveSelectedDirectory != resolvedDirectory {
-            await selectDirectory(resolvedDirectory)
-            if let openedSession {
-                await selectSession(openedSession)
-            }
-        }
+        await openLiveActivitySession(deepLink)
 
         switch deepLink.action {
         case .open:
@@ -250,6 +243,11 @@ extension AppViewModel {
             activitySnapshot: activitySnapshot
         )
         let openedSession = resolution.session
+        let resolvedDirectory = openedSession.directory ?? deepLink.directory
+        if !isUsingAppleIntelligence, currentProject == nil || effectiveSelectedDirectory != resolvedDirectory {
+            await selectDirectory(resolvedDirectory)
+        }
+
         if case .fallback = resolution {
             upsertVisibleSession(openedSession)
         }
