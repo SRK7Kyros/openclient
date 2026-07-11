@@ -330,7 +330,9 @@ extension AppViewModel {
             let loadedStatus = try await status
             applyLoadedVCSStatus(loadedStatus)
 
-            if projectFilesStore.vcsDiffsByMode[selectedVCSDiffMode] != nil {
+            if loadedStatus.isEmpty, let cachedDiff = projectFilesStore.vcsDiffsByMode[selectedVCSDiffMode] {
+                projectFilesStore.applyLoadedVCSStatusFromDiffIfNeeded(cachedDiff, relativePath: relativeGitPath)
+            } else if loadedStatus.isEmpty || projectFilesStore.vcsDiffsByMode[selectedVCSDiffMode] != nil {
                 let loadedDiff = try await client.getVCSDiff(mode: selectedVCSDiffMode, directory: directory)
                 applyLoadedVCSDiff(loadedDiff, mode: selectedVCSDiffMode)
             }

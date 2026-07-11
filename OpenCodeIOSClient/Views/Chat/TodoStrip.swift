@@ -99,6 +99,10 @@ struct ComposerAccessoryArea: View {
         !activeTodos.isEmpty && !attachments.isEmpty
     }
 
+    private var attachmentIDs: String {
+        attachments.map(\.id).joined(separator: "|")
+    }
+
     var body: some View {
         Group {
             if activeTodos.isEmpty && attachments.isEmpty {
@@ -120,6 +124,7 @@ struct ComposerAccessoryArea: View {
                 )
             }
         }
+        .animation(opencodeSelectionAnimation, value: attachmentIDs)
     }
 
     private var collapsedStacks: some View {
@@ -147,6 +152,7 @@ struct ComposerAccessoryArea: View {
                         .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
                         .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
                         .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
+                        .transition(.composerAttachmentEntry)
                 }
             }
         }
@@ -181,6 +187,7 @@ struct ComposerAccessoryArea: View {
                                     onRemove: { onRemoveAttachment(attachment) }
                                 )
                                 .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
+                                .transition(.composerAttachmentEntry)
                             }
                         }
                     }
@@ -257,6 +264,7 @@ struct AttachmentStrip: View {
                             onRemove: { onRemoveAttachment(attachment) }
                         )
                         .id(attachment.id)
+                        .transition(.composerAttachmentEntry)
                     }
                 }
                 .padding(.horizontal, 1)
@@ -545,4 +553,16 @@ private func dataPayload(from dataURL: String) -> Data? {
     guard let commaIndex = dataURL.firstIndex(of: ",") else { return nil }
     let payload = dataURL[dataURL.index(after: commaIndex)...]
     return Data(base64Encoded: String(payload))
+}
+
+private extension AnyTransition {
+    static var composerAttachmentEntry: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.86, anchor: .bottomLeading)
+                .combined(with: .offset(x: 18, y: 8))
+                .combined(with: .opacity),
+            removal: .scale(scale: 0.96, anchor: .center)
+                .combined(with: .opacity)
+        )
+    }
 }

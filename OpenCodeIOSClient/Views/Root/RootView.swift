@@ -124,7 +124,11 @@ struct RootView: View {
             } else if viewModel.selectedProjectContentTab == .mcp {
                 ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
             } else if let session = viewModel.selectedSession, viewModel.isUsingAppleIntelligence == false {
-                ChatRouteView(viewModel: viewModel, sessionID: session.id)
+                ChatRouteView(
+                    viewModel: viewModel,
+                    sessionID: session.id,
+                    presentationRequest: viewModel.chatDetailPresentationRequest
+                )
                     .equatable()
             } else {
                 ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
@@ -226,19 +230,21 @@ private struct ChatRouteView: View, Equatable {
     let viewModel: AppViewModel
     let viewModelID: ObjectIdentifier
     let sessionID: String
+    let presentationRequest: Int
 
-    init(viewModel: AppViewModel, sessionID: String) {
+    init(viewModel: AppViewModel, sessionID: String, presentationRequest: Int) {
         self.viewModel = viewModel
         viewModelID = ObjectIdentifier(viewModel)
         self.sessionID = sessionID
+        self.presentationRequest = presentationRequest
     }
 
     nonisolated static func == (lhs: ChatRouteView, rhs: ChatRouteView) -> Bool {
-        lhs.viewModelID == rhs.viewModelID && lhs.sessionID == rhs.sessionID
+        lhs.viewModelID == rhs.viewModelID && lhs.sessionID == rhs.sessionID && lhs.presentationRequest == rhs.presentationRequest
     }
 
     var body: some View {
-        ChatView(viewModel: viewModel, sessionID: sessionID)
+        ChatView(viewModel: viewModel, sessionID: sessionID, presentationRequest: presentationRequest)
             .id(sessionID)
     }
 }

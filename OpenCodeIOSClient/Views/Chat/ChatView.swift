@@ -332,6 +332,18 @@ enum OpenCodeLargeMessageChunker {
         var text = ""
 
         while index < lines.count {
+            if lines[index].isBlank {
+                guard let nextTableLineIndex = nextTableLineIndex(afterBlankLineAt: index, in: lines) else {
+                    break
+                }
+
+                while index < nextTableLineIndex {
+                    text += lines[index].text
+                    index += 1
+                }
+                continue
+            }
+
             guard isMarkdownTableLine(lines[index].value) || isMarkdownTableSeparatorLine(lines[index].value) else {
                 break
             }
@@ -342,6 +354,20 @@ enum OpenCodeLargeMessageChunker {
 
         text += consumeBlankLines(in: lines, index: &index)
         return text
+    }
+
+    private static func nextTableLineIndex(afterBlankLineAt index: Int, in lines: [MarkdownLine]) -> Int? {
+        var nextIndex = index + 1
+        while nextIndex < lines.count, lines[nextIndex].isBlank {
+            nextIndex += 1
+        }
+
+        guard nextIndex < lines.count,
+              isMarkdownTableLine(lines[nextIndex].value) || isMarkdownTableSeparatorLine(lines[nextIndex].value) else {
+            return nil
+        }
+
+        return nextIndex
     }
 
     private static func consumeBlockQuote(in lines: [MarkdownLine], index: inout Int) -> String {
@@ -1748,9 +1774,10 @@ struct ChatView: View {
     @ObservedObject private var funAndGamesStore: FunAndGamesStore
     @ObservedObject private var chatPresentationStore: ChatPresentationStore
     let sessionID: String
+    let presentationRequest: Int
 
     @MainActor
-    init(viewModel: AppViewModel, sessionID: String) {
+    init(viewModel: AppViewModel, sessionID: String, presentationRequest: Int = 0) {
         self.viewModel = viewModel
         _connectionStore = ObservedObject(wrappedValue: viewModel.connectionStore)
         _projectStore = ObservedObject(wrappedValue: viewModel.projectStore)
@@ -1764,6 +1791,7 @@ struct ChatView: View {
         _funAndGamesStore = ObservedObject(wrappedValue: viewModel.funAndGamesStore)
         _chatPresentationStore = ObservedObject(wrappedValue: viewModel.chatPresentationStore)
         self.sessionID = sessionID
+        self.presentationRequest = presentationRequest
     }
 
     @Namespace private var toolbarGlassNamespace
@@ -2116,9 +2144,10 @@ struct ChatView: View {
             }
 #if canImport(UIKit)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                keyboardMeasuredHeight = keyboardHeight(from: notification)
-                guard keyboardMeasuredHeight > 0 else { return }
-                requestBottomReadjustmentIfPinned()
+                updateKeyboardMeasuredHeight(keyboardHeight(from: notification))
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                updateKeyboardMeasuredHeight(0)
             }
 #endif
 
@@ -2142,13 +2171,16 @@ struct ChatView: View {
             refreshCachedForkableMessages()
             pruneExpandedReasoningParts()
             updateDelayedLoadingIndicator()
+            clearInactiveKeyboardMeasurement(forceBottomReadjustment: true)
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            clearInactiveKeyboardMeasurement()
             scheduleEagerChatRefresh(reason: "scene active")
         }
 #if canImport(UIKit)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            clearInactiveKeyboardMeasurement()
             scheduleEagerChatRefresh(reason: "did become active")
         }
 #endif
@@ -2268,6 +2300,9 @@ struct ChatView: View {
         }
         .onChange(of: chatStore.isLoadingSelectedSession) { _, _ in
             updateDelayedLoadingIndicator()
+        }
+        .onChange(of: presentationRequest) { _, _ in
+            handleChatPresentationRequest()
         }
     }
 
@@ -2452,6 +2487,9 @@ struct ChatView: View {
             actionSignature: snapshot.actionSignature,
             onFocusChange: { isFocused in
                 isComposerInputFocused = isFocused
+                if !isFocused {
+                    clearInactiveKeyboardMeasurement()
+                }
                 viewModel.setComposerStreamingFocus(isFocused)
             },
             onTextChange: { text in
@@ -2832,6 +2870,31 @@ struct ChatView: View {
 
     private func requestBottomReadjustment() {
         bottomReadjustmentToken &+= 1
+    }
+
+    private func handleChatPresentationRequest() {
+        guard directoryStore.selectedSession?.id == sessionID else { return }
+        clearInactiveKeyboardMeasurement(forceBottomReadjustment: true)
+        requestBottomReadjustment()
+    }
+
+    private func updateKeyboardMeasuredHeight(_ height: CGFloat) {
+        let height = max(0, height)
+        guard abs(height - keyboardMeasuredHeight) > 0.5 else { return }
+        let wasAtBottom = isScrollGeometryAtBottom
+        keyboardMeasuredHeight = height
+        guard wasAtBottom else { return }
+        requestBottomReadjustment()
+    }
+
+    private func clearInactiveKeyboardMeasurement(forceBottomReadjustment: Bool = false) {
+        guard !isComposerInputFocused else { return }
+        if keyboardMeasuredHeight > 0 {
+            keyboardMeasuredHeight = 0
+        }
+        if forceBottomReadjustment || isScrollGeometryAtBottom {
+            requestBottomReadjustment()
+        }
     }
 
     private func scrollToBottomFromButton() {

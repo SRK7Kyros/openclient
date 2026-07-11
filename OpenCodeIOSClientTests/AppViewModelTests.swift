@@ -631,6 +631,34 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(store.selectedFilePath, "README.md")
     }
 
+    func testProjectFilesStoreDerivesStatusRowsFromDiffWhenStatusEndpointIsEmpty() {
+        let store = ProjectFilesStore()
+
+        store.applyLoadedVCSStatus([]) { $0 }
+        store.applyLoadedVCSDiff([
+            OpenCodeVCSFileDiff(file: "Sources/App.swift", patch: "", additions: 3, deletions: 1, status: "modified"),
+            OpenCodeVCSFileDiff(file: "README.md", patch: "", additions: 2, deletions: 0, status: nil),
+        ], mode: .git) { $0 }
+
+        XCTAssertEqual(store.vcsFileStatuses.map(\.path), ["README.md", "Sources/App.swift"])
+        XCTAssertEqual(store.vcsFileStatuses.map(\.status), ["modified", "modified"])
+        XCTAssertEqual(store.vcsSummary.fileCount, 2)
+        XCTAssertEqual(store.vcsSummary.additions, 5)
+        XCTAssertEqual(store.vcsSummary.deletions, 1)
+        XCTAssertEqual(store.selectedVCSFile, "README.md")
+    }
+
+    func testProjectFilesStoreTreatsEmptyCachedDiffAsLoadedCleanState() {
+        let store = ProjectFilesStore(vcsInfo: OpenCodeVCSInfo(branch: "main", defaultBranch: "main"))
+
+        XCTAssertTrue(store.needsGitViewLoad())
+
+        store.applyLoadedVCSStatus([]) { $0 }
+        store.applyLoadedVCSDiff([], mode: .git) { $0 }
+
+        XCTAssertFalse(store.needsGitViewLoad())
+    }
+
     func testProjectFilesStoreMatchesChangedFilesAcrossAbsoluteAndRelativePaths() {
         let store = ProjectFilesStore(vcsFileStatuses: [
             OpenCodeVCSFileStatus(path: "Sources/App.swift", added: 3, removed: 1, status: "modified"),

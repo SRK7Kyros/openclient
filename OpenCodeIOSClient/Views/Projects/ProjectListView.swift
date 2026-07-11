@@ -439,6 +439,78 @@ private struct InlineSubtitleSelectTrigger: View {
     }
 }
 
+private struct ProjectNewChatModelItem: Identifiable, Equatable {
+    let providerID: String
+    let modelID: String
+    let name: String
+
+    var id: String { "\(providerID):\(modelID)" }
+    var reference: OpenCodeModelReference { OpenCodeModelReference(providerID: providerID, modelID: modelID) }
+}
+
+private struct ProjectNewChatModelSection: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let models: [ProjectNewChatModelItem]
+}
+
+private struct ProjectNewChatModelMenu: View {
+    let title: String
+    let defaultTitle: String
+    let sourceSections: [ProjectNewChatModelSection]
+    @Binding var selectedReference: OpenCodeModelReference?
+    let onSelectionChanged: () -> Void
+    @State private var sections: [ProjectNewChatModelSection] = []
+
+    var body: some View {
+        Menu {
+            Button {
+                select(nil)
+            } label: {
+                menuSelectionLabel(defaultTitle, isSelected: selectedReference == nil)
+            }
+
+            ForEach(sections) { section in
+                Section(section.name) {
+                    ForEach(section.models) { model in
+                        Button {
+                            select(model.reference)
+                        } label: {
+                            menuSelectionLabel(model.name, isSelected: selectedReference == model.reference)
+                        }
+                    }
+                }
+            }
+        } label: {
+            InlineSubtitleSelectTrigger(title: title)
+        }
+        .onAppear(perform: syncSections)
+        .onChange(of: sourceSections) { _, _ in
+            syncSections()
+        }
+        .accessibilityIdentifier("projects.newChat.model")
+    }
+
+    private func select(_ reference: OpenCodeModelReference?) {
+        selectedReference = reference
+        onSelectionChanged()
+    }
+
+    @ViewBuilder
+    private func menuSelectionLabel(_ title: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
+    private func syncSections() {
+        guard sections != sourceSections else { return }
+        sections = sourceSections
+    }
+}
+
 struct ProjectNewChatSheet: View {
     @ObservedObject var viewModel: AppViewModel
     let request: NewProjectChatSheetRequest
@@ -866,34 +938,13 @@ struct ProjectNewChatSheet: View {
     }
 
     private var modelSelectTrigger: some View {
-        Menu {
-            Button {
-                selectedModelReference = nil
-                syncReasoningSelection()
-            } label: {
-                menuSelectionLabel(modelDefaultOptionTitle, isSelected: selectedModelReference == nil)
-            }
-
-            ForEach(viewModel.sortedProviders) { provider in
-                let models = viewModel.modelConfigurationStore.visibleModels(for: provider)
-                if !models.isEmpty {
-                    Section(provider.name) {
-                        ForEach(models, id: \.id) { model in
-                            let reference = OpenCodeModelReference(providerID: provider.id, modelID: model.id)
-                            Button {
-                                selectedModelReference = reference
-                                syncReasoningSelection()
-                            } label: {
-                                menuSelectionLabel(model.name, isSelected: selectedModelReference == reference)
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            InlineSubtitleSelectTrigger(title: modelTitle)
-        }
-        .accessibilityIdentifier("projects.newChat.model")
+        ProjectNewChatModelMenu(
+            title: modelTitle,
+            defaultTitle: modelDefaultOptionTitle,
+            sourceSections: modelPickerSourceSections,
+            selectedReference: $selectedModelReference,
+            onSelectionChanged: syncReasoningSelection
+        )
     }
 
     private var reasoningSelectTrigger: some View {
@@ -978,6 +1029,16 @@ struct ProjectNewChatSheet: View {
                 return "\(provider.id):\(modelIDs)"
             }.joined(separator: "|")
         ].joined(separator: "|")
+    }
+
+    private var modelPickerSourceSections: [ProjectNewChatModelSection] {
+        viewModel.sortedProviders.compactMap { provider in
+            let models = viewModel.modelConfigurationStore.visibleModels(for: provider).map { model in
+                ProjectNewChatModelItem(providerID: provider.id, modelID: model.id, name: model.name)
+            }
+            guard !models.isEmpty else { return nil }
+            return ProjectNewChatModelSection(id: provider.id, name: provider.name, models: models)
+        }
     }
 
     private var selectedProject: OpenCodeProject? {

@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import OpenClient
 
 final class OpenCodeStreamingTests: XCTestCase {
@@ -1875,6 +1876,86 @@ Closing paragraph after structured markdown.
         XCTAssertTrue(codeChunks[0].text.contains("func render"))
         XCTAssertEqual(chunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(text))
     }
+
+    func testLargeMessageChunkerKeepsTablesWithBlankRowsTogether() throws {
+        let text = """
+Intro paragraph before the table.
+
+| Name | Value |
+| --- | --- |
+| Alpha | 1 |
+
+| Beta | 2 |
+
+| Gamma | 3 |
+
+Closing paragraph after the table.
+"""
+
+        let chunks = OpenCodeLargeMessageChunker.makeChunks(from: text)
+        let tableChunk = try XCTUnwrap(chunks.first { $0.text.contains("| Name | Value |") })
+
+        XCTAssertTrue(tableChunk.text.contains("| Alpha | 1 |"))
+        XCTAssertTrue(tableChunk.text.contains("| Beta | 2 |"))
+        XCTAssertTrue(tableChunk.text.contains("| Gamma | 3 |"))
+        XCTAssertEqual(chunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(text))
+    }
+
+#if DEBUG
+    @MainActor
+    func testMarkdownRendererParsesTablesWithBlankRowsAndCRLF() throws {
+        let text = "| Name | Value |\r\n| --- | --- |\r\n| Alpha | 1 |\r\n\r\n| Beta | 2 |\r\n\r\n| Gamma | 3 |"
+
+        XCTAssertEqual(MarkdownMessageText._testFirstTableRowCount(in: text), 3)
+    }
+
+#if canImport(UIKit)
+    @MainActor
+    func testMarkdownRendererReportsFullTableHeight() throws {
+        let text = """
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Header row | Visible | Should stay at the top |
+
+| First data row | Visible | This used to be where rendering stopped |
+
+| Second data row | Visible | Blank line above should not break the table |
+
+| Third data row | Visible | CRLF-like spacing should still render all rows |
+
+| Final row | Visible | Table should not be clipped |
+"""
+        let controller = UIHostingController(rootView: MarkdownMessageText(text: text, isUser: false, style: .standard).frame(width: 360))
+
+        let size = controller.sizeThatFits(in: CGSize(width: 360, height: 10_000))
+
+        XCTAssertEqual(MarkdownMessageText._testFirstTableRowCount(in: text), 5)
+        XCTAssertGreaterThan(size.height, 280)
+    }
+
+    @MainActor
+    func testMarkdownRendererAvoidsExcessiveTableBottomPadding() throws {
+        let text = """
+| Area | Status | Notes |
+| --- | --- | --- |
+| Markdown table parsing | Passing | Handles CRLF input, blank lines between rows, and normal separator rows. |
+| Chat chunking | Passing | Keeps the whole table together instead of splitting the header from later rows. |
+| Table layout | Improved | The table content now owns the minimum height, so multi-line cells should not clip at the bottom. |
+| Regression coverage | Added | Tests cover blank-line rows, renderer parsing, the 5-row reproduction sample, and layout height. |
+| TestFlight build | Uploaded | Version 1.0.11 build 4 is confirmed as the latest TestFlight upload. |
+| Short note | OK | This row checks normal single-line cells. |
+| Longer wrapped note | Needs visual check | This cell is intentionally longer so it should wrap to multiple lines on iPhone. It should remain fully visible with no clipping, including the final line at the bottom of the cell. |
+| Very long wrapped note | Needs visual check | This row pushes the layout harder with a longer paragraph that should wrap several times. If the fix is solid, every wrapped line should be visible, the row should expand naturally, and the table should scroll horizontally without cutting off text vertically. |
+| Final row | Critical | The last row is the one most likely to expose bottom clipping. This line should be completely visible, including descenders like g, p, q, and y. |
+"""
+        let estimatedHeight = try XCTUnwrap(MarkdownMessageText._testFirstTableEstimatedHeight(in: text))
+
+        XCTAssertEqual(MarkdownMessageText._testFirstTableRowCount(in: text), 9)
+        XCTAssertGreaterThan(estimatedHeight, 900)
+        XCTAssertLessThan(estimatedHeight, 1_350)
+    }
+#endif
+#endif
 
     func testLargeMessageChunkCachePreservesFrozenChunksOnAppend() throws {
         let cache = OpenCodeLargeMessageChunkCache()

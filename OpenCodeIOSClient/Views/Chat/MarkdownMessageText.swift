@@ -161,7 +161,9 @@ struct MarkdownMessageText: View {
     }
 
     private func styledTable(headers: [String], rows: [[String]]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let minimumHeight = estimatedTableHeight(headers: headers, rows: rows)
+
+        return ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 tableRow(headers, isHeader: true)
 
@@ -172,6 +174,8 @@ struct MarkdownMessageText: View {
                     tableRow(rows[rowIndex], isHeader: false)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: minimumHeight, alignment: .top)
             .background(tableBackgroundStyle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -179,6 +183,7 @@ struct MarkdownMessageText: View {
             }
             .padding(.horizontal, tableHorizontalScrollBleed)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, -tableHorizontalScrollBleed)
         .padding(.vertical, tableOuterPadding)
     }
@@ -196,6 +201,92 @@ struct MarkdownMessageText: View {
             }
         }
         .background(isHeader ? tableHeaderBackgroundStyle : .clear)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func estimatedTableHeight(headers: [String], rows: [[String]]) -> CGFloat {
+        let dividerHeight = CGFloat(rows.count)
+        return estimatedTableRowHeight(headers, isHeader: true)
+            + rows.reduce(0) { $0 + estimatedTableRowHeight($1, isHeader: false) }
+            + dividerHeight
+            + estimatedTableHeightSafetyPadding
+    }
+
+    private func estimatedTableRowHeight(_ cells: [String], isHeader: Bool) -> CGFloat {
+        let verticalPadding: CGFloat = isHeader ? 16 : 14
+        let contentHeight = cells
+            .map { estimatedTableCellTextHeight(for: $0, isHeader: isHeader) }
+            .max() ?? estimatedTableLineHeight
+
+        return ceil(contentHeight) + verticalPadding
+    }
+
+    private func estimatedTableCellTextHeight(for value: String, isHeader: Bool) -> CGFloat {
+        let normalized = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let text = normalized.isEmpty ? " " : normalized
+
+#if canImport(UIKit)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineSpacing = textLineSpacing
+
+        let boundingSize = (text as NSString).boundingRect(
+            with: CGSize(width: estimatedTableCellTextWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [
+                .font: estimatedTableUIFont(isHeader: isHeader),
+                .paragraphStyle: paragraph
+            ],
+            context: nil
+        )
+
+        return max(estimatedTableLineHeight, ceil(boundingSize.height))
+#else
+        let charactersPerLine = style == .standard ? 28 : 30
+
+        let lineCount = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { count, line in
+                count + max(1, Int(ceil(Double(line.count) / Double(charactersPerLine))))
+            }
+
+        return CGFloat(max(1, lineCount)) * estimatedTableLineHeight
+#endif
+    }
+
+#if canImport(UIKit)
+    private func estimatedTableUIFont(isHeader: Bool) -> UIFont {
+        let textStyle: UIFont.TextStyle = style == .standard ? .body : .caption1
+        let baseFont = UIFont.preferredFont(forTextStyle: textStyle)
+
+        guard isHeader else { return baseFont }
+
+        return .systemFont(ofSize: baseFont.pointSize, weight: .semibold)
+    }
+#endif
+
+    private var estimatedTableCellTextWidth: CGFloat {
+        max(1, tableCellMaxWidth - 20)
+    }
+
+    private var estimatedTableLineHeight: CGFloat {
+        switch style {
+        case .standard:
+            return 22
+        case .reasoning:
+            return 17
+        }
+    }
+
+    private var estimatedTableHeightSafetyPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 8
+        case .reasoning:
+            return 6
+        }
     }
 
     private func tableCell(_ value: String, isHeader: Bool) -> some View {
@@ -238,7 +329,12 @@ struct MarkdownMessageText: View {
 
     private var blocks: [MarkdownBlock] {
         OpenCodeMarkdownRenderCache.shared.blocks(for: text) {
-            let lines = text.components(separatedBy: .newlines)
+            let normalizedText = text
+                .replacingOccurrences(of: "\r\n", with: "\n")
+                .replacingOccurrences(of: "\r", with: "\n")
+                .replacingOccurrences(of: "\u{2029}", with: "\n\n")
+                .replacingOccurrences(of: "\u{2028}", with: "\n")
+            let lines = normalizedText.components(separatedBy: "\n")
             var result: [MarkdownBlock] = []
             var index = 0
             var id = 0
@@ -289,6 +385,32 @@ struct MarkdownMessageText: View {
             return result
         }
     }
+
+#if DEBUG
+    @MainActor
+    static func _testFirstTableRowCount(in text: String) -> Int? {
+        let messageText = MarkdownMessageText(text: text, isUser: false, style: .standard)
+        for block in messageText.blocks {
+            if case let .table(_, _, rows) = block {
+                return rows.count
+            }
+        }
+
+        return nil
+    }
+
+    @MainActor
+    static func _testFirstTableEstimatedHeight(in text: String) -> CGFloat? {
+        let messageText = MarkdownMessageText(text: text, isUser: false, style: .standard)
+        for block in messageText.blocks {
+            if case let .table(_, headers, rows) = block {
+                return messageText.estimatedTableHeight(headers: headers, rows: rows)
+            }
+        }
+
+        return nil
+    }
+#endif
 
     private func heading(from line: String) -> (level: Int, value: String)? {
         for level in 1...3 {
@@ -416,13 +538,39 @@ struct MarkdownMessageText: View {
         var rows: [[String]] = []
         var index = startIndex + 2
 
-        while index < lines.count, let cells = tableCells(from: lines[index]), !isTableSeparator(lines[index]) {
+        while index < lines.count {
+            if lines[index].trimmingCharacters(in: .whitespaces).isEmpty {
+                let nextRowIndex = nextTableRowIndex(afterBlankLineAt: index, in: lines)
+                guard let nextRowIndex else { break }
+                index = nextRowIndex
+                continue
+            }
+
+            guard let cells = tableCells(from: lines[index]), !isTableSeparator(lines[index]) else {
+                break
+            }
+
             rows.append(normalizedTableRow(cells, count: headers.count))
             index += 1
         }
 
         guard !rows.isEmpty else { return nil }
         return (headers, rows, index)
+    }
+
+    private func nextTableRowIndex(afterBlankLineAt index: Int, in lines: [String]) -> Int? {
+        var nextIndex = index + 1
+        while nextIndex < lines.count, lines[nextIndex].trimmingCharacters(in: .whitespaces).isEmpty {
+            nextIndex += 1
+        }
+
+        guard nextIndex < lines.count,
+              tableCells(from: lines[nextIndex]) != nil,
+              !isTableSeparator(lines[nextIndex]) else {
+            return nil
+        }
+
+        return nextIndex
     }
 
     private func tableCells(from line: String) -> [String]? {
@@ -679,9 +827,9 @@ struct MarkdownMessageText: View {
     private var tableCellMaxWidth: CGFloat {
         switch style {
         case .standard:
-            return 180
+            return 260
         case .reasoning:
-            return 150
+            return 220
         }
     }
 

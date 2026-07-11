@@ -123,6 +123,8 @@ platform :ios do
     archive
     upload_to_testflight(
       api_key: api_key,
+      app_identifier: "com.ntoporcov.openclient",
+      apple_id: "6763641767",
       uses_non_exempt_encryption: false,
       skip_waiting_for_build_processing: true,
       distribute_external: false

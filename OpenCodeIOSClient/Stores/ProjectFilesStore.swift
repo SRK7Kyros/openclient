@@ -187,7 +187,7 @@ final class ProjectFilesStore: ObservableObject {
     }
 
     func needsGitViewLoad() -> Bool {
-        vcsInfo == nil || vcsFileStatuses.isEmpty || vcsDiffsByMode[selectedVCSMode] == nil
+        vcsInfo == nil || (vcsFileStatuses.isEmpty && vcsDiffsByMode[selectedVCSMode] == nil)
     }
 
     func needsDiffLoad(mode: OpenCodeVCSDiffMode, force: Bool = false) -> Bool {
@@ -218,7 +218,24 @@ final class ProjectFilesStore: ObservableObject {
             relativePath(lhs.file).localizedCaseInsensitiveCompare(relativePath(rhs.file)) == .orderedAscending
         }
         vcsDiffsByMode[mode] = sorted
+        applyLoadedVCSStatusFromDiffIfNeeded(sorted, relativePath: relativePath)
         selectReasonableVCSFileIfNeeded()
+    }
+
+    func applyLoadedVCSStatusFromDiffIfNeeded(_ diff: [OpenCodeVCSFileDiff], relativePath: (String) -> String) {
+        guard vcsFileStatuses.isEmpty, !diff.isEmpty else { return }
+
+        vcsFileStatuses = diff.map { fileDiff in
+            OpenCodeVCSFileStatus(
+                path: fileDiff.file,
+                added: fileDiff.additions,
+                removed: fileDiff.deletions,
+                status: fileDiff.status ?? "modified"
+            )
+        }
+        .sorted { lhs, rhs in
+            relativePath(lhs.path).localizedCaseInsensitiveCompare(relativePath(rhs.path)) == .orderedAscending
+        }
     }
 
     func selectReasonableVCSFileIfNeeded() {

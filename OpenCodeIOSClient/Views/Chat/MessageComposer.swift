@@ -1065,6 +1065,7 @@ struct MessageComposer: View {
             maxLines: 6,
             canSubmit: canSend && !isDictating,
             autoFocus: autoFocus,
+            onPasteImages: pastedImageHandler,
             onSubmit: onSend,
             onFocusChange: onFocusChange
         )
@@ -1550,6 +1551,35 @@ struct MessageComposer: View {
     }
 
 #if canImport(PhotosUI) && canImport(UIKit)
+    private var pastedImageHandler: ([UIImage]) -> Bool {
+        { images in
+            attachPastedImages(images)
+        }
+    }
+
+    private func attachPastedImages(_ images: [UIImage]) -> Bool {
+        let pastedImages = Array(images.prefix(AttachmentImportLimits.maxItemCount))
+        guard !pastedImages.isEmpty else { return false }
+
+        if isImportingAttachments {
+            return true
+        }
+
+        isImportingAttachments = true
+        defer { isImportingAttachments = false }
+
+        let importResult = Self.makePastedImageAttachments(from: pastedImages)
+        if !importResult.attachments.isEmpty {
+            onAddAttachments(importResult.attachments)
+            isAccessoryMenuOpen = false
+        }
+        if !importResult.skippedMessages.isEmpty {
+            attachmentImportError = Self.skippedAttachmentMessage(importResult.skippedMessages)
+        }
+
+        return true
+    }
+
     private func loadRecentPhotosIfAllowed() async {
         if isComposerActionsScreenshotScene {
             recentPhotoAssets = []
@@ -1717,6 +1747,45 @@ struct MessageComposer: View {
                 attachmentImportError = Self.skippedAttachmentMessage(importResult.skippedMessages)
             }
         }
+    }
+
+    nonisolated private static func makePastedImageAttachments(from images: [UIImage]) -> (attachments: [OpenCodeComposerAttachment], skippedMessages: [String]) {
+        var attachments: [OpenCodeComposerAttachment] = []
+        var skippedMessages: [String] = []
+        var totalBytes = 0
+
+        for image in images {
+            guard let encodedImage = encodedPasteImageData(from: image) else {
+                skippedMessages.append("Pasted image could not be read.")
+                continue
+            }
+            guard encodedImage.data.count <= AttachmentImportLimits.maxInlineBytes else {
+                skippedMessages.append(attachmentTooLargeMessage(filename: "Pasted image", byteCount: encodedImage.data.count))
+                continue
+            }
+            guard totalBytes + encodedImage.data.count <= AttachmentImportLimits.maxTotalBytes else {
+                skippedMessages.append("Some images were skipped because attachments are limited to \(formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message.")
+                break
+            }
+
+            attachments.append(imageAttachment(from: encodedImage.data, type: encodedImage.type))
+            totalBytes += encodedImage.data.count
+        }
+
+        return (attachments, skippedMessages)
+    }
+
+    nonisolated private static func encodedPasteImageData(from image: UIImage) -> (data: Data, type: UTType)? {
+        if let pngData = image.pngData(), pngData.count <= AttachmentImportLimits.maxInlineBytes {
+            return (pngData, .png)
+        }
+        if let jpegData = image.jpegData(compressionQuality: 0.9) {
+            return (jpegData, .jpeg)
+        }
+        if let pngData = image.pngData() {
+            return (pngData, .png)
+        }
+        return nil
     }
 
     nonisolated private static func makeFileAttachments(from urls: [URL]) -> (attachments: [OpenCodeComposerAttachment], skippedMessages: [String]) {
@@ -1915,6 +1984,14 @@ struct MessageComposer: View {
 #endif
 }
 
+#if canImport(UIKit) && !canImport(PhotosUI)
+private extension MessageComposer {
+    var pastedImageHandler: ([UIImage]) -> Bool {
+        { _ in false }
+    }
+}
+#endif
+
 #if canImport(UIKit)
 private enum ComposerTextViewMetrics {
     static let horizontalInset: CGFloat = 14
@@ -1935,6 +2012,7 @@ private struct ComposerTextView: UIViewRepresentable {
     let maxLines: Int
     let canSubmit: Bool
     let autoFocus: Bool
+    let onPasteImages: ([UIImage]) -> Bool
     let onSubmit: () -> Void
     let onFocusChange: (Bool) -> Void
 
@@ -1961,6 +2039,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.keyboardDismissMode = .interactive
         textView.placeholder = placeholder
         textView.canSubmit = canSubmit
+        textView.onPasteImages = onPasteImages
         textView.onSubmit = onSubmit
         textView.applyText(text, agentMentions: agentMentions)
         textView.updatePlaceholderVisibility()
@@ -2000,6 +2079,7 @@ private struct ComposerTextView: UIViewRepresentable {
         }
 
         textView.canSubmit = canSubmit
+        textView.onPasteImages = onPasteImages
         textView.onSubmit = onSubmit
         context.coordinator.requestAutoFocusIfNeeded(on: textView)
 
@@ -2069,6 +2149,7 @@ private final class ComposerPlaceholderTextView: UITextView {
     private let placeholderLabel = UILabel()
     var maximumLineCount = ComposerTextViewMetrics.maxLines
     var canSubmit = false
+    var onPasteImages: (([UIImage]) -> Bool)?
     var onSubmit: (() -> Void)?
 
     var placeholder: String = "" {
@@ -2184,6 +2265,20 @@ private final class ComposerPlaceholderTextView: UITextView {
         if canSubmit {
             onSubmit?()
         }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), UIPasteboard.general.hasImages {
+            return true
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func paste(_ sender: Any?) {
+        if let images = UIPasteboard.general.images, !images.isEmpty, onPasteImages?(images) == true {
+            return
+        }
+        super.paste(sender)
     }
 
     private func setupPlaceholder() {
