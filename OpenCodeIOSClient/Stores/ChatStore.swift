@@ -14,6 +14,7 @@ final class ChatStore: ObservableObject {
     @Published var cachedMessagesBySessionID: [String: [OpenCodeMessageEnvelope]]
     @Published var toolMessageDetails: [String: OpenCodeMessageEnvelope]
     @Published var isLoadingSelectedSession: Bool
+    @Published private(set) var preparedSessionID: String?
     var inFlightToolMessageDetailIDs: Set<String>
     var nextStreamPartHapticAllowedAt: Date
     var pendingTranscriptEvents: [OpenCodePendingTranscriptEvent]
@@ -29,6 +30,7 @@ final class ChatStore: ObservableObject {
         cachedMessagesBySessionID: [String: [OpenCodeMessageEnvelope]] = [:],
         toolMessageDetails: [String: OpenCodeMessageEnvelope] = [:],
         isLoadingSelectedSession: Bool = false,
+        preparedSessionID: String? = nil,
         inFlightToolMessageDetailIDs: Set<String> = [],
         nextStreamPartHapticAllowedAt: Date = .distantPast,
         pendingTranscriptEvents: [OpenCodePendingTranscriptEvent] = [],
@@ -43,6 +45,7 @@ final class ChatStore: ObservableObject {
         self.cachedMessagesBySessionID = cachedMessagesBySessionID
         self.toolMessageDetails = toolMessageDetails
         self.isLoadingSelectedSession = isLoadingSelectedSession
+        self.preparedSessionID = preparedSessionID
         self.inFlightToolMessageDetailIDs = inFlightToolMessageDetailIDs
         self.nextStreamPartHapticAllowedAt = nextStreamPartHapticAllowedAt
         self.pendingTranscriptEvents = pendingTranscriptEvents
@@ -57,6 +60,7 @@ final class ChatStore: ObservableObject {
     func resetActiveSession() {
         messages = []
         isLoadingSelectedSession = false
+        preparedSessionID = nil
         pendingTranscriptEvents = []
         streamDeltaFlushTask?.cancel()
         streamDeltaFlushTask = nil
@@ -67,7 +71,8 @@ final class ChatStore: ObservableObject {
         streamDeltaScheduledPendingCharacterCount = 0
     }
 
-    func beginSelectingSession(cachedMessages: [OpenCodeMessageEnvelope]) {
+    func beginSelectingSession(sessionID: String, cachedMessages: [OpenCodeMessageEnvelope]) {
+        preparedSessionID = sessionID
         isLoadingSelectedSession = true
         messages = cachedMessages
     }
@@ -75,6 +80,7 @@ final class ChatStore: ObservableObject {
     func clearActiveTranscript() {
         messages = []
         isLoadingSelectedSession = false
+        preparedSessionID = nil
     }
 
     func finishLoadingSelectedSession() {

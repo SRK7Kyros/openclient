@@ -388,6 +388,39 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messageDraftsByChatKey[viewModel.messageDraftStorageKey(for: first)]?.text, "saved draft")
     }
 
+    func testBeginSessionNavigationUpdatesRouteBeforeTranscriptPreparation() {
+        let viewModel = AppViewModel()
+        let first = OpenCodeSession(id: "ses_first", title: "First", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        let second = OpenCodeSession(id: "ses_second", title: "Second", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        viewModel.selectedSession = first
+        viewModel.isLoadingSelectedSession = false
+
+        let previousSessionID = viewModel.beginSessionNavigation(second)
+
+        XCTAssertEqual(previousSessionID, first.id)
+        XCTAssertEqual(viewModel.selectedSession?.id, second.id)
+        XCTAssertEqual(viewModel.streamDirectory, second.directory)
+        XCTAssertTrue(viewModel.isLoadingSelectedSession)
+    }
+
+    func testBeginProjectNavigationUpdatesRouteAndClearsPreviousDirectorySessions() {
+        let viewModel = AppViewModel()
+        let previousSession = OpenCodeSession(id: "ses_previous", title: "Previous", workspaceID: nil, directory: "/tmp/old", projectID: "proj_old", parentID: nil)
+        let project = OpenCodeProject(id: "proj_new", worktree: "/tmp/new", vcs: nil, name: "New", sandboxes: nil, icon: nil, time: nil)
+        viewModel.selectedDirectory = "/tmp/old"
+        viewModel.allSessions = [previousSession]
+        viewModel.selectedSession = previousSession
+
+        let previousSessionID = viewModel.beginProjectNavigation(project)
+
+        XCTAssertEqual(previousSessionID, previousSession.id)
+        XCTAssertEqual(viewModel.currentProject?.id, project.id)
+        XCTAssertEqual(viewModel.selectedDirectory, project.worktree)
+        XCTAssertNil(viewModel.selectedSession)
+        XCTAssertTrue(viewModel.allSessions.isEmpty)
+        XCTAssertTrue(viewModel.isLoadingSessions)
+    }
+
     func testClearingDraftRemovesPersistedSlashCommand() {
         let viewModel = AppViewModel()
         let session = OpenCodeSession(id: "ses_command", title: "Command", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)

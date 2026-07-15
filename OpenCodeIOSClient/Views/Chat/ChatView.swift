@@ -2116,10 +2116,8 @@ struct ChatView: View {
                 onAppear: { _ in
                     viewModel.activeChatSessionID = sessionID
                     hasCompletedInitialHydrationSnap = !chatStore.messages.isEmpty
-                    refreshCachedContextMetrics()
-                    refreshCachedForkableMessages()
                     updateDelayedLoadingIndicator()
-                    requestBottomReadjustment()
+                    scheduleInitialBottomReadjustments()
                 },
                 onHeightChange: { _ in },
                 onSlowSnapshot: { message in
@@ -2137,7 +2135,7 @@ struct ChatView: View {
 
                 if count > 0, !hasCompletedInitialHydrationSnap {
                     hasCompletedInitialHydrationSnap = true
-                    requestBottomReadjustment()
+                    scheduleInitialBottomReadjustments()
                 }
                 pruneExpandedReasoningParts()
                 updateDelayedLoadingIndicator()
@@ -2413,7 +2411,6 @@ struct ChatView: View {
                         Task { await viewModel.respondToQuestion(request, answers: answers) }
                     }
                 )
-                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             case .childSessionNotice:
                 childSessionComposerNotice(headerSnapshot: chatHeaderSnapshot)
@@ -2872,6 +2869,22 @@ struct ChatView: View {
         bottomReadjustmentToken &+= 1
     }
 
+    private func scheduleInitialBottomReadjustments() {
+        initialBottomScrollTask?.cancel()
+        initialBottomScrollTask = Task { @MainActor in
+            for delayMS in [0, 80, 240, 520] {
+                if delayMS > 0 {
+                    try? await Task.sleep(for: .milliseconds(delayMS))
+                } else {
+                    await Task.yield()
+                }
+                guard !Task.isCancelled else { return }
+                requestBottomReadjustment()
+            }
+            isScrollGeometryAtBottom = true
+        }
+    }
+
     private func handleChatPresentationRequest() {
         guard directoryStore.selectedSession?.id == sessionID else { return }
         clearInactiveKeyboardMeasurement(forceBottomReadjustment: true)
@@ -2975,7 +2988,7 @@ struct ChatView: View {
         guard taskStore.delayedLoadingIndicatorTask == nil else { return }
         taskStore.delayedLoadingIndicatorTask = Task { @MainActor in
             defer { taskStore.delayedLoadingIndicatorTask = nil }
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, delayedLoadingIndicatorSnapshot.shouldDelay else { return }
             withAnimation(.easeOut(duration: 0.18)) {
                 showsDelayedLoadingIndicator = true

@@ -76,25 +76,34 @@ final class ComposerStore: ObservableObject {
         return true
     }
 
+    @discardableResult
     func saveDraft(
         _ text: String,
         agentMentions: [OpenCodeAgentMention] = [],
         forKey key: String,
         removesEmpty: Bool = true,
         updateActiveDraft: Bool = true
-    ) {
+    ) -> Bool {
         if updateActiveDraft {
-            draftMessage = text
-            draftAgentMentions = agentMentions
+            if draftMessage != text {
+                draftMessage = text
+            }
+            if draftAgentMentions != agentMentions {
+                draftAgentMentions = agentMentions
+            }
         }
 
         let draft = OpenCodeMessageDraft(text: text, agentMentions: agentMentions)
         if draft.isEmpty {
-            guard removesEmpty else { return }
+            guard removesEmpty else { return false }
+            guard draftsByChatKey[key] != nil else { return false }
             draftsByChatKey.removeValue(forKey: key)
-        } else {
-            draftsByChatKey[key] = draft
+            return true
         }
+
+        guard draftsByChatKey[key] != draft else { return false }
+        draftsByChatKey[key] = draft
+        return true
     }
 
     func clearDraft(forKey key: String, clearActive: Bool) {

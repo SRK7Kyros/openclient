@@ -107,6 +107,10 @@ struct RootView: View {
         } content: {
             if viewModel.currentProject == nil {
                 ContentUnavailableView("Select a Project", systemImage: "folder")
+            } else if horizontalSizeClass == .compact,
+                      viewModel.isLoadingSessions,
+                      viewModel.allSessions.isEmpty {
+                CompactRouteLoadingView(title: "Loading project...")
             } else {
                 ProjectContentView(viewModel: viewModel) {
                     withAnimation(opencodeSelectionAnimation) {
@@ -124,12 +128,18 @@ struct RootView: View {
             } else if viewModel.selectedProjectContentTab == .mcp {
                 ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
             } else if let session = viewModel.selectedSession, viewModel.isUsingAppleIntelligence == false {
-                ChatRouteView(
-                    viewModel: viewModel,
-                    sessionID: session.id,
-                    presentationRequest: viewModel.chatDetailPresentationRequest
-                )
-                    .equatable()
+                if horizontalSizeClass == .compact,
+                   viewModel.chatStore.preparedSessionID != session.id {
+                    CompactRouteLoadingView(title: "Loading chat...")
+                        .id(session.id)
+                } else {
+                    ChatRouteView(
+                        viewModel: viewModel,
+                        sessionID: session.id,
+                        presentationRequest: viewModel.chatDetailPresentationRequest
+                    )
+                        .equatable()
+                }
             } else {
                 ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
             }
@@ -319,5 +329,36 @@ private struct RootDeepLinkProgressOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
         .accessibilityLabel(message)
+    }
+}
+
+private struct CompactRouteLoadingView: View {
+    let title: String
+    @State private var showsIndicator = false
+
+    var body: some View {
+        ZStack {
+            OpenCodePlatformColor.groupedBackground
+                .ignoresSafeArea()
+
+            if showsIndicator {
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text(title)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.16)) {
+                showsIndicator = true
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 }

@@ -396,11 +396,18 @@ private struct SessionListContent: View {
         .matchedGeometryEffect(id: row.session.id, in: sessionRowNamespace)
         .contentShape(Rectangle())
         .onTapGesture {
-            viewModel.prepareSessionSelection(row.session)
+            let previousSessionID = viewModel.beginSessionNavigation(row.session)
             withAnimation(opencodeSelectionAnimation) {
                 onSessionChosen()
             }
-            Task {
+            Task { @MainActor in
+                await Task.yield()
+                guard viewModel.selectedSession?.id == row.session.id else { return }
+                viewModel.prepareSessionSelection(
+                    row.session,
+                    preservingDraftForSessionID: previousSessionID,
+                    animatesChanges: false
+                )
                 await viewModel.selectSession(row.session)
             }
         }

@@ -23,6 +23,8 @@ final class DirectorySyncStore: ObservableObject {
 
 @MainActor
 final class DirectoryStore: ObservableObject {
+    private static let immediateTranscriptLimit = 100
+
     @Published var isLoadingSessions: Bool
     @Published var sessions: [OpenCodeSession]
     @Published var selectedSession: OpenCodeSession?
@@ -101,11 +103,16 @@ final class DirectoryStore: ObservableObject {
         _ session: OpenCodeSession,
         cachedMessages: [OpenCodeMessageEnvelope]
     ) -> [OpenCodeMessageEnvelope] {
-        let syncedMessages = syncStore.state.messageEnvelopes(forSessionID: session.id)
-        let visibleMessages = syncedMessages.isEmpty ? cachedMessages : syncedMessages
+        let syncedMessageCount = syncStore.messageCount(forSessionID: session.id)
+        let syncedMessages = syncStore.messageEnvelopes(
+            forSessionID: session.id,
+            suffix: Self.immediateTranscriptLimit
+        )
+        let cachedTail = Array(cachedMessages.suffix(Self.immediateTranscriptLimit))
+        let visibleMessages = syncedMessages.isEmpty ? cachedTail : syncedMessages
 
-        if syncedMessages.isEmpty, !cachedMessages.isEmpty {
-            syncStore.state.replaceMessages(cachedMessages, forSessionID: session.id)
+        if syncedMessageCount == 0, !cachedTail.isEmpty {
+            syncStore.state.replaceMessages(cachedTail, forSessionID: session.id)
         }
         selectedSession = session
 

@@ -44,13 +44,18 @@ struct ProjectListView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            viewModel.currentProject = project
-                            viewModel.prepareDirectorySelection(project.id == "global" ? nil : project.worktree)
+                            let previousSessionID = viewModel.beginProjectNavigation(project)
                             withAnimation(opencodeSelectionAnimation) {
                                 onProjectChosen()
                             }
-                            Task {
-                                await viewModel.selectProject(project)
+                            Task { @MainActor in
+                                await Task.yield()
+                                guard viewModel.currentProject?.id == project.id else { return }
+                                await viewModel.selectProject(
+                                    project,
+                                    preservingDraftForSessionID: previousSessionID,
+                                    animatesPreparation: false
+                                )
                             }
                         }
                         .contextMenu {
@@ -454,13 +459,19 @@ private struct ProjectNewChatModelSection: Identifiable, Equatable {
     let models: [ProjectNewChatModelItem]
 }
 
-private struct ProjectNewChatModelMenu: View {
+private struct ProjectNewChatModelMenu: View, Equatable {
     let title: String
     let defaultTitle: String
-    let sourceSections: [ProjectNewChatModelSection]
-    @Binding var selectedReference: OpenCodeModelReference?
-    let onSelectionChanged: () -> Void
-    @State private var sections: [ProjectNewChatModelSection] = []
+    let sections: [ProjectNewChatModelSection]
+    let selectedReference: OpenCodeModelReference?
+    let onSelect: (OpenCodeModelReference?) -> Void
+
+    nonisolated static func == (lhs: ProjectNewChatModelMenu, rhs: ProjectNewChatModelMenu) -> Bool {
+        lhs.title == rhs.title
+            && lhs.defaultTitle == rhs.defaultTitle
+            && lhs.sections == rhs.sections
+            && lhs.selectedReference == rhs.selectedReference
+    }
 
     var body: some View {
         Menu {
@@ -484,16 +495,11 @@ private struct ProjectNewChatModelMenu: View {
         } label: {
             InlineSubtitleSelectTrigger(title: title)
         }
-        .onAppear(perform: syncSections)
-        .onChange(of: sourceSections) { _, _ in
-            syncSections()
-        }
         .accessibilityIdentifier("projects.newChat.model")
     }
 
     private func select(_ reference: OpenCodeModelReference?) {
-        selectedReference = reference
-        onSelectionChanged()
+        onSelect(reference)
     }
 
     @ViewBuilder
@@ -503,11 +509,6 @@ private struct ProjectNewChatModelMenu: View {
         } else {
             Text(title)
         }
-    }
-
-    private func syncSections() {
-        guard sections != sourceSections else { return }
-        sections = sourceSections
     }
 }
 
@@ -941,10 +942,14 @@ struct ProjectNewChatSheet: View {
         ProjectNewChatModelMenu(
             title: modelTitle,
             defaultTitle: modelDefaultOptionTitle,
-            sourceSections: modelPickerSourceSections,
-            selectedReference: $selectedModelReference,
-            onSelectionChanged: syncReasoningSelection
+            sections: modelPickerSourceSections,
+            selectedReference: selectedModelReference,
+            onSelect: { reference in
+                selectedModelReference = reference
+                syncReasoningSelection()
+            }
         )
+        .equatable()
     }
 
     private var reasoningSelectTrigger: some View {

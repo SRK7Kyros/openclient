@@ -90,10 +90,36 @@ extension AppViewModel {
         }
     }
 
-    func prepareSessionSelection(_ session: OpenCodeSession) {
-        preserveCurrentMessageDraftForNavigation()
-        var selectedMessages: [OpenCodeMessageEnvelope] = []
+    func beginSessionNavigation(_ session: OpenCodeSession) -> String? {
+        let previousSessionID = selectedSession?.id
         withAnimation(opencodeSelectionAnimation) {
+            selectedProjectContentTab = .sessions
+            selectedSession = session
+            isLoadingSelectedSession = true
+            selectedVCSFile = nil
+        }
+        streamDirectory = session.directory
+        return previousSessionID
+    }
+
+    func prepareSessionSelection(_ session: OpenCodeSession) {
+        prepareSessionSelection(
+            session,
+            preservingDraftForSessionID: selectedSession?.id,
+            animatesChanges: true
+        )
+    }
+
+    func prepareSessionSelection(
+        _ session: OpenCodeSession,
+        preservingDraftForSessionID previousSessionID: String?,
+        animatesChanges: Bool
+    ) {
+        if let previousSessionID {
+            preserveCurrentMessageDraftForNavigation(forSessionID: previousSessionID)
+        }
+        var selectedMessages: [OpenCodeMessageEnvelope] = []
+        let applyChanges = { [self] in
             selectedProjectContentTab = .sessions
             objectWillChange.send()
             let cachedMessages = directoryStore.applySessionSelection(
@@ -101,9 +127,14 @@ extension AppViewModel {
                 cachedMessages: cachedMessagesBySessionID[session.id] ?? []
             )
             selectedMessages = cachedMessages
-            chatStore.beginSelectingSession(cachedMessages: cachedMessages)
+            chatStore.beginSelectingSession(sessionID: session.id, cachedMessages: cachedMessages)
             sessionInteractionStore.applySelectedSession(sessionID: session.id, syncState: directoryStore.syncState)
             selectedVCSFile = nil
+        }
+        if animatesChanges {
+            withAnimation(opencodeSelectionAnimation, applyChanges)
+        } else {
+            applyChanges()
         }
         if !selectedMessages.isEmpty {
             inferFunAndGames(from: selectedMessages, forSessionID: session.id)
@@ -422,7 +453,7 @@ extension AppViewModel {
                     session,
                     cachedMessages: cachedMessagesBySessionID[session.id] ?? []
                 )
-                chatStore.beginSelectingSession(cachedMessages: cachedMessages)
+                chatStore.beginSelectingSession(sessionID: session.id, cachedMessages: cachedMessages)
             }
             restoreMessageDraft(for: session)
             streamDirectory = session.directory
@@ -1325,7 +1356,9 @@ extension AppViewModel {
         directoryStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
         inferFunAndGames(from: loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
-        appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
+        if isCapturingStreamingDiagnostics {
+            appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
+        }
         syncComposerSelections(for: session, sourceMessages: loadedMessages)
         if prefetchToolDetails {
             prefetchToolMessageDetails(for: session, messages: messages)
@@ -1437,8 +1470,7 @@ extension AppViewModel {
     func serverMessageSummary(_ messages: [OpenCodeMessageEnvelope], sessionID: String, reason: String) -> String {
         let tail = messages.suffix(4).map { message in
             let parts = message.parts.map { part in
-                let text = (part.text ?? "").replacingOccurrences(of: "\n", with: "\\n")
-                let snippet = String(text.prefix(40))
+                let snippet = String((part.text ?? "").prefix(40)).replacingOccurrences(of: "\n", with: "\\n")
                 return "\(part.id ?? "nil"):\(part.type):\(snippet)"
             }.joined(separator: "|")
             return "\(message.id):\(message.info.role ?? "nil")[\(parts)]"

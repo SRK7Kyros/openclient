@@ -77,9 +77,44 @@ extension AppViewModel {
         sessionListStore.isSearchingProjectSessions
     }
 
-    func prepareDirectorySelection(_ directory: String?) {
-        preserveCurrentMessageDraftForNavigation()
+    func beginProjectNavigation(_ project: OpenCodeProject) -> String? {
+        let previousSessionID = selectedSession?.id
+        let nextDirectory = project.id == "global" ? nil : project.worktree
         withAnimation(opencodeSelectionAnimation) {
+            if selectedDirectory != nextDirectory {
+                allSessions = []
+                workspaceSessionsByDirectory = [:]
+            }
+            currentProject = project
+            selectedDirectory = nextDirectory
+            selectedProjectContentTab = .sessions
+            isLoadingSessions = true
+            selectedSession = nil
+        }
+        return previousSessionID
+    }
+
+    func prepareDirectorySelection(_ directory: String?) {
+        prepareDirectorySelection(
+            directory,
+            preservingDraftForSessionID: selectedSession?.id,
+            animatesChanges: true
+        )
+    }
+
+    func prepareDirectorySelection(
+        _ directory: String?,
+        preservingDraftForSessionID previousSessionID: String?,
+        animatesChanges: Bool
+    ) {
+        if let previousSessionID {
+            preserveCurrentMessageDraftForNavigation(forSessionID: previousSessionID)
+        }
+        let applyChanges = { [self] in
+            if selectedDirectory != directory {
+                allSessions = []
+                workspaceSessionsByDirectory = [:]
+            }
             selectedDirectory = directory
             selectedProjectContentTab = .sessions
             isLoadingSessions = true
@@ -90,6 +125,11 @@ extension AppViewModel {
             mcpStore.reset()
             projectFilesStore.reset()
             selectedFilesWorkspaceDirectory = nil
+        }
+        if animatesChanges {
+            withAnimation(opencodeSelectionAnimation, applyChanges)
+        } else {
+            applyChanges()
         }
     }
 
@@ -323,7 +363,23 @@ extension AppViewModel {
     }
 
     func selectDirectory(_ directory: String?) async {
-        prepareDirectorySelection(directory)
+        await selectDirectory(
+            directory,
+            preservingDraftForSessionID: selectedSession?.id,
+            animatesPreparation: true
+        )
+    }
+
+    func selectDirectory(
+        _ directory: String?,
+        preservingDraftForSessionID previousSessionID: String?,
+        animatesPreparation: Bool
+    ) async {
+        prepareDirectorySelection(
+            directory,
+            preservingDraftForSessionID: previousSessionID,
+            animatesChanges: animatesPreparation
+        )
         do {
             if let directory, !directory.isEmpty {
                 _ = try await client.listSessions(directory: directory, roots: true, limit: 55)
@@ -394,11 +450,27 @@ extension AppViewModel {
     }
 
     func selectProject(_ project: OpenCodeProject?) async {
+        await selectProject(
+            project,
+            preservingDraftForSessionID: selectedSession?.id,
+            animatesPreparation: true
+        )
+    }
+
+    func selectProject(
+        _ project: OpenCodeProject?,
+        preservingDraftForSessionID previousSessionID: String?,
+        animatesPreparation: Bool
+    ) async {
         let selection = projectCoordinator.selectionResult(for: project, projects: projects)
         withAnimation(opencodeSelectionAnimation) {
             currentProject = selection.currentProject
         }
-        await selectDirectory(selection.selectedDirectory)
+        await selectDirectory(
+            selection.selectedDirectory,
+            preservingDraftForSessionID: previousSessionID,
+            animatesPreparation: animatesPreparation
+        )
     }
 
     var projectScopeTitle: String {
@@ -1225,18 +1297,23 @@ extension AppViewModel {
     func buildSessionPreview(from messages: [OpenCodeMessageEnvelope]) -> SessionPreview {
         guard let message = messages.last(where: { message in
             message.parts.contains { part in
-                guard let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
-                return !text.isEmpty
+                part.text?.contains(where: { !$0.isWhitespace }) == true
             }
         }) else {
             return SessionPreview(text: "No messages yet", date: nil)
         }
 
-        let text = message.parts
-            .compactMap { part -> String? in
-                part.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            .joined(separator: "\n")
+        var segments: [String] = []
+        var remainingCharacterBudget = 240
+        for part in message.parts {
+            guard remainingCharacterBudget > 0, let rawText = part.text else { continue }
+            let segment = String(rawText.prefix(remainingCharacterBudget))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !segment.isEmpty else { continue }
+            segments.append(segment)
+            remainingCharacterBudget -= segment.count
+        }
+        let text = segments.joined(separator: "\n")
         let previewText = opencodePreviewText(text, limit: 120)
 
         let date = dateFromMilliseconds(message.info.time?.completed ?? message.info.time?.created)

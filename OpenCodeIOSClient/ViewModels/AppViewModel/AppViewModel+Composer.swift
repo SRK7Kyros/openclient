@@ -159,13 +159,14 @@ extension AppViewModel {
         }
 
         let key = messageDraftStorageKey(forSessionID: sessionID)
-        composerStore.saveDraft(
+        let didChangeStoredDraft = composerStore.saveDraft(
             text,
             agentMentions: agentMentions ?? (selectedSession?.id == sessionID ? draftAgentMentions : composerStore.draftsByChatKey[key]?.agentMentions ?? []),
             forKey: key,
             removesEmpty: removesEmpty,
             updateActiveDraft: updateActiveDraft && selectedSession?.id == sessionID
         )
+        guard didChangeStoredDraft else { return }
         saveMessageDraftsByChatKey()
     }
 
