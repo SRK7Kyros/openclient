@@ -1,9 +1,20 @@
 import SwiftUI
 
 struct ProjectContentView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var shell: AppShellFacade
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let onDetailChosen: () -> Void
+
+    private var snapshot: AppShellFacade.ProjectContentSnapshot {
+        shell.projectContentSnapshot
+    }
+
+    private var selectedTab: Binding<OpenClientProjectContentTab> {
+        Binding(
+            get: { shell.projectContentSnapshot.selectedTab },
+            set: { shell.selectProjectContentTab($0) }
+        )
+    }
 
     var body: some View {
         rootContent
@@ -13,7 +24,7 @@ struct ProjectContentView: View {
         .toolbar {
             ToolbarItem(placement: .opencodeTrailing) {
                 Button {
-                    viewModel.presentProjectSettingsSheet()
+                    shell.presentProjectSettings()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
@@ -35,18 +46,14 @@ struct ProjectContentView: View {
         .onAppear {
             syncProjectTabIfNeeded()
         }
-        .sheet(isPresented: $viewModel.isShowingProjectSettingsSheet) {
-            ProjectSettingsSheet(viewModel: viewModel)
+        .sheet(isPresented: Binding(
+            get: { shell.projectContentSnapshot.isShowingSettings },
+            set: { shell.setProjectSettingsPresented($0) }
+        )) {
+            ProjectSettingsSheet(facade: shell.projects)
         }
-        .onChange(of: viewModel.currentProject?.id) { _, _ in
+        .onChange(of: snapshot.currentProjectID) { _, _ in
             syncProjectTabIfNeeded()
-        }
-        .onChange(of: viewModel.selectedProjectContentTab) { _, tab in
-            if tab == .git {
-                viewModel.presentGitView()
-            } else if tab == .mcp {
-                viewModel.presentMCPView()
-            }
         }
     }
 
@@ -57,8 +64,8 @@ struct ProjectContentView: View {
         } else {
             VStack(spacing: 0) {
                 ProjectContentTabSelector(
-                    selection: $viewModel.selectedProjectContentTab,
-                    tabs: availableTabs
+                    selection: selectedTab,
+                    tabs: snapshot.availableTabs
                 )
 
                 content
@@ -94,26 +101,26 @@ struct ProjectContentView: View {
     }
 
     private var legacyTabContent: some View {
-        TabView(selection: $viewModel.selectedProjectContentTab) {
-            SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
+        TabView(selection: selectedTab) {
+            SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
                 .tabItem {
-                    Label(AppViewModel.ProjectContentTab.sessions.title, systemImage: AppViewModel.ProjectContentTab.sessions.systemImage)
+                    Label(OpenClientProjectContentTab.sessions.title, systemImage: OpenClientProjectContentTab.sessions.systemImage)
                 }
-                .tag(AppViewModel.ProjectContentTab.sessions)
+                .tag(OpenClientProjectContentTab.sessions)
 
-            if viewModel.hasGitProject {
-                GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
+            if snapshot.hasGitProject {
+                GitStatusView(facade: shell.projectFiles, onFileChosen: onDetailChosen)
                     .tabItem {
-                        Label(AppViewModel.ProjectContentTab.git.title, systemImage: AppViewModel.ProjectContentTab.git.systemImage)
+                        Label(OpenClientProjectContentTab.git.title, systemImage: OpenClientProjectContentTab.git.systemImage)
                     }
-                    .tag(AppViewModel.ProjectContentTab.git)
+                    .tag(OpenClientProjectContentTab.git)
             }
 
-            MCPListView(viewModel: viewModel)
+            MCPListView(facade: shell.mcp)
                 .tabItem {
-                    Label(AppViewModel.ProjectContentTab.mcp.title, systemImage: AppViewModel.ProjectContentTab.mcp.systemImage)
+                    Label(OpenClientProjectContentTab.mcp.title, systemImage: OpenClientProjectContentTab.mcp.systemImage)
                 }
-                .tag(AppViewModel.ProjectContentTab.mcp)
+                .tag(OpenClientProjectContentTab.mcp)
         }
     }
 
@@ -122,29 +129,29 @@ struct ProjectContentView: View {
     private var nativeRoleTabContent: some View {
         TabView(selection: nativeTabSelection) {
             Tab(
-                AppViewModel.ProjectContentTab.sessions.title,
-                systemImage: AppViewModel.ProjectContentTab.sessions.systemImage,
+                OpenClientProjectContentTab.sessions.title,
+                systemImage: OpenClientProjectContentTab.sessions.systemImage,
                 value: ProjectNativeTab.sessions
             ) {
-                SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
+                SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
             }
 
-            if viewModel.hasGitProject {
+            if snapshot.hasGitProject {
                 Tab(
-                    AppViewModel.ProjectContentTab.git.title,
-                    systemImage: AppViewModel.ProjectContentTab.git.systemImage,
+                    OpenClientProjectContentTab.git.title,
+                    systemImage: OpenClientProjectContentTab.git.systemImage,
                     value: ProjectNativeTab.git
                 ) {
-                    GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
+                    GitStatusView(facade: shell.projectFiles, onFileChosen: onDetailChosen)
                 }
             }
 
             Tab(
-                AppViewModel.ProjectContentTab.mcp.title,
-                systemImage: AppViewModel.ProjectContentTab.mcp.systemImage,
+                OpenClientProjectContentTab.mcp.title,
+                systemImage: OpenClientProjectContentTab.mcp.systemImage,
                 value: ProjectNativeTab.mcp
             ) {
-                MCPListView(viewModel: viewModel)
+                MCPListView(facade: shell.mcp)
             }
 
             Tab(value: ProjectNativeTab.compose, role: .search) {
@@ -161,12 +168,12 @@ struct ProjectContentView: View {
     @available(iOS 18.0, *)
     private var nativeTabSelection: Binding<ProjectNativeTab> {
         Binding(
-            get: { ProjectNativeTab(projectTab: viewModel.selectedProjectContentTab) },
+            get: { ProjectNativeTab(projectTab: snapshot.selectedTab) },
             set: { selection in
                 if selection == .compose {
                     presentCreateSessionSheet()
                 } else if let projectTab = selection.projectTab {
-                    viewModel.selectedProjectContentTab = projectTab
+                    shell.selectProjectContentTab(projectTab)
                 }
             }
         )
@@ -174,122 +181,61 @@ struct ProjectContentView: View {
 #endif
 
     private var showsTopToolbarAction: Bool {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            return !usesNativeSearchRoleComposeTab
-        case .git, .mcp:
-            return true
-        }
+        snapshot.showsToolbarAction(usesNativeComposeTab: usesNativeSearchRoleComposeTab)
     }
 
     @ViewBuilder
     private var content: some View {
-        switch viewModel.selectedProjectContentTab {
+        switch snapshot.selectedTab {
         case .sessions:
-            SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
+            SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
         case .git:
-            if viewModel.hasGitProject {
-                GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
+            if snapshot.hasGitProject {
+                GitStatusView(facade: shell.projectFiles, onFileChosen: onDetailChosen)
             } else {
-                SessionListView(viewModel: viewModel, onSessionChosen: onDetailChosen)
+                SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
             }
         case .mcp:
-            MCPListView(viewModel: viewModel)
-        }
-    }
-
-    private var availableTabs: [AppViewModel.ProjectContentTab] {
-        AppViewModel.ProjectContentTab.allCases.filter { tab in
-            tab != .git || viewModel.hasGitProject
+            MCPListView(facade: shell.mcp)
         }
     }
 
     private func syncProjectTabIfNeeded() {
-        if !viewModel.hasGitProject, viewModel.selectedProjectContentTab == .git {
-            viewModel.selectedProjectContentTab = .sessions
-        }
+        shell.reconcileInvalidGitSelection()
     }
 
     private var projectTitle: String {
-        viewModel.projectScopeTitle.split(separator: "/").last.map(String.init) ?? viewModel.projectScopeTitle
+        snapshot.title
     }
 
     private var toolbarIcon: String {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            return "square.and.pencil"
-        case .git:
-            return "arrow.clockwise"
-        case .mcp:
-            return "arrow.clockwise"
-        }
+        snapshot.toolbarIcon
     }
 
     private var toolbarLabel: String {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            return "Create Session"
-        case .git:
-            return viewModel.projectFilesMode == .tree ? "Refresh File Tree" : "Refresh Files"
-        case .mcp:
-            return "Refresh MCP Servers"
-        }
+        snapshot.toolbarLabel
     }
 
     private var toolbarIdentifier: String {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            return "sessions.create"
-        case .git:
-            return "git.refresh"
-        case .mcp:
-            return "mcp.refresh"
-        }
+        snapshot.toolbarIdentifier
     }
 
     private var toolbarDisabled: Bool {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            return false
-        case .git:
-            return viewModel.isLoadingVCS || viewModel.isLoadingFileTree
-        case .mcp:
-            return viewModel.isLoadingMCP
-        }
+        snapshot.isToolbarDisabled
     }
 
     private func toolbarAction() {
-        switch viewModel.selectedProjectContentTab {
-        case .sessions:
-            presentCreateSessionSheet()
-        case .git:
-            Task {
-                if viewModel.projectFilesMode == .tree {
-                    await viewModel.reloadGitViewData(force: true)
-                    await viewModel.reloadFileTree(force: true)
-                } else {
-                    await viewModel.reloadGitViewData(force: true)
-                }
-            }
-        case .mcp:
-            Task {
-                await viewModel.reloadMCPStatus()
-            }
-        }
+        shell.performProjectContentToolbarAction()
     }
 
     private func presentCreateSessionSheet() {
-        viewModel.presentNewProjectChatSheet(
-            projectID: viewModel.currentProject?.id,
-            workspaceDirectory: viewModel.effectiveSelectedDirectory,
-            locksProject: true
-        )
+        shell.presentNewChatForCurrentContext()
     }
 }
 
 struct ProjectContentTabSelector: View {
-    @Binding var selection: AppViewModel.ProjectContentTab
-    let tabs: [AppViewModel.ProjectContentTab]
+    @Binding var selection: OpenClientProjectContentTab
+    let tabs: [OpenClientProjectContentTab]
 
     var body: some View {
         Picker("Project Content", selection: $selection.animation(opencodeSelectionAnimation)) {
@@ -307,7 +253,7 @@ struct ProjectContentTabSelector: View {
         .padding(.bottom, 10)
     }
 
-    private func systemImage(for tab: AppViewModel.ProjectContentTab) -> String {
+    private func systemImage(for tab: OpenClientProjectContentTab) -> String {
         tab.systemImage
     }
 }
@@ -320,7 +266,7 @@ private enum ProjectNativeTab: Hashable {
     case mcp
     case compose
 
-    init(projectTab: AppViewModel.ProjectContentTab) {
+    init(projectTab: OpenClientProjectContentTab) {
         switch projectTab {
         case .sessions:
             self = .sessions
@@ -331,7 +277,7 @@ private enum ProjectNativeTab: Hashable {
         }
     }
 
-    var projectTab: AppViewModel.ProjectContentTab? {
+    var projectTab: OpenClientProjectContentTab? {
         switch self {
         case .sessions:
             return .sessions
@@ -345,16 +291,3 @@ private enum ProjectNativeTab: Hashable {
     }
 }
 #endif
-
-private extension AppViewModel.ProjectContentTab {
-    var systemImage: String {
-        switch self {
-        case .sessions:
-            return "bubble.left.and.bubble.right"
-        case .git:
-            return "doc.on.doc"
-        case .mcp:
-            return "server.rack"
-        }
-    }
-}

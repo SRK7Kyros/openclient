@@ -3,24 +3,20 @@ import SwiftUI
 #if DEBUG
 #Preview("Session List") {
     NavigationStack {
-        SessionListView(
-            viewModel: AppViewModel.preview(permissions: [OpenCodePreviewData.permission]),
-            onSessionChosen: {}
-        )
+        SessionListPreview(viewModel: AppViewModel.preview(permissions: [OpenCodePreviewData.permission]))
     }
 }
 
 #Preview("Session Create Sheet") {
     NavigationStack {
-        SessionListView(
-            viewModel: AppViewModel.preview(isShowingCreateSessionSheet: true, draftTitle: "UI polish"),
-            onSessionChosen: {}
+        SessionListPreview(
+            viewModel: AppViewModel.preview(isShowingCreateSessionSheet: true, draftTitle: "UI polish")
         )
     }
 }
 
 #Preview("Create Session Sheet") {
-    CreateSessionSheet(viewModel: AppViewModel.preview(isShowingCreateSessionSheet: true, draftTitle: "UI polish"))
+    CreateSessionPreview(viewModel: AppViewModel.preview(isShowingCreateSessionSheet: true, draftTitle: "UI polish"))
 }
 
 #Preview("Session Avatar") {
@@ -37,5 +33,29 @@ import SwiftUI
         )
     }
     .listStyle(.plain)
+}
+
+private struct SessionListPreview: View {
+    @StateObject private var viewModel: AppViewModel
+
+    init(viewModel: AppViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    var body: some View {
+        SessionListView(facade: viewModel.sessionListFacade, onSessionChosen: {})
+    }
+}
+
+private struct CreateSessionPreview: View {
+    @StateObject private var viewModel: AppViewModel
+
+    init(viewModel: AppViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    var body: some View {
+        CreateSessionSheet(facade: viewModel.sessionListFacade)
+    }
 }
 #endif

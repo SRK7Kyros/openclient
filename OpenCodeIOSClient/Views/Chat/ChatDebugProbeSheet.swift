@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -60,7 +61,7 @@ private enum DebugProbeLogFilter: String, CaseIterable, Identifiable {
 }
 
 struct ChatDebugProbeSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var chatFacade: ChatFacade
     @Binding var copiedDebugLog: Bool
     @State private var selectedFilter: DebugProbeLogFilter = .deltaFlush
     @State private var filterQuery = ""
@@ -74,11 +75,11 @@ struct ChatDebugProbeSheet: View {
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 12) {
-                        Button(viewModel.isRunningDebugProbe ? "Running..." : "Start Probe") {
-                            Task { await viewModel.startDebugProbe() }
+                        Button(chatFacade.isRunningDebugProbe ? "Running..." : "Start Probe") {
+                            Task { await chatFacade.startDebugProbe() }
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(viewModel.isRunningDebugProbe)
+                        .disabled(chatFacade.isRunningDebugProbe)
 
                         Button(copiedDebugLog ? "Copied" : "Copy Filtered") {
                             OpenCodeClipboard.copy(filteredDebugText)
@@ -125,15 +126,15 @@ struct ChatDebugProbeSheet: View {
             .toolbar {
                 ToolbarItem(placement: .opencodeLeading) {
                     Button("Close") {
-                        viewModel.isShowingDebugProbe = false
+                        chatFacade.dismissDebugProbe()
                     }
                 }
             }
         }
-        .onChange(of: viewModel.debugProbeLog.count) { _, _ in
+        .onChange(of: chatFacade.debugProbeLogCount) { _, _ in
             copiedDebugLog = false
         }
-        .onChange(of: viewModel.chatBreadcrumbs.count) { _, _ in
+        .onChange(of: chatFacade.chatBreadcrumbCount) { _, _ in
             copiedDebugLog = false
         }
         .onChange(of: selectedFilter) { _, _ in
@@ -182,8 +183,8 @@ struct ChatDebugProbeSheet: View {
 
     private var rawSections: [(title: String, lines: [String])] {
         [
-            ("Probe Log", lines(from: viewModel.copyDebugProbeLog())),
-            ("Chat Breadcrumbs", lines(from: viewModel.copyChatBreadcrumbs())),
+            ("Probe Log", lines(from: chatFacade.copyDebugProbeLog())),
+            ("Chat Breadcrumbs", lines(from: chatFacade.copyChatBreadcrumbs())),
         ]
     }
 
@@ -191,3 +192,4 @@ struct ChatDebugProbeSheet: View {
         text.components(separatedBy: .newlines).filter { !$0.isEmpty }
     }
 }
+#endif

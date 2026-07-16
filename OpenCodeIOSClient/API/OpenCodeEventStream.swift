@@ -87,7 +87,7 @@ enum OpenCodeEventStream {
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
             let streamSession = URLSession(configuration: configuration)
             defer {
-                streamSession.invalidateAndCancel()
+                streamSession.finishTasksAndInvalidate()
             }
 
             let (bytes, response) = try await streamSession.bytes(for: request)

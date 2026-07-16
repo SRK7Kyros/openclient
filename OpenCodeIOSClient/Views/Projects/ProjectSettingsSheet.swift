@@ -1,18 +1,20 @@
 import SwiftUI
 
 struct ProjectSettingsSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
     @State private var selectedActionCommandName = ""
     @State private var selectedActionIconName = "bolt.fill"
     @State private var symbolPickerContext: ProjectActionSymbolPickerContext?
 
     var body: some View {
+        let snapshot = facade.settingsSnapshot
+
         NavigationStack {
             Form {
                 Section("Sessions") {
                     Toggle("Auto-start Live Activity", isOn: Binding(
-                        get: { viewModel.isLiveActivityAutoStartEnabled },
-                        set: { viewModel.setLiveActivityAutoStartEnabled($0) }
+                        get: { facade.settingsSnapshot.isLiveActivityAutoStartEnabled },
+                        set: { facade.setLiveActivityAutoStartEnabled($0) }
                     ))
 
                     Text("Start a Live Activity automatically when a session begins working in this project.")
@@ -21,8 +23,8 @@ struct ProjectSettingsSheet: View {
                 }
 
                 Section("Actions") {
-                    if viewModel.hasProUnlock {
-                        actionEditor
+                    if snapshot.hasProUnlock {
+                        actionEditor(snapshot)
                     } else {
                         lockedActions
                     }
@@ -30,17 +32,14 @@ struct ProjectSettingsSheet: View {
 
                 Section("Workspaces") {
                     Toggle("Show Workspaces", isOn: Binding(
-                        get: { viewModel.isProjectWorkspacesEnabled },
+                        get: { facade.settingsSnapshot.isProjectWorkspacesEnabled },
                         set: { isEnabled in
-                            viewModel.setProjectWorkspacesEnabled(isEnabled)
-                            if isEnabled {
-                                Task { await viewModel.loadWorkspaceSessionsIfNeeded() }
-                            }
+                            Task { await facade.setWorkspacesEnabled(isEnabled) }
                         }
                     ))
-                    .disabled(!viewModel.hasGitProject)
+                    .disabled(!snapshot.hasGitProject)
 
-                    Text(workspacesDescription)
+                    Text(workspacesDescription(snapshot))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -50,7 +49,7 @@ struct ProjectSettingsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .opencodeTrailing) {
                     Button("Done") {
-                        viewModel.isShowingProjectSettingsSheet = false
+                        facade.dismissSettings()
                     }
                 }
             }
@@ -58,7 +57,7 @@ struct ProjectSettingsSheet: View {
         .sheet(item: $symbolPickerContext) { context in
             ProjectActionSymbolPickerSheet(selectedSymbolName: context.selectedSymbolName) { symbolName in
                 if let actionID = context.actionID {
-                    viewModel.updateProjectActionIcon(actionID: actionID, iconName: symbolName)
+                    facade.updateActionIcon(actionID: actionID, iconName: symbolName)
                 } else {
                     selectedActionIconName = symbolName
                 }
@@ -68,38 +67,38 @@ struct ProjectSettingsSheet: View {
     }
 
     @ViewBuilder
-    private var actionEditor: some View {
-        if viewModel.currentProjectActions.isEmpty {
+    private func actionEditor(_ snapshot: ProjectFacade.SettingsSnapshot) -> some View {
+        if snapshot.actions.isEmpty {
             Text("Configure commands as quick Actions. They run in temporary sessions and only appear if they need debugging.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(viewModel.currentProjectActions) { action in
+            ForEach(snapshot.actions) { item in
                 ProjectActionSettingsRow(
-                    action: action,
-                    command: viewModel.actionCommand(for: action),
-                    phase: viewModel.actionRunPhase(for: action),
+                    action: item.action,
+                    command: item.command,
+                    phase: item.phase,
                     onPickIcon: {
-                        symbolPickerContext = ProjectActionSymbolPickerContext(actionID: action.id, selectedSymbolName: action.iconName)
+                        symbolPickerContext = ProjectActionSymbolPickerContext(actionID: item.action.id, selectedSymbolName: item.action.iconName)
                     },
                     onDelete: {
-                        viewModel.removeProjectAction(action)
+                        facade.removeAction(item.action)
                     }
                 )
             }
             .onMove { offsets, destination in
-                viewModel.moveProjectActions(fromOffsets: offsets, toOffset: destination)
+                facade.moveActions(from: offsets, to: destination)
             }
         }
 
-        if addableActionCommands.isEmpty {
-            Text(viewModel.actionEligibleCommands.isEmpty ? "No project commands are available yet." : "All available commands are already configured as Actions.")
+        if snapshot.addableCommands.isEmpty {
+            Text(snapshot.eligibleCommands.isEmpty ? "No project commands are available yet." : "All available commands are already configured as Actions.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         } else {
             Picker("Command", selection: $selectedActionCommandName) {
                 Text("Choose Command").tag("")
-                ForEach(addableActionCommands) { command in
+                ForEach(snapshot.addableCommands) { command in
                     Text("/\(command.name)").tag(command.name)
                 }
             }
@@ -118,7 +117,7 @@ struct ProjectSettingsSheet: View {
             }
 
             Button("Add Action") {
-                viewModel.addProjectAction(commandName: selectedActionCommandName, iconName: selectedActionIconName)
+                facade.addAction(commandName: selectedActionCommandName, iconName: selectedActionIconName)
                 selectedActionCommandName = ""
                 selectedActionIconName = "bolt.fill"
             }
@@ -136,20 +135,15 @@ struct ProjectSettingsSheet: View {
                 .foregroundStyle(.secondary)
 
             Button("Unlock Actions") {
-                viewModel.presentPaywall(reason: .actions)
+                facade.presentActionsPaywall()
             }
             .font(.subheadline.weight(.semibold))
         }
         .padding(.vertical, 4)
     }
 
-    private var addableActionCommands: [OpenCodeCommand] {
-        let configuredNames = Set(viewModel.currentProjectActions.map(\.commandName))
-        return viewModel.actionEligibleCommands.filter { !configuredNames.contains($0.name) }
-    }
-
-    private var workspacesDescription: String {
-        if viewModel.hasGitProject {
+    private func workspacesDescription(_ snapshot: ProjectFacade.SettingsSnapshot) -> String {
+        if snapshot.hasGitProject {
             return "Group sessions by the main worktree and any OpenCode sandbox worktrees for this project."
         }
 

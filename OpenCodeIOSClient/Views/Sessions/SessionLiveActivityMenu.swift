@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SessionLiveActivityMenu: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
 
     var body: some View {
         Menu {
@@ -9,11 +9,11 @@ struct SessionLiveActivityMenu: View {
                 Text("Auto-start Live Activity for this project.")
 
                 Button {
-                    viewModel.setLiveActivityAutoStartEnabled(!viewModel.isLiveActivityAutoStartEnabled)
+                    facade.setLiveActivityAutoStartEnabled(!facade.settingsSnapshot.isLiveActivityAutoStartEnabled)
                 } label: {
                     Label(
-                        viewModel.isLiveActivityAutoStartEnabled ? "Disable Auto-Start" : "Enable Auto-Start",
-                        systemImage: viewModel.isLiveActivityAutoStartEnabled ? "bolt.slash" : "bolt.badge.a"
+                        facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "Disable Auto-Start" : "Enable Auto-Start",
+                        systemImage: facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "bolt.slash" : "bolt.badge.a"
                     )
                 }
             }
@@ -24,6 +24,6 @@ struct SessionLiveActivityMenu: View {
     }
 
     private var toolbarSymbolName: String {
-        viewModel.isLiveActivityAutoStartEnabled ? "bolt.badge.a" : "waveform.badge.plus"
+        facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "bolt.badge.a" : "waveform.badge.plus"
     }
 }

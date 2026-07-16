@@ -120,6 +120,26 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testNewSessionUIKitPickerRemainsInContext() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "new-session"
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["New Session"].waitForExistence(timeout: 10))
+        let modelTrigger = app.descendants(matching: .any)["projects.newChat.model"]
+        XCTAssertTrue(modelTrigger.waitForExistence(timeout: 10))
+        modelTrigger.tap()
+
+        let option = app.buttons["Claude Sonnet 4.5"]
+        XCTAssertTrue(option.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["New Session"].exists)
+        option.tap()
+
+        XCTAssertTrue(modelTrigger.exists)
+        XCTAssertEqual(modelTrigger.value as? String, "Claude Sonnet 4.5")
+    }
+
+    @MainActor
     func testCreateSessionAndSendMessageAgainstLocalBackend() {
         let app = XCUIApplication()
         let sessionTitle = "UI Test \(UUID().uuidString.prefix(8))"

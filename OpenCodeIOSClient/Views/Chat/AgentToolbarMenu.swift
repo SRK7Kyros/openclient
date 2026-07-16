@@ -1,19 +1,27 @@
 import SwiftUI
 
 struct AgentToolbarMenu: View {
-    @ObservedObject var viewModel: AppViewModel
-    let session: OpenCodeSession
+    let title: String
+    let agents: [OpenCodeAgent]
     let glassNamespace: Namespace.ID
+    let onSelectAgent: (String) -> Void
 
     var body: some View {
-        Menu {
-            ForEach(viewModel.selectableAgents) { agent in
-                Button(agent.name.capitalized) {
-                    viewModel.selectAgent(named: agent.name, for: session)
-                }
-            }
-        } label: {
-            Text(viewModel.agentToolbarTitle(for: session).capitalized)
+        StablePickerMenu(
+            elements: agents.map { agent in
+                .action(
+                    id: agent.name,
+                    title: agent.name.capitalized,
+                    systemImage: "person.crop.circle",
+                    isSelected: agent.name.caseInsensitiveCompare(title) == .orderedSame
+                )
+            },
+            accessibilityLabel: "Agent",
+            accessibilityValue: title,
+            accessibilityIdentifier: "chat.toolbar.agent",
+            onSelect: onSelectAgent
+        ) {
+            Text(title.capitalized)
                 .font(.caption)
                 .opencodeToolbarGlassID("agent-toolbar", in: glassNamespace)
         }

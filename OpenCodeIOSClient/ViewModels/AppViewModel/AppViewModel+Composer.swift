@@ -2,77 +2,6 @@ import Foundation
 import SwiftUI
 
 extension AppViewModel {
-    struct ChatComposerOverlaySnapshot {
-        let todos: [OpenCodeTodo]
-        let attachments: [OpenCodeComposerAttachment]
-        let permissions: [OpenCodePermission]
-        let questions: [OpenCodeQuestionRequest]
-
-        var showsAccessoryArea: Bool {
-            todos.contains { !$0.isComplete } || !attachments.isEmpty
-        }
-
-        var attachmentIDs: [String] {
-            attachments.map(\.id)
-        }
-
-        var incompleteTodoIDs: [String] {
-            todos.filter { !$0.isComplete }.map(\.id)
-        }
-    }
-
-    struct ChatComposerSnapshot {
-        let commands: [OpenCodeCommand]
-        let attachmentCount: Int
-        let isBusy: Bool
-        let canFork: Bool
-        let forkableMessages: [OpenCodeForkableMessage]
-        let forkSignature: String
-        let mcp: MCPSnapshot
-        let mcpSignature: String
-        let actionSignature: String
-    }
-
-    func chatComposerOverlaySnapshot(forSessionID sessionID: String) -> ChatComposerOverlaySnapshot {
-        ChatComposerOverlaySnapshot(
-            todos: todos,
-            attachments: draftAttachments,
-            permissions: permissions(for: sessionID),
-            questions: questions(for: sessionID)
-        )
-    }
-
-    func chatComposerSnapshot(for session: OpenCodeSession, isBusy: Bool) -> ChatComposerSnapshot {
-        let canFork = !forkableMessages.isEmpty
-        let commands = commands(canFork: canFork)
-        let forkSignature = forkableMessages
-            .map { "\($0.id):\($0.text):\($0.created ?? 0)" }
-            .joined(separator: "|")
-        let mcpSnapshot = mcpSnapshot
-        let mcpSignature = mcpSnapshot.servers
-            .map { "\($0.name):\($0.status.status):\($0.status.error ?? "")" }
-            .joined(separator: "|") + "|loading=\(mcpSnapshot.isLoading)|toggling=\(mcpSnapshot.togglingServerNames.sorted().joined(separator: ","))|error=\(mcpSnapshot.errorMessage ?? "")"
-        let actionSignature = [
-            session.id,
-            session.directory ?? "",
-            session.workspaceID ?? "",
-            session.projectID ?? "",
-            session.parentID ?? ""
-        ].joined(separator: "|")
-
-        return ChatComposerSnapshot(
-            commands: commands,
-            attachmentCount: draftAttachments.count,
-            isBusy: isBusy,
-            canFork: canFork,
-            forkableMessages: forkableMessages,
-            forkSignature: forkSignature,
-            mcp: mcpSnapshot,
-            mcpSignature: mcpSignature,
-            actionSignature: actionSignature
-        )
-    }
-
     func addDraftAttachments(_ attachments: [OpenCodeComposerAttachment]) {
         withAnimation(opencodeSelectionAnimation) {
             objectWillChange.send()
@@ -315,31 +244,6 @@ extension AppViewModel {
         modelConfigurationStore.configurationReasoningTitle
     }
 
-    func agentToolbarTitle(for session: OpenCodeSession) -> String {
-        toolbarAgentName(for: session) ?? "Agent"
-    }
-
-    func modelToolbarTitle(for session: OpenCodeSession) -> String {
-        toolbarModelTitle(for: session) ?? "Model"
-    }
-
-    func isAgentToolbarLoading(for session: OpenCodeSession) -> Bool {
-        guard !isFunAndGamesSession(session.id) else { return false }
-        guard selectedSession?.id == session.id else { return false }
-        guard chatStore.isLoadingSelectedSession else { return false }
-        return selectedAgentName(for: session) == nil && lastUserMessage(for: session)?.info.agent == nil
-    }
-
-    func isModelToolbarLoading(for session: OpenCodeSession) -> Bool {
-        guard selectedSession?.id == session.id else { return false }
-        guard chatStore.isLoadingSelectedSession else { return false }
-        return selectedModelReference(for: session) == nil && lastUserMessage(for: session)?.info.model == nil
-    }
-
-    func isChatToolbarConfigurationLoading(for session: OpenCodeSession) -> Bool {
-        isAgentToolbarLoading(for: session) || isModelToolbarLoading(for: session)
-    }
-
     func selectedAgentName(for session: OpenCodeSession) -> String? {
         modelConfigurationStore.selectedAgentName(for: session.id)
     }
@@ -372,57 +276,6 @@ extension AppViewModel {
         modelConfigurationStore.effectiveModel(for: session.id)
     }
 
-    private func toolbarAgentName(for session: OpenCodeSession) -> String? {
-        if isKnownFunAndGamesSession(session.id) {
-            return "plan"
-        }
-
-        if let selected = selectedAgentName(for: session) {
-            return selected
-        }
-
-        if let agent = lastUserMessage(for: session)?.info.agent?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !agent.isEmpty {
-            return agent
-        }
-
-        guard !isAgentToolbarLoading(for: session) else { return nil }
-        return effectiveAgentName(for: session)
-    }
-
-    private func toolbarModelTitle(for session: OpenCodeSession) -> String? {
-        if let selected = selectedModel(for: session) {
-            return selected.name
-        }
-
-        if let messageModel = lastUserMessage(for: session)?.info.model {
-            let reference = OpenCodeModelReference(providerID: messageModel.providerID, modelID: messageModel.modelID)
-            return model(for: reference)?.name ?? messageModel.modelID
-        }
-
-        guard !isModelToolbarLoading(for: session) else { return nil }
-        return effectiveModel(for: session)?.name
-    }
-
-    private func sessionMessageSource(for session: OpenCodeSession) -> [OpenCodeMessageEnvelope] {
-        let syncedMessages = directoryStore.syncState.messageEnvelopes(forSessionID: session.id)
-        if !syncedMessages.isEmpty { return syncedMessages }
-        if let cachedMessages = cachedMessagesBySessionID[session.id], !cachedMessages.isEmpty { return cachedMessages }
-        if selectedSession?.id == session.id { return messages }
-        return []
-    }
-
-    private func lastUserMessage(for session: OpenCodeSession) -> OpenCodeMessageEnvelope? {
-        let source = sessionMessageSource(for: session)
-        return source.reversed().first { message in
-            message.info.sessionID == session.id && (message.info.role ?? "").lowercased() == "user"
-        }
-    }
-
-    func reasoningVariants(for session: OpenCodeSession) -> [String] {
-        modelConfigurationStore.reasoningVariants(forSessionID: session.id)
-    }
-
     func reasoningVariants(for reference: OpenCodeModelReference?) -> [String] {
         modelConfigurationStore.reasoningVariants(for: reference)
     }
@@ -431,26 +284,16 @@ extension AppViewModel {
         modelConfigurationStore.selectedVariant(for: session.id)
     }
 
-    func reasoningToolbarTitle(for session: OpenCodeSession) -> String {
-        if let selectedVariant = selectedVariant(for: session) {
-            return formattedVariantTitle(selectedVariant)
-        }
-        return "Default"
-    }
-
     func selectAgent(named name: String?, for session: OpenCodeSession) {
-        objectWillChange.send()
-        modelConfigurationStore.selectAgent(named: name, forSessionID: session.id)
+        chatFacade.selectAgent(named: name, for: session)
     }
 
     func selectModel(_ reference: OpenCodeModelReference?, for session: OpenCodeSession) {
-        objectWillChange.send()
-        modelConfigurationStore.selectModel(reference, forSessionID: session.id)
+        chatFacade.selectModel(reference, for: session)
     }
 
     func selectVariant(_ variant: String?, for session: OpenCodeSession) {
-        objectWillChange.send()
-        modelConfigurationStore.selectVariant(variant, forSessionID: session.id)
+        chatFacade.selectReasoningVariant(variant, for: session)
     }
 
     func formattedVariantTitle(_ variant: String) -> String {
@@ -495,7 +338,7 @@ extension AppViewModel {
     }
 
     func syncComposerSelections(for session: OpenCodeSession, sourceMessages: [OpenCodeMessageEnvelope]? = nil) {
-        let source = sourceMessages ?? sessionMessageSource(for: session)
+        let source = sourceMessages ?? chatFacade.messageSource(for: session)
         let lastUserMessage = source.reversed().first { message in
             message.info.sessionID == session.id && (message.info.role ?? "").lowercased() == "user"
         }

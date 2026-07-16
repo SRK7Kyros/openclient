@@ -77,26 +77,13 @@ private enum WorkspaceSessionLoadResult: Sendable {
 }
 
 extension AppViewModel {
-    struct ChatSessionHeaderSnapshot {
-        let session: OpenCodeSession
-        let isChildSession: Bool
-        let parentSession: OpenCodeSession?
-        let parentTitle: String
-        let childTitle: String
-        let shimmersNavigationTitle: Bool
-
-        var navigationTitle: String {
-            isChildSession ? childTitle : session.displayTitle(fallback: "Session")
-        }
-    }
-
     func beginSessionNavigation(_ session: OpenCodeSession) -> String? {
         let previousSessionID = selectedSession?.id
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .sessions
             selectedSession = session
             isLoadingSelectedSession = true
-            selectedVCSFile = nil
+            projectFilesStore.selectedVCSFile = nil
         }
         streamDirectory = session.directory
         return previousSessionID
@@ -129,7 +116,7 @@ extension AppViewModel {
             selectedMessages = cachedMessages
             chatStore.beginSelectingSession(sessionID: session.id, cachedMessages: cachedMessages)
             sessionInteractionStore.applySelectedSession(sessionID: session.id, syncState: directoryStore.syncState)
-            selectedVCSFile = nil
+            projectFilesStore.selectedVCSFile = nil
         }
         if animatesChanges {
             withAnimation(opencodeSelectionAnimation, applyChanges)
@@ -177,17 +164,26 @@ extension AppViewModel {
     }
 
     func reloadSessions() async throws {
-        let previousSelectedSession = selectedSession
-        let reload = try await sessionCoordinator.reloadDirectory(client: client, directory: effectiveSelectedDirectory)
+        let directory = effectiveSelectedDirectory
+        let targetKey = DirectoryStoreRegistry.key(for: directory)
+        let targetStore = directoryStoreRegistry.store(for: directory)
+        let targetGeneration = directoryStoreRegistry.generation
+        let previousSelectedSession = targetStore.selectedSession
+        let reload = try await sessionCoordinator.reloadDirectory(client: client, directory: directory)
+        guard directoryStoreRegistry.generation == targetGeneration,
+              directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
         let bootstrap = reload.bootstrap
-        let scopedSessions = sessionListStore.applyDirectoryReloadSessions(bootstrap.sessions, scopedTo: effectiveSelectedDirectory)
-        withAnimation(opencodeSelectionAnimation) {
-            objectWillChange.send()
-            directoryStore.applyDirectoryReload(
+        let scopedSessions = sessionListStore.applyDirectoryReloadSessions(bootstrap.sessions, scopedTo: directory)
+        _ = withAnimation(opencodeSelectionAnimation) {
+            targetStore.applyDirectoryReload(
                 bootstrap: bootstrap,
                 statuses: reload.statuses,
                 scopedSessions: scopedSessions
             )
+        }
+        guard directoryStoreRegistry.activeStore === targetStore else { return }
+        withAnimation(opencodeSelectionAnimation) {
+            objectWillChange.send()
             sessionInteractionStore.applyDirectoryBootstrap(bootstrap)
         }
         let selection = sessionCoordinator.selectionAfterDirectoryReload(
@@ -228,7 +224,7 @@ extension AppViewModel {
         }
 
         if hasGitProject, selectedProjectContentTab == .git {
-            await reloadGitViewData(force: true)
+            await projectFilesFacade.reloadGitViewData(force: true)
         }
 
         publishWidgetSnapshots()
@@ -403,6 +399,7 @@ extension AppViewModel {
     }
 
     private func loadWorkspaceSessions(directory: String, client: OpenCodeAPIClient, force: Bool = false) async {
+        let targetGeneration = directoryStoreRegistry.generation
         var state = sessionListStore.workspaceSessionState(for: directory)
         if state.isLoading {
             guard force else { return }
@@ -415,17 +412,29 @@ extension AppViewModel {
 
         do {
             let result = try await sessionCoordinator.loadWorkspaceSessions(client: client, directory: directory, limit: state.limit)
+            guard directoryStoreRegistry.generation == targetGeneration else { return }
 
             withAnimation(opencodeSelectionAnimation) {
                 sessionListStore.finishWorkspaceSessionsLoading(result.sessions, estimatedTotal: result.estimatedTotal, limit: state.limit, directory: directory)
             }
         } catch {
+            guard directoryStoreRegistry.generation == targetGeneration else { return }
             sessionListStore.failWorkspaceSessionsLoading(previousState: loadingState, directory: directory)
         }
     }
 
     func reloadSessionStatuses() async throws {
-        sessionStatuses = try await client.listSessionStatuses(directory: effectiveSelectedDirectory)
+        let directory = effectiveSelectedDirectory
+        let targetKey = DirectoryStoreRegistry.key(for: directory)
+        let targetStore = directoryStoreRegistry.store(for: directory)
+        let targetGeneration = directoryStoreRegistry.generation
+        let statuses = try await client.listSessionStatuses(directory: directory)
+        guard directoryStoreRegistry.generation == targetGeneration,
+              directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
+        targetStore.applySessionStatuses(statuses)
+        if directoryStoreRegistry.activeStore === targetStore {
+            objectWillChange.send()
+        }
     }
 
     func createSession() async {
@@ -1349,11 +1358,15 @@ extension AppViewModel {
         prefetchToolDetails: Bool = true,
         refreshTodos: Bool = true
     ) async throws {
+        let targetStore = directoryStoreRegistry.ownerStore(forSessionID: session.id) ?? directoryStore
+        let targetGeneration = directoryStoreRegistry.generation
         let loadedMessages = try await client.listMessages(sessionID: session.id, directory: session.directory)
+        guard directoryStoreRegistry.generation == targetGeneration,
+              directoryStoreRegistry.key(for: targetStore) != nil else { return }
         refreshSessionPreview(for: session.id, messages: loadedMessages)
         let isActiveSession = selectedSession?.id == session.id
         chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
-        directoryStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
+        targetStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
         inferFunAndGames(from: loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
         if isCapturingStreamingDiagnostics {
@@ -1516,18 +1529,24 @@ extension AppViewModel {
     }
 
     func loadTodos(for session: OpenCodeSession) async {
+        let targetStore = directoryStoreRegistry.ownerStore(forSessionID: session.id) ?? directoryStore
+        let targetGeneration = directoryStoreRegistry.generation
         do {
             let todos = try await client.getTodos(sessionID: session.id)
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.key(for: targetStore) != nil else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.applyTodos(todos, forSessionID: session.id)
+                targetStore.applyTodos(todos, forSessionID: session.id)
                 sessionInteractionStore.applyTodos(todos, forSessionID: session.id, selectedSessionID: selectedSession?.id)
             }
             refreshLiveActivityIfNeeded(for: session.id)
         } catch {
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.key(for: targetStore) != nil else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.applyTodos([], forSessionID: session.id)
+                targetStore.applyTodos([], forSessionID: session.id)
                 sessionInteractionStore.applyTodos([], forSessionID: session.id, selectedSessionID: selectedSession?.id)
             }
             refreshLiveActivityIfNeeded(for: session.id)
@@ -1535,19 +1554,30 @@ extension AppViewModel {
     }
 
     func loadAllPermissions(directory: String? = nil, workspaceID: String? = nil) async {
+        let targetKey = directoryStoreRegistry.activeKey
+        let targetStore = directoryStore
+        let targetGeneration = directoryStoreRegistry.generation
         do {
             let permissions = try await client.listPermissions(directory: directory, workspaceID: workspaceID)
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.applyPermissions(permissions)
-                sessionInteractionStore.applyLoadedPermissions(permissions)
+                targetStore.applyPermissions(permissions)
+                if directoryStoreRegistry.activeStore === targetStore {
+                    sessionInteractionStore.applyLoadedPermissions(permissions)
+                }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.clearPermissions()
-                sessionInteractionStore.applyLoadedPermissions([])
+                targetStore.clearPermissions()
+                if directoryStoreRegistry.activeStore === targetStore {
+                    sessionInteractionStore.applyLoadedPermissions([])
+                }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         }
@@ -1558,19 +1588,30 @@ extension AppViewModel {
     }
 
     func loadAllQuestions(directory: String? = nil, workspaceID: String? = nil) async {
+        let targetKey = directoryStoreRegistry.activeKey
+        let targetStore = directoryStore
+        let targetGeneration = directoryStoreRegistry.generation
         do {
             let questions = try await client.listQuestions(directory: directory, workspaceID: workspaceID)
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.applyQuestions(questions)
-                sessionInteractionStore.applyLoadedQuestions(questions)
+                targetStore.applyQuestions(questions)
+                if directoryStoreRegistry.activeStore === targetStore {
+                    sessionInteractionStore.applyLoadedQuestions(questions)
+                }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
+            guard directoryStoreRegistry.generation == targetGeneration,
+                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
             withAnimation(opencodeSelectionAnimation) {
                 objectWillChange.send()
-                directoryStore.clearQuestions()
-                sessionInteractionStore.applyLoadedQuestions([])
+                targetStore.clearQuestions()
+                if directoryStoreRegistry.activeStore === targetStore {
+                    sessionInteractionStore.applyLoadedQuestions([])
+                }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         }
@@ -1590,7 +1631,8 @@ extension AppViewModel {
         if !visiblePermissions.isEmpty {
             return visiblePermissions
         }
-        return directoryStore.syncState.permissionsBySessionID[sessionID] ?? []
+        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
+        return owner.syncState.permissionsBySessionID[sessionID] ?? []
     }
 
     var selectedSessionQuestions: [OpenCodeQuestionRequest] {
@@ -1603,7 +1645,8 @@ extension AppViewModel {
         if !visibleQuestions.isEmpty {
             return visibleQuestions
         }
-        return directoryStore.syncState.questionsBySessionID[sessionID] ?? []
+        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
+        return owner.syncState.questionsBySessionID[sessionID] ?? []
     }
 
     func hasPermissionRequest(for session: OpenCodeSession) -> Bool {
@@ -1846,22 +1889,6 @@ extension AppViewModel {
         }
 
         return "New Session"
-    }
-
-    func parentSessionTitle(for session: OpenCodeSession) -> String {
-        parentSession(for: session)?.title ?? "Session"
-    }
-
-    func chatSessionHeaderSnapshot(for session: OpenCodeSession) -> ChatSessionHeaderSnapshot {
-        let parent = parentSession(for: session)
-        return ChatSessionHeaderSnapshot(
-            session: session,
-            isChildSession: session.parentID != nil,
-            parentSession: parent,
-            parentTitle: parent?.displayTitle(fallback: "Session") ?? "Session",
-            childTitle: childSessionTitle(for: session),
-            shimmersNavigationTitle: session.isDefaultGeneratedTitle && latestTaskDescription(for: session) == nil
-        )
     }
 
     private func mergeSessions(_ sessions: [OpenCodeSession]) {

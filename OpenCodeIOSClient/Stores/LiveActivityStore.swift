@@ -8,7 +8,6 @@ import ActivityKit
 @MainActor
 final class LiveActivityStore: ObservableObject {
     @Published var activeSessionIDs: Set<String>
-    @Published var activeChatSessionID: String?
     var previewRefreshTasksBySessionID: [String: Task<Void, Never>]
     var refreshTasksBySessionID: [String: Task<Void, Never>]
 #if canImport(ActivityKit) && os(iOS)
@@ -17,12 +16,10 @@ final class LiveActivityStore: ObservableObject {
 
     init(
         activeSessionIDs: Set<String> = [],
-        activeChatSessionID: String? = nil,
         previewRefreshTasksBySessionID: [String: Task<Void, Never>] = [:],
         refreshTasksBySessionID: [String: Task<Void, Never>] = [:]
     ) {
         self.activeSessionIDs = activeSessionIDs
-        self.activeChatSessionID = activeChatSessionID
         self.previewRefreshTasksBySessionID = previewRefreshTasksBySessionID
         self.refreshTasksBySessionID = refreshTasksBySessionID
 #if canImport(ActivityKit) && os(iOS)

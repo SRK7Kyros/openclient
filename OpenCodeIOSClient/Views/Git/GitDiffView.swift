@@ -1,16 +1,16 @@
 import SwiftUI
 
 struct GitDiffView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFilesFacade
 
     var body: some View {
         GitDiffContent(
-            hasGitProject: viewModel.hasGitProject,
-            snapshot: viewModel.projectFilesSnapshot,
-            relativeGitPath: { viewModel.relativeGitPath($0) },
-            onLoadDiff: { mode in await viewModel.loadVCSDiff(mode: mode) },
+            hasGitProject: facade.hasGitProject,
+            snapshot: facade.snapshot,
+            relativeGitPath: { facade.relativeGitPath($0) },
+            onLoadDiff: { mode in await facade.loadVCSDiff(mode: mode) },
             onLoadSelectedFileContent: {
-                await viewModel.loadSelectedProjectFileContentIfNeeded()
+                await facade.loadSelectedFileContentIfNeeded()
             }
         )
     }
@@ -18,7 +18,7 @@ struct GitDiffView: View {
 
 private struct GitDiffContent: View {
     let hasGitProject: Bool
-    let snapshot: AppViewModel.ProjectFilesSnapshot
+    let snapshot: ProjectFilesFacade.Snapshot
     let relativeGitPath: (String) -> String
     let onLoadDiff: (OpenCodeVCSDiffMode) async -> Void
     let onLoadSelectedFileContent: () async -> Void
@@ -95,15 +95,15 @@ private struct GitDiffContent: View {
 }
 
 struct ProjectFileContentView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFilesFacade
 
     var body: some View {
         ProjectFileContent(
-            hasGitProject: viewModel.hasGitProject,
-            snapshot: viewModel.projectFilesSnapshot,
-            relativeGitPath: { viewModel.relativeGitPath($0) },
+            hasGitProject: facade.hasGitProject,
+            snapshot: facade.snapshot,
+            relativeGitPath: { facade.relativeGitPath($0) },
             onLoadSelectedFileContent: {
-                await viewModel.loadSelectedProjectFileContentIfNeeded()
+                await facade.loadSelectedFileContentIfNeeded()
             }
         )
     }
@@ -111,7 +111,7 @@ struct ProjectFileContentView: View {
 
 private struct ProjectFileContent: View {
     let hasGitProject: Bool
-    let snapshot: AppViewModel.ProjectFilesSnapshot
+    let snapshot: ProjectFilesFacade.Snapshot
     let relativeGitPath: (String) -> String
     let onLoadSelectedFileContent: () async -> Void
 

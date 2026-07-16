@@ -81,10 +81,6 @@ extension AppViewModel {
         let previousSessionID = selectedSession?.id
         let nextDirectory = project.id == "global" ? nil : project.worktree
         withAnimation(opencodeSelectionAnimation) {
-            if selectedDirectory != nextDirectory {
-                allSessions = []
-                workspaceSessionsByDirectory = [:]
-            }
             currentProject = project
             selectedDirectory = nextDirectory
             selectedProjectContentTab = .sessions
@@ -111,10 +107,6 @@ extension AppViewModel {
             preserveCurrentMessageDraftForNavigation(forSessionID: previousSessionID)
         }
         let applyChanges = { [self] in
-            if selectedDirectory != directory {
-                allSessions = []
-                workspaceSessionsByDirectory = [:]
-            }
             selectedDirectory = directory
             selectedProjectContentTab = .sessions
             isLoadingSessions = true
@@ -122,9 +114,8 @@ extension AppViewModel {
             isLoadingSelectedSession = false
             messages = []
             sessionInteractionStore.reset()
-            mcpStore.reset()
-            projectFilesStore.reset()
-            selectedFilesWorkspaceDirectory = nil
+            mcpFacade.reset()
+            projectFilesFacade.reset()
         }
         if animatesChanges {
             withAnimation(opencodeSelectionAnimation, applyChanges)
@@ -763,7 +754,7 @@ extension AppViewModel {
         guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
         if let recentProjectSessionsLoadTask {
             await recentProjectSessionsLoadTask.value
-            guard self.recentProjectSessionsLoadTask == nil else { return }
+            return
         }
 
         let generation = recentProjectSessionsLoadGeneration
@@ -1221,6 +1212,7 @@ extension AppViewModel {
         }
 
         let existingSandboxes = project.sandboxes ?? []
+        guard existingSandboxes != sandboxes else { return }
         let nextKeys = Set(sandboxes.map(workspaceKey))
         for existing in existingSandboxes where !nextKeys.contains(workspaceKey(existing)) {
             sessionListStore.removeWorkspaceState(for: existing)

@@ -16,13 +16,15 @@ enum ConnectionSheetRoute: Hashable {
     case appleIntelligenceChat(String)
 }
 
-struct ConnectionSheetView: View {
-    @ObservedObject var viewModel: AppViewModel
+private let connectionSheetHomeDetent: PresentationDetent = .fraction(0.98)
 
-    private static let homeDetent: PresentationDetent = .fraction(0.98)
+struct ConnectionSheetView<ChatDestination: View>: View {
+    @ObservedObject var facade: ConnectionFacade
+    @ObservedObject var commerce: CommerceFacade
+    let chatDestination: (String) -> ChatDestination
 
     @State private var path: [ConnectionSheetRoute] = []
-    @State private var selectedDetent: PresentationDetent = Self.homeDetent
+    @State private var selectedDetent: PresentationDetent = connectionSheetHomeDetent
 
     private var currentRoute: ConnectionSheetRoute? {
         path.last
@@ -31,7 +33,7 @@ struct ConnectionSheetView: View {
     var body: some View {
         ZStack {
             NavigationStack(path: $path) {
-                ConnectionView(viewModel: viewModel) { route in
+                ConnectionView(facade: facade, commerce: commerce) { route in
                     path.append(route)
                 }
                 .navigationDestination(for: ConnectionSheetRoute.self) { route in
@@ -39,13 +41,13 @@ struct ConnectionSheetView: View {
                 }
             }
 
-            if viewModel.isShowingConnectionOverlay {
+            if facade.isShowingConnectionOverlay {
                 ConnectingServerView(
-                    config: viewModel.config,
-                    phase: viewModel.connectionPhase,
-                    cancel: { viewModel.cancelConnectionAttempt() },
-                    retry: { viewModel.startConnection() },
-                    edit: { viewModel.cancelConnectionAttempt() }
+                    config: facade.config,
+                    phase: facade.connectionPhase,
+                    cancel: { facade.cancelConnectionAttempt() },
+                    retry: { facade.startConnection() },
+                    edit: { facade.cancelConnectionAttempt() }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -54,7 +56,7 @@ struct ConnectionSheetView: View {
         .presentationDetents(detents, selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(true)
-        .animation(.snappy(duration: 0.34, extraBounce: 0.02), value: viewModel.isShowingConnectionOverlay)
+        .animation(.snappy(duration: 0.34, extraBounce: 0.02), value: facade.isShowingConnectionOverlay)
         .onAppear {
             updateDetent(for: currentRoute)
             syncAppleIntelligenceRoute()
@@ -67,16 +69,16 @@ struct ConnectionSheetView: View {
             }
 
             if case .appleIntelligenceChat = oldPath.last,
-               viewModel.isUsingAppleIntelligence {
-                viewModel.leaveAppleIntelligenceSession()
+               facade.isUsingAppleIntelligence {
+                facade.leaveAppleIntelligenceSession()
             }
 
             updateDetent(for: currentRoute)
         }
-        .onChange(of: viewModel.selectedSession?.id) { _, _ in
+        .onChange(of: facade.selectedSessionID) { _, _ in
             syncAppleIntelligenceRoute()
         }
-        .onChange(of: viewModel.isUsingAppleIntelligence) { _, _ in
+        .onChange(of: facade.isUsingAppleIntelligence) { _, _ in
             syncAppleIntelligenceRoute()
         }
     }
@@ -84,7 +86,7 @@ struct ConnectionSheetView: View {
     private var detents: Set<PresentationDetent> {
         switch currentRoute {
         case .addServer, .editServer, .none:
-            [Self.homeDetent]
+            [connectionSheetHomeDetent]
         case .help, .appleIntelligenceChat:
             [.large]
         }
@@ -94,12 +96,11 @@ struct ConnectionSheetView: View {
     private func destination(for route: ConnectionSheetRoute) -> some View {
         switch route {
         case .addServer, .editServer:
-            ServerConnectionEditorView(viewModel: viewModel)
+            ServerConnectionEditorView(facade: facade)
         case .help:
             HelpView()
         case let .appleIntelligenceChat(sessionID):
-            ChatView(viewModel: viewModel, sessionID: sessionID)
-                .id(sessionID)
+            chatDestination(sessionID)
         }
     }
 
@@ -108,12 +109,12 @@ struct ConnectionSheetView: View {
         case .help, .appleIntelligenceChat:
             selectedDetent = .large
         case .addServer, .editServer, .none:
-            selectedDetent = Self.homeDetent
+            selectedDetent = connectionSheetHomeDetent
         }
     }
 
     private func syncAppleIntelligenceRoute() {
-        guard viewModel.isUsingAppleIntelligence, let sessionID = viewModel.selectedSession?.id else {
+        guard facade.isUsingAppleIntelligence, let sessionID = facade.selectedSessionID else {
             if case .appleIntelligenceChat = currentRoute {
                 path.removeLast()
             }
@@ -126,11 +127,12 @@ struct ConnectionSheetView: View {
 }
 
 struct ConnectionView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ConnectionFacade
+    @ObservedObject var commerce: CommerceFacade
     var navigate: ((ConnectionSheetRoute) -> Void)? = nil
 
     private var hasRecentServers: Bool {
-        viewModel.recentServerConfigs.isEmpty == false
+        facade.recentServerConfigs.isEmpty == false
     }
 
     private var isScreenshotScene: Bool {
@@ -145,7 +147,7 @@ struct ConnectionView: View {
             if hasRecentServers {
                 ToolbarItem(placement: .opencodeTrailing) {
                     Button {
-                        viewModel.presentAddServerSheet()
+                        facade.presentAddServerSheet()
                         navigate?(.addServer)
                     } label: {
                         Image(systemName: "plus")
@@ -154,12 +156,15 @@ struct ConnectionView: View {
                 }
             }
         }
-        .sheet(isPresented: $viewModel.isShowingAppleIntelligenceFolderPicker) {
+        .sheet(isPresented: Binding(
+            get: { facade.isShowingAppleIntelligenceFolderPicker },
+            set: { facade.isShowingAppleIntelligenceFolderPicker = $0 }
+        )) {
 #if canImport(UIKit) && canImport(UniformTypeIdentifiers)
             AppleIntelligenceFolderPicker { url in
-                viewModel.isShowingAppleIntelligenceFolderPicker = false
+                facade.isShowingAppleIntelligenceFolderPicker = false
                 guard let url else { return }
-                Task { await viewModel.createAppleIntelligenceWorkspace(from: url) }
+                Task { await facade.createAppleIntelligenceWorkspace(from: url) }
             }
 #else
             Text("Folder picking is unavailable on this platform.")
@@ -175,7 +180,7 @@ struct ConnectionView: View {
             if hasRecentServers {
                 recentServersSection
 
-                if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
+                if let errorMessage = facade.errorMessage, !errorMessage.isEmpty {
                     Section("Connection Failed") {
                         Text(errorMessage)
                             .font(.footnote)
@@ -186,12 +191,12 @@ struct ConnectionView: View {
             }
 
             if hasRecentServers == false {
-                ServerConnectionSections(viewModel: viewModel)
+                ServerConnectionSections(facade: facade)
             }
 
 #if DEBUG
             if !isScreenshotScene {
-                DebugEntitlementSection(viewModel: viewModel)
+                DebugEntitlementSection(commerce: commerce)
             }
 #endif
 
@@ -203,24 +208,24 @@ struct ConnectionView: View {
 
     private var recentServersSection: some View {
         Section("Recent") {
-            ForEach(viewModel.recentServerConfigs, id: \.recentServerID) { serverConfig in
+            ForEach(facade.recentServerConfigs, id: \.recentServerID) { serverConfig in
                 ZStack(alignment: .topTrailing) {
                     Button {
-                        viewModel.startConnection(to: serverConfig)
+                        facade.startConnection(to: serverConfig)
                     } label: {
                         RecentServerCard(serverConfig: serverConfig)
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button {
-                            viewModel.prepareToEditRecentServer(serverConfig)
+                            facade.prepareToEditRecentServer(serverConfig)
                             navigate?(.editServer(serverConfig.recentServerID))
                         } label: {
                             Label("Edit", systemImage: "square.and.pencil")
                         }
 
                         Button(role: .destructive) {
-                            viewModel.removeRecentServer(serverConfig)
+                            facade.removeRecentServer(serverConfig)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
@@ -228,7 +233,7 @@ struct ConnectionView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        viewModel.prepareToEditRecentServer(serverConfig)
+                        facade.prepareToEditRecentServer(serverConfig)
                         navigate?(.editServer(serverConfig.recentServerID))
                     } label: {
                         Label("Edit", systemImage: "square.and.pencil")
@@ -236,7 +241,7 @@ struct ConnectionView: View {
                     .tint(.indigo)
 
                     Button("Remove", role: .destructive) {
-                        viewModel.removeRecentServer(serverConfig)
+                        facade.removeRecentServer(serverConfig)
                     }
                 }
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -253,17 +258,17 @@ struct ConnectionView: View {
     private var appleIntelligenceSection: some View {
         Section("Apple Intelligence") {
             Button {
-                viewModel.presentAppleIntelligenceFolderPicker()
+                facade.presentAppleIntelligenceFolderPicker()
             } label: {
                 AppleIntelligenceConnectionCard()
             }
             .buttonStyle(.plain)
-            .disabled(!viewModel.canTryAppleIntelligence)
+            .disabled(!facade.canTryAppleIntelligence)
             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
 
-            if let summary = viewModel.appleIntelligenceAvailabilitySummary, !viewModel.canTryAppleIntelligence {
+            if let summary = facade.appleIntelligenceAvailabilitySummary, !facade.canTryAppleIntelligence {
                 Text(summary)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -290,26 +295,26 @@ struct ConnectionView: View {
 }
 
 private struct ServerConnectionEditorView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ConnectionFacade
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
-            ServerConnectionSections(viewModel: viewModel)
+            ServerConnectionSections(facade: facade)
         }
         .opencodeGroupedListStyle()
         .scrollContentBackground(.hidden)
         .background(.clear)
-        .navigationTitle(viewModel.isEditingSavedServer ? "Edit Server" : "Server")
+        .navigationTitle(facade.isEditingSavedServer ? "Edit Server" : "Server")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if viewModel.isEditingSavedServer {
+            if facade.isEditingSavedServer {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        viewModel.saveEditedServer()
+                        facade.saveEditedServer()
                         dismiss()
                     }
-                    .disabled(!viewModel.canSaveEditedServer)
+                    .disabled(!facade.canSaveEditedServer)
                 }
             }
         }
@@ -490,11 +495,11 @@ struct ConnectingServerView: View {
 
 #if DEBUG
 private struct DebugEntitlementSection: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var commerce: CommerceFacade
 
     var body: some View {
         Section {
-            OpenClientDebugEntitlementControls(viewModel: viewModel)
+            OpenClientDebugEntitlementControls(commerce: commerce)
                 .padding(.vertical, 6)
         } header: {
             Text("Debug")
@@ -528,15 +533,15 @@ private struct ServerConnectionSections: View {
         ConnectionIconOption(symbolName: "cube.box.fill", title: "Lab"),
     ]
 
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ConnectionFacade
     @State private var acknowledgesInsecureConnection = false
 
     private var requiresInsecureConnectionAcknowledgment: Bool {
-        viewModel.config.usesInsecureHTTP
+        facade.config.usesInsecureHTTP
     }
 
     private var insecureConnectionMessage: String {
-        switch viewModel.config.insecureConnectionKind {
+        switch facade.config.insecureConnectionKind {
         case .localNetwork:
             return "`http://` connections are not protected by HTTPS/TLS. This is often acceptable for local, LAN, or Tailscale-based self-hosted setups, but it is still less secure than HTTPS."
         case .nonLocal:
@@ -547,27 +552,27 @@ private struct ServerConnectionSections: View {
     }
 
     private var canConnect: Bool {
-        !viewModel.isLoading && (!requiresInsecureConnectionAcknowledgment || acknowledgesInsecureConnection)
+        !facade.isLoading && (!requiresInsecureConnectionAcknowledgment || acknowledgesInsecureConnection)
     }
 
     var body: some View {
         Group {
             Section {
-                TextField("Name", text: $viewModel.config.name)
+                TextField("Name", text: $facade.config.name)
                     .accessibilityIdentifier("connection.name")
 
-                TextField("Server URL", text: $viewModel.config.baseURL)
+                TextField("Server URL", text: $facade.config.baseURL)
                     .opencodeDisableTextAutocapitalization()
                     .autocorrectionDisabled()
                     .opencodeURLKeyboardType()
                     .accessibilityIdentifier("connection.baseURL")
 
-                TextField("Username", text: $viewModel.config.username)
+                TextField("Username", text: $facade.config.username)
                     .opencodeDisableTextAutocapitalization()
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("connection.username")
 
-                SecureField("Password", text: $viewModel.config.password)
+                SecureField("Password", text: $facade.config.password)
                     .accessibilityIdentifier("connection.password")
 
                 if requiresInsecureConnectionAcknowledgment {
@@ -578,14 +583,14 @@ private struct ServerConnectionSections: View {
             } header: {
                 Text("Server")
             } footer: {
-                if viewModel.isEditingSavedServer {
+                if facade.isEditingSavedServer {
                     Text("Save changes to keep this connection handy, or connect now to verify it immediately.")
                 } else if requiresInsecureConnectionAcknowledgment {
                     Text(insecureConnectionMessage)
                 }
             }
 
-            if let errorMessage = viewModel.errorMessage {
+            if let errorMessage = facade.errorMessage {
                 Section("Error") {
                     Text(errorMessage)
                         .foregroundStyle(.red)
@@ -607,25 +612,25 @@ private struct ServerConnectionSections: View {
             }
 
             Section {
-                Button(viewModel.isLoading ? "Connecting..." : "Connect to OpenCode") {
-                    viewModel.startConnectionFromEditor()
+                Button(facade.isLoading ? "Connecting..." : "Connect to OpenCode") {
+                    facade.startConnectionFromEditor()
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .disabled(!canConnect)
                 .accessibilityIdentifier("connection.connect")
             }
         }
-        .onChange(of: viewModel.config.trimmedBaseURL) { _, _ in
+        .onChange(of: facade.config.trimmedBaseURL) { _, _ in
             acknowledgesInsecureConnection = false
         }
     }
 
     @ViewBuilder
     private func connectionIconButton(for option: ConnectionIconOption) -> some View {
-        let isSelected = viewModel.config.displayIconName == option.symbolName
+        let isSelected = facade.config.displayIconName == option.symbolName
 
         Button {
-            viewModel.config.iconName = option.symbolName
+            facade.config.iconName = option.symbolName
         } label: {
             VStack(spacing: 8) {
                 ZStack {

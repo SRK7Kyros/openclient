@@ -6,7 +6,7 @@ final class ProjectStore: ObservableObject {
     @Published var projects: [OpenCodeProject]
     @Published var currentProject: OpenCodeProject?
     @Published var selectedDirectory: String?
-    @Published var selectedContentTab: AppViewModel.ProjectContentTab
+    @Published var selectedContentTab: OpenClientProjectContentTab
     @Published var isShowingProjectPicker: Bool
     @Published var searchQuery: String
     @Published var searchResults: [String]
@@ -19,7 +19,7 @@ final class ProjectStore: ObservableObject {
         projects: [OpenCodeProject] = [],
         currentProject: OpenCodeProject? = nil,
         selectedDirectory: String? = nil,
-        selectedContentTab: AppViewModel.ProjectContentTab = .sessions,
+        selectedContentTab: OpenClientProjectContentTab = .sessions,
         isShowingProjectPicker: Bool = false,
         searchQuery: String = "",
         searchResults: [String] = [],

@@ -6,9 +6,10 @@ private struct AgentToolbarMenuPreviewHost: View {
 
     var body: some View {
         AgentToolbarMenu(
-            viewModel: AppViewModel.preview(),
-            session: OpenCodePreviewData.primarySession,
-            glassNamespace: namespace
+            title: "build",
+            agents: OpenCodePreviewData.agents,
+            glassNamespace: namespace,
+            onSelectAgent: { _ in }
         )
         .padding()
     }
@@ -19,11 +20,43 @@ private struct ModelToolbarMenuPreviewHost: View {
 
     var body: some View {
         ModelToolbarMenu(
-            viewModel: AppViewModel.preview(),
-            session: OpenCodePreviewData.primarySession,
-            glassNamespace: namespace
+            modelTitle: OpenCodePreviewData.previewModel.name,
+            providerGroups: OpenCodePreviewData.providers.map {
+                ChatFacade.ToolbarProviderGroup(id: $0.id, name: $0.name, models: Array($0.models.values))
+            },
+            reasoningVariants: [ChatFacade.ToolbarReasoningVariant(id: "balanced", title: "Balanced")],
+            reasoningTitle: "Balanced",
+            glassNamespace: namespace,
+            onSelectModel: { _ in },
+            onSelectReasoningVariant: { _ in }
         )
         .padding()
+    }
+}
+
+private struct TodoInspectorPreviewHost: View {
+    private let viewModel = AppViewModel.preview()
+
+    var body: some View {
+        NavigationStack {
+            TodoInspectorView(chatFacade: viewModel.chatFacade)
+        }
+    }
+}
+
+private struct ActivityDetailPreviewHost: View {
+    private let viewModel = AppViewModel.preview()
+
+    var body: some View {
+        NavigationStack {
+            ActivityDetailView(
+                chatFacade: viewModel.chatFacade,
+                detail: ActivityDetail(
+                    message: OpenCodePreviewData.assistantMessage,
+                    part: OpenCodePreviewData.assistantMessage.parts[1]
+                )
+            )
+        }
     }
 }
 
@@ -56,10 +89,18 @@ private struct MessageComposerPreviewHost: View {
     }
 }
 
-#Preview("Chat View") {
-    NavigationStack {
-        ChatView(viewModel: AppViewModel.preview(), sessionID: OpenCodePreviewData.primarySession.id)
+private struct ChatViewPreviewHost: View {
+    private let viewModel = AppViewModel.preview()
+
+    var body: some View {
+        NavigationStack {
+            ChatView(chatFacade: viewModel.chatFacade, sessionID: OpenCodePreviewData.primarySession.id)
+        }
     }
+}
+
+#Preview("Chat View") {
+    ChatViewPreviewHost()
 }
 
 #Preview("Agent Toolbar Menu") {
@@ -95,9 +136,7 @@ private struct MessageComposerPreviewHost: View {
 }
 
 #Preview("Todo Inspector") {
-    NavigationStack {
-        TodoInspectorView(viewModel: AppViewModel.preview())
-    }
+    TodoInspectorPreviewHost()
 }
 
 #Preview("Permission Card") {
@@ -148,22 +187,17 @@ private struct MessageComposerPreviewHost: View {
 }
 
 #Preview("Activity Detail") {
-    NavigationStack {
-        ActivityDetailView(
-            viewModel: AppViewModel.preview(),
-            detail: ActivityDetail(message: OpenCodePreviewData.assistantMessage, part: OpenCodePreviewData.assistantMessage.parts[1])
-        )
-    }
+    ActivityDetailPreviewHost()
 }
 
 #Preview("User Message Bubble") {
-            MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: false, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], resolveTaskSessionID: { _, _ in nil }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in })
+            MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: false, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in nil }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onShowEarlierActivity: {})
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Assistant Message Bubble") {
-            MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: true, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], resolveTaskSessionID: { _, _ in OpenCodePreviewData.secondarySession.id }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in })
+            MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: true, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in OpenCodePreviewData.secondarySession.id }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onShowEarlierActivity: {})
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }

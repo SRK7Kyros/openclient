@@ -310,7 +310,10 @@ final class AppViewModelTests: XCTestCase {
             appendOptimisticMessage: false,
             meterPrompt: false
         )
-        viewModel.appleIntelligenceResponseTask?.cancel()
+        if let responseTask = viewModel.appleIntelligenceResponseTask {
+            responseTask.cancel()
+            await responseTask.value
+        }
 
         XCTAssertEqual(viewModel.messages.filter { $0.id == "msg_user" }.count, 1)
         XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "hello apple intelligence")
@@ -769,130 +772,6 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertTrue(store.togglingServerNames.isEmpty)
     }
 
-    func testMCPSnapshotContainsOnlyMCPViewState() {
-        let viewModel = AppViewModel()
-        viewModel.mcpStatuses = [
-            "server": OpenCodeMCPStatus(status: "connected", error: nil),
-        ]
-        viewModel.isLoadingMCP = true
-        viewModel.togglingMCPServerNames = ["server"]
-
-        let snapshot = viewModel.mcpSnapshot
-
-        XCTAssertEqual(snapshot.servers.map(\.name), ["server"])
-        XCTAssertEqual(snapshot.connectedServerCount, 1)
-        XCTAssertTrue(snapshot.isLoading)
-        XCTAssertEqual(snapshot.togglingServerNames, ["server"])
-    }
-
-    func testChatComposerSnapshotContainsPreparedComposerState() {
-        let viewModel = AppViewModel()
-        let session = makeSession(id: "ses_composer")
-        viewModel.selectedSession = session
-        viewModel.directoryCommands = [makeCommand("explain")]
-        viewModel.messages = [makeMessage(id: "msg_user", text: "Fork this", sessionID: session.id, role: "user")]
-        viewModel.draftAttachments = [
-            OpenCodeComposerAttachment(id: "att_1", kind: .file, filename: "notes.txt", mime: "text/plain", dataURL: "data:text/plain;base64,QQ=="),
-        ]
-        viewModel.mcpStatuses = [
-            "server": OpenCodeMCPStatus(status: "connected", error: nil),
-        ]
-        viewModel.isLoadingMCP = true
-
-        let snapshot = viewModel.chatComposerSnapshot(for: session, isBusy: true)
-
-        XCTAssertEqual(snapshot.commands.map(\.name), ["explain", "compact", "fork"])
-        XCTAssertEqual(snapshot.attachmentCount, 1)
-        XCTAssertTrue(snapshot.isBusy)
-        XCTAssertTrue(snapshot.canFork)
-        XCTAssertEqual(snapshot.forkableMessages.map(\.text), ["Fork this"])
-        XCTAssertEqual(snapshot.mcp.connectedServerCount, 1)
-        XCTAssertTrue(snapshot.mcp.isLoading)
-        XCTAssertEqual(snapshot.actionSignature, "ses_composer|/tmp/project||proj_test|")
-    }
-
-    func testChatComposerOverlaySnapshotContainsPendingComposerState() {
-        let viewModel = AppViewModel()
-        let sessionID = "ses_overlay"
-        viewModel.todos = [
-            OpenCodeTodo(content: "Active todo", status: "in_progress", priority: "high"),
-            OpenCodeTodo(content: "Done todo", status: "completed", priority: "low"),
-        ]
-        viewModel.draftAttachments = [
-            OpenCodeComposerAttachment(id: "att_1", kind: .file, filename: "notes.txt", mime: "text/plain", dataURL: "data:text/plain;base64,QQ=="),
-        ]
-        viewModel.permissions = [
-            OpenCodePermission(id: "perm_1", sessionID: sessionID, permission: "bash", patterns: ["ls"], always: nil, metadata: nil, tool: nil),
-            OpenCodePermission(id: "perm_other", sessionID: "other", permission: "edit", patterns: nil, always: nil, metadata: nil, tool: nil),
-        ]
-        viewModel.questions = [
-            OpenCodeQuestionRequest(id: "question_1", sessionID: sessionID, questions: [], tool: nil),
-            OpenCodeQuestionRequest(id: "question_other", sessionID: "other", questions: [], tool: nil),
-        ]
-
-        let snapshot = viewModel.chatComposerOverlaySnapshot(forSessionID: sessionID)
-
-        XCTAssertTrue(snapshot.showsAccessoryArea)
-        XCTAssertEqual(snapshot.attachmentIDs, ["att_1"])
-        XCTAssertEqual(snapshot.incompleteTodoIDs, ["Active todo"])
-        XCTAssertEqual(snapshot.permissions.map(\.id), ["perm_1"])
-        XCTAssertEqual(snapshot.questions.map(\.id), ["question_1"])
-    }
-
-    func testChatSessionHeaderSnapshotContainsChildSessionTitles() {
-        let viewModel = AppViewModel()
-        let parent = OpenCodeSession(id: "ses_parent", title: "Parent Chat", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
-        let child = OpenCodeSession(id: "ses_child", title: "Fix issue (@build subagent)", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: parent.id)
-        viewModel.allSessions = [parent, child]
-
-        let snapshot = viewModel.chatSessionHeaderSnapshot(for: child)
-
-        XCTAssertTrue(snapshot.isChildSession)
-        XCTAssertEqual(snapshot.parentSession?.id, parent.id)
-        XCTAssertEqual(snapshot.parentTitle, "Parent Chat")
-        XCTAssertEqual(snapshot.childTitle, "Fix issue")
-        XCTAssertEqual(snapshot.navigationTitle, "Fix issue")
-    }
-
-    func testProjectFilesSnapshotContainsPreparedViewState() {
-        let viewModel = AppViewModel()
-        viewModel.vcsFileStatuses = [
-            OpenCodeVCSFileStatus(path: "Sources/App.swift", added: 3, removed: 1, status: "modified"),
-        ]
-        viewModel.selectedVCSFile = "Sources/App.swift"
-        viewModel.projectFilesMode = .changes
-
-        let snapshot = viewModel.projectFilesSnapshot
-
-        XCTAssertEqual(snapshot.fileStatuses.map(\.path), ["Sources/App.swift"])
-        XCTAssertEqual(snapshot.summary.additions, 3)
-        XCTAssertEqual(snapshot.selectedVCSFile, "Sources/App.swift")
-        XCTAssertEqual(snapshot.filesMode, .changes)
-        XCTAssertNil(snapshot.selectedFileDiff)
-    }
-
-    func testProjectFilesSnapshotContainsSelectedDiffAndFileContent() {
-        let viewModel = AppViewModel()
-        let path = "Sources/App.swift"
-        viewModel.selectedVCSFile = path
-        viewModel.selectedProjectFilePath = path
-        viewModel.projectFilesStore.vcsDiffsByMode[.git] = [
-            OpenCodeVCSFileDiff(file: path, patch: "@@", additions: 1, deletions: 0, status: "modified"),
-        ]
-        viewModel.projectFilesStore.fileContentsByPath[path] = OpenCodeFileContent(
-            type: "text",
-            content: "print(\"hi\")",
-            diff: nil,
-            encoding: "utf-8",
-            mimeType: "text/x-swift"
-        )
-
-        let snapshot = viewModel.projectFilesSnapshot
-
-        XCTAssertEqual(snapshot.selectedFileDiff?.file, path)
-        XCTAssertEqual(snapshot.selectedFileContent?.content, "print(\"hi\")")
-    }
-
     func testSendDirectoryKeepsExistingSessionScope() {
         let viewModel = AppViewModel()
         let session = OpenCodeSession(
@@ -1242,7 +1121,7 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.todos.map(\.content), ["Updated"])
     }
 
-    func testActiveLiveActivityMessageEventBypassesSelectedDirectoryGateAndUpdatesCache() {
+    func testActiveLiveActivityMessageEventBypassesSelectedDirectoryGateAndUpdatesOwningStore() {
         let viewModel = AppViewModel()
         let selected = makeSession(id: "ses_selected")
         let live = OpenCodeSession(
@@ -1258,9 +1137,12 @@ final class AppViewModelTests: XCTestCase {
         viewModel.selectedDirectory = "/tmp/selected-project"
         viewModel.selectedSession = selected
         viewModel.activeLiveActivitySessionIDs = [live.id]
-        viewModel.cachedMessagesBySessionID[live.id] = [
-            makeMessage(id: "msg_live_assistant", text: "", sessionID: live.id),
-        ]
+        let owner = viewModel.directoryStoreRegistry.store(for: live.directory)
+        owner.sessions = [live]
+        owner.applyCanonicalMessages(
+            [makeMessage(id: "msg_live_assistant", text: "", sessionID: live.id)],
+            forSessionID: live.id
+        )
 
         viewModel.handleManagedEvent(
             OpenCodeManagedEvent(
@@ -1285,8 +1167,12 @@ final class AppViewModelTests: XCTestCase {
             )
         )
 
-        let cachedText = viewModel.cachedMessagesBySessionID[live.id]?.first?.parts.first?.text
-        XCTAssertEqual(cachedText, "Streaming live")
+        let canonicalText = viewModel.directoryStoreRegistry
+            .snapshot(forSessionID: live.id)?
+            .messages.first?
+            .parts.first?
+            .text
+        XCTAssertEqual(canonicalText, "Streaming live")
     }
 
     func testActiveLiveActivityPromptEventBypassesSelectedDirectoryGate() {
@@ -1326,7 +1212,7 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.permissions(for: permission.sessionID).map(\.id), [permission.id])
     }
 
-    func testSelectedTranscriptDeltaProjectsWhenActiveChatFocusIsTemporarilyMissing() {
+    func testSelectedTranscriptDeltaRemainsCoalescedWhenChatIsOffscreen() {
         let viewModel = AppViewModel()
         let selected = OpenCodeSession(id: "ses_selected", title: "Selected", workspaceID: nil, directory: "/tmp/project", projectID: nil, parentID: nil)
         let message = OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: selected.id, time: nil, agent: nil, model: nil)
@@ -1382,7 +1268,17 @@ final class AppViewModelTests: XCTestCase {
             )
         ))
 
+        XCTAssertEqual(viewModel.pendingTranscriptEvents.count, 1)
+        var syncChangeCount = 0
+        let syncObservation = viewModel.directoryStore.syncStore.objectWillChange.sink {
+            syncChangeCount += 1
+        }
+
+        viewModel.flushBufferedTranscript(reason: "test offscreen projection")
+
         XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "streaming")
+        XCTAssertEqual(syncChangeCount, 1)
+        withExtendedLifetime(syncObservation) {}
     }
 
     func testBufferedSelectedTranscriptDeltaFlushProjectsVisibleMessages() {

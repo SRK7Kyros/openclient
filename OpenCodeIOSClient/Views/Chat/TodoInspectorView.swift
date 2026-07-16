@@ -1,19 +1,35 @@
 import SwiftUI
 
+struct TodoInspectorRefreshState: Equatable {
+    private(set) var refreshedTodos: [OpenCodeTodo]?
+
+    mutating func apply(_ todos: [OpenCodeTodo]) {
+        refreshedTodos = todos
+    }
+
+    func visibleTodos(fallback: [OpenCodeTodo]) -> [OpenCodeTodo] {
+        refreshedTodos ?? fallback
+    }
+}
+
 struct TodoInspectorView: View {
-    @ObservedObject var viewModel: AppViewModel
-    @State private var refreshedTodos: [OpenCodeTodo] = []
+    @ObservedObject var chatFacade: ChatFacade
+    @State private var refreshState = TodoInspectorRefreshState()
     @State private var todoMessageDetail: OpenCodeMessageEnvelope?
     @State private var loadError: String?
     @State private var isLoading = false
     @State private var lastRefreshedAt: Date?
     @State private var rawTodoJSON = ""
 
+    private var snapshot: ChatFacade.TodoInspectorSnapshot {
+        chatFacade.todoInspectorSnapshot
+    }
+
     var body: some View {
         List {
             Section("Source") {
-                if let selectedSession = viewModel.selectedSession {
-                    LabeledContent("Session ID", value: selectedSession.id)
+                if let selectedSessionID = snapshot.selectedSessionID {
+                    LabeledContent("Session ID", value: selectedSessionID)
                 }
                 if let lastRefreshedAt {
                     LabeledContent("Last Refreshed", value: lastRefreshedAt.formatted(date: .omitted, time: .standard))
@@ -31,7 +47,7 @@ struct TodoInspectorView: View {
             }
 
             Section("Todos") {
-                ForEach(refreshedTodos.isEmpty ? viewModel.todos : refreshedTodos) { todo in
+                ForEach(refreshState.visibleTodos(fallback: snapshot.todos)) { todo in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: todo.isComplete ? "checkmark.circle.fill" : (todo.isInProgress ? "clock.badge" : "circle"))
                             .foregroundStyle(todo.isComplete ? .green : (todo.isInProgress ? .blue : .secondary))
@@ -80,8 +96,8 @@ struct TodoInspectorView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let result = try await viewModel.refreshTodosAndLatestTodoMessage()
-            refreshedTodos = result.todos
+            let result = try await chatFacade.refreshTodosAndLatestTodoMessage()
+            refreshState.apply(result.todos)
             todoMessageDetail = result.detail
             lastRefreshedAt = Date()
             rawTodoJSON = encodedTodos(result.todos)

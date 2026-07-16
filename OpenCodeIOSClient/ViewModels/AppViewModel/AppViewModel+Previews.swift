@@ -34,6 +34,10 @@ extension AppViewModel {
         viewModel.selectedSession = selectedSession
         viewModel.sessionStatuses = sessionStatuses
         viewModel.messages = messages
+        if let selectedSession {
+            viewModel.chatStore.beginSelectingSession(sessionID: selectedSession.id, cachedMessages: messages)
+            viewModel.chatStore.finishLoadingSelectedSession()
+        }
         viewModel.todos = todos
         viewModel.permissions = permissions
         viewModel.questions = questions

@@ -1,107 +1,42 @@
 import Foundation
 
 extension AppViewModel {
-    var hasProUnlock: Bool {
-#if DEBUG
-        switch debugEntitlementOverride {
-        case .system:
-            return purchaseManager.hasProUnlock
-        case .free, .limitReached:
-            return false
-        case .unlocked:
-            return true
-        }
-#else
-        return purchaseManager.hasProUnlock
-#endif
-    }
-
-    var remainingFreePromptsToday: Int {
-        normalizedUsageMeter()
-#if DEBUG
-        if debugEntitlementOverride == .limitReached { return 0 }
-#endif
-        return max(0, OpenClientCommerceLimits.dailyPromptLimit - usageMeter.dailyPromptCount)
-    }
-
-    var remainingFreeSessions: Int {
-        max(0, OpenClientCommerceLimits.freeSessionLimit - usageMeter.createdSessionCount)
-    }
-
-    var canCreateFreeSession: Bool {
-        hasProUnlock || usageMeter.createdSessionCount < OpenClientCommerceLimits.freeSessionLimit
-    }
+    var hasProUnlock: Bool { commerceFacade.hasProUnlock }
+    var remainingFreePromptsToday: Int { commerceFacade.remainingFreePromptsToday }
+    var remainingFreeSessions: Int { commerceFacade.remainingFreeSessions }
+    var canCreateFreeSession: Bool { commerceFacade.canCreateFreeSession }
 
     func presentPaywall(reason: OpenClientPaywallReason = .manual) {
-        paywallReason = reason
+        commerceFacade.presentPaywall(reason: reason)
     }
 
     func purchaseProUnlock() async {
-        await purchaseManager.purchaseProUnlock()
-        objectWillChange.send()
+        await commerceFacade.purchaseProUnlock()
     }
 
     func restoreProUnlock() async {
-        await purchaseManager.restorePurchases()
-        objectWillChange.send()
+        await commerceFacade.restoreProUnlock()
     }
 
     func reserveUserPromptIfAllowed() -> Bool {
-        normalizedUsageMeter()
-        guard !hasProUnlock else { return true }
-
-#if DEBUG
-        if debugEntitlementOverride == .limitReached {
-            paywallReason = .promptLimit
-            return false
-        }
-#endif
-
-        guard usageMeter.dailyPromptCount < OpenClientCommerceLimits.dailyPromptLimit else {
-            paywallReason = .promptLimit
-            return false
-        }
-
-        usageMeter.dailyPromptCount += 1
-        usageStore.save(usageMeter)
-        return true
+        commerceFacade.reserveUserPromptIfAllowed()
     }
 
     func refundReservedUserPromptIfNeeded() {
-        guard !hasProUnlock else { return }
-        normalizedUsageMeter()
-        guard usageMeter.dailyPromptCount > 0 else { return }
-        usageMeter.dailyPromptCount -= 1
-        usageStore.save(usageMeter)
+        commerceFacade.refundReservedUserPromptIfNeeded()
     }
 
     func canCreateSessionOrPresentPaywall() -> Bool {
-        guard canCreateFreeSession else {
-            paywallReason = .sessionLimit
-            return false
-        }
-        return true
+        commerceFacade.canCreateSessionOrPresentPaywall()
     }
 
     func recordCreatedSessionForMetering() {
-        guard !hasProUnlock else { return }
-        usageMeter.createdSessionCount += 1
-        usageStore.save(usageMeter)
+        commerceFacade.recordCreatedSessionForMetering()
     }
 
 #if DEBUG
     func resetDebugUsageMeter() {
-        usageMeter = .empty
-        usageStore.save(usageMeter)
+        commerceFacade.resetDebugUsageMeter()
     }
 #endif
-
-    private func normalizedUsageMeter() {
-        var meter = usageMeter
-        meter.normalize()
-        if meter != usageMeter {
-            usageMeter = meter
-            usageStore.save(meter)
-        }
-    }
 }

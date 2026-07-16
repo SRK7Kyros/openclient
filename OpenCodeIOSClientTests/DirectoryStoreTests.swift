@@ -36,6 +36,7 @@ final class DirectoryStoreTests: XCTestCase {
         XCTAssertEqual(store.sessions, [selected])
         XCTAssertEqual(store.commands, [command])
         XCTAssertEqual(store.sessionStatuses, [selected.id: "busy"])
+        XCTAssertEqual(store.syncState.sessionStatusesBySessionID, [selected.id: "busy"])
         XCTAssertEqual(store.syncState.permissionsBySessionID[selected.id], [permission])
         XCTAssertEqual(store.syncState.questionsBySessionID[selected.id], [question])
     }
@@ -73,6 +74,26 @@ final class DirectoryStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedSession, selected)
         XCTAssertEqual(visible.map(\.id), ["msg_cached"])
         XCTAssertEqual(store.syncState.messageEnvelopes(forSessionID: selected.id).map(\.id), ["msg_cached"])
+    }
+
+    func testApplySessionSelectionPreparesOnlyLatestThreeUserRounds() {
+        let selected = session(id: "ses_selected", directory: "/tmp/project")
+        var messages: [OpenCodeMessageEnvelope] = []
+        for round in 0..<20 {
+            messages.append(message(id: String(format: "msg_%03d_user", round * 2), role: "user", text: "Prompt \(round)", sessionID: selected.id))
+            messages.append(message(id: String(format: "msg_%03d_assistant", round * 2 + 1), role: "assistant", text: "Answer \(round)", sessionID: selected.id))
+        }
+        let store = DirectoryStore()
+        store.syncState.replaceMessages(messages, forSessionID: selected.id)
+
+        let visible = store.applySessionSelection(selected, cachedMessages: [])
+
+        XCTAssertEqual(visible.map(\.id), [
+            "msg_034_user", "msg_035_assistant",
+            "msg_036_user", "msg_037_assistant",
+            "msg_038_user", "msg_039_assistant",
+        ])
+        XCTAssertEqual(store.syncState.messageCount(forSessionID: selected.id), 40)
     }
 
     func testApplyInteractionHydrationResultsUpdatesSyncState() {
@@ -133,6 +154,135 @@ final class DirectoryStoreTests: XCTestCase {
 
         XCTAssertTrue(store.removeMessage(sessionID: sessionID, messageID: message.id))
         XCTAssertTrue(store.syncState.messageEnvelopes(forSessionID: sessionID).isEmpty)
+    }
+
+    func testRegistryNormalizesDirectoryKeysWithoutConflatingRootAndGlobal() {
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: nil), "global")
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: ""), "global")
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: "global"), "global")
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: "/tmp/project/"), "/tmp/project")
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: "\\tmp\\project\\"), "/tmp/project")
+        XCTAssertEqual(DirectoryStoreRegistry.key(for: "/"), "/")
+    }
+
+    func testRegistryRetainsDirectoryStateAcrossActivation() {
+        let registry = DirectoryStoreRegistry()
+        let projectA = registry.activate("/tmp/a")
+        projectA.sessions = [session(id: "ses_a", directory: "/tmp/a")]
+
+        let projectB = registry.activate("/tmp/b")
+        projectB.sessions = [session(id: "ses_b", directory: "/tmp/b")]
+
+        XCTAssertTrue(registry.activate("/tmp/a") === projectA)
+        XCTAssertEqual(registry.activeStore.sessions.map(\.id), ["ses_a"])
+        XCTAssertTrue(registry.activate("/tmp/b") === projectB)
+        XCTAssertEqual(registry.activeStore.sessions.map(\.id), ["ses_b"])
+    }
+
+    func testRegistryRestoresSelectionAndTranscriptAcrossDirectoryActivation() {
+        let registry = DirectoryStoreRegistry(activeDirectory: "/tmp/a")
+        let sessionA = session(id: "ses_a", directory: "/tmp/a")
+        let messageA = message(id: "msg_a", role: "assistant", text: "Project A", sessionID: sessionA.id)
+        registry.activeStore.sessions = [sessionA]
+        _ = registry.activeStore.applySessionSelection(sessionA, cachedMessages: [messageA])
+
+        let sessionB = session(id: "ses_b", directory: "/tmp/b")
+        let messageB = message(id: "msg_b", role: "assistant", text: "Project B", sessionID: sessionB.id)
+        let storeB = registry.activate("/tmp/b")
+        storeB.sessions = [sessionB]
+        _ = storeB.applySessionSelection(sessionB, cachedMessages: [messageB])
+
+        let restoredA = registry.activate("/tmp/a")
+
+        XCTAssertEqual(restoredA.selectedSession?.id, sessionA.id)
+        XCTAssertEqual(restoredA.syncState.messageEnvelopes(forSessionID: sessionA.id), [messageA])
+        XCTAssertEqual(storeB.selectedSession?.id, sessionB.id)
+        XCTAssertEqual(storeB.syncState.messageEnvelopes(forSessionID: sessionB.id), [messageB])
+    }
+
+    func testRegistryFindsSessionAndMessageOwners() {
+        let registry = DirectoryStoreRegistry(activeDirectory: "/tmp/a")
+        let owner = registry.activeStore
+        let ownedSession = session(id: "ses_a", directory: "/tmp/a")
+        owner.sessions = [ownedSession]
+        owner.applyCanonicalMessages(
+            [message(id: "msg_a", role: "assistant", text: "A", sessionID: ownedSession.id)],
+            forSessionID: ownedSession.id
+        )
+
+        XCTAssertTrue(registry.ownerStore(forSessionID: ownedSession.id) === owner)
+        XCTAssertEqual(registry.stores(containingMessageID: "msg_a").count, 1)
+    }
+
+    func testDirectorySyncFacadeRoutesKnownSessionOnlyToExistingOwner() {
+        let registry = DirectoryStoreRegistry(activeDirectory: "/tmp/project")
+        let owner = registry.activeStore
+        let ownedSession = session(id: "ses_project", directory: "/tmp/project")
+        owner.sessions = [ownedSession]
+        let global = registry.store(for: nil)
+        let facade = DirectorySyncFacade(registry: registry, coordinator: EventSyncCoordinator())
+        let managed = OpenCodeManagedEvent(
+            directory: DirectoryStoreRegistry.globalKey,
+            envelope: OpenCodeEventEnvelope(
+                type: "session.status",
+                properties: OpenCodeEventProperties(sessionID: ownedSession.id)
+            ),
+            typed: .sessionStatus(sessionID: ownedSession.id, status: "busy")
+        )
+
+        let targets = facade.targetStores(
+            for: managed,
+            selectedSessionID: nil,
+            selectedSessionDirectory: nil,
+            effectiveSelectedDirectory: "/tmp/project",
+            activeLiveActivitySessionIDs: []
+        )
+
+        XCTAssertEqual(targets.count, 1)
+        XCTAssertTrue(targets.first === owner)
+        XCTAssertFalse(targets.contains { $0 === global })
+    }
+
+    func testDirectorySyncFacadeUsesEventDirectoryStoreWhenSessionHasNoOwner() {
+        let registry = DirectoryStoreRegistry(activeDirectory: "/tmp/a")
+        let eventStore = registry.store(for: "/tmp/b")
+        let created = session(id: "ses_b", directory: "/tmp/b")
+        let facade = DirectorySyncFacade(registry: registry, coordinator: EventSyncCoordinator())
+        let managed = OpenCodeManagedEvent(
+            directory: "/tmp/b",
+            envelope: OpenCodeEventEnvelope(
+                type: "session.created",
+                properties: OpenCodeEventProperties(sessionID: created.id)
+            ),
+            typed: .sessionCreated(created)
+        )
+
+        let targets = facade.targetStores(
+            for: managed,
+            selectedSessionID: nil,
+            selectedSessionDirectory: nil,
+            effectiveSelectedDirectory: "/tmp/a",
+            activeLiveActivitySessionIDs: []
+        )
+
+        XCTAssertEqual(targets.count, 1)
+        XCTAssertTrue(targets.first === eventStore)
+        XCTAssertFalse(targets.contains { $0 === registry.activeStore })
+    }
+
+    func testRegistryResetDropsRetainedStoresAndReturnsToGlobal() {
+        let registry = DirectoryStoreRegistry(activeDirectory: "/tmp/a")
+        let oldStore = registry.activeStore
+        oldStore.sessions = [session(id: "ses_a", directory: "/tmp/a")]
+
+        registry.reset()
+
+        XCTAssertEqual(registry.activeKey, DirectoryStoreRegistry.globalKey)
+        XCTAssertFalse(registry.activeStore === oldStore)
+        XCTAssertEqual(registry.generation, 1)
+        XCTAssertTrue(registry.activeStore.sessions.isEmpty)
+        XCTAssertNil(registry.existingStore(for: "/tmp/a"))
+        XCTAssertFalse(registry.contains(oldStore, forKey: "/tmp/a"))
     }
 
     private func session(id: String, directory: String?) -> OpenCodeSession {

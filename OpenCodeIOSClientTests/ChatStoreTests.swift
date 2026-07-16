@@ -3,6 +3,102 @@ import XCTest
 
 @MainActor
 final class ChatStoreTests: XCTestCase {
+    func testInitialTranscriptRequestContainsLatestThreeUserRounds() {
+        let sessionID = "ses_test"
+        let messages = [
+            OpenCodeMessage(id: "system", role: "system", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "u0", role: "user", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "a0", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u0"),
+            OpenCodeMessage(id: "u1", role: "user", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "a1", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u1"),
+            OpenCodeMessage(id: "u2", role: "user", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "a2a", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u2"),
+            OpenCodeMessage(id: "a2b", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u2"),
+            OpenCodeMessage(id: "u3", role: "user", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "a3", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u3"),
+            OpenCodeMessage(id: "u4", role: "user", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            OpenCodeMessage(id: "a4", role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil, parentID: "u4"),
+        ]
+
+        let count = OpenCodeChatTranscriptWindowing.messageCountIncludingLatestUserRounds(
+            3,
+            fallbackMessageCount: 3,
+            in: messages
+        )
+
+        XCTAssertEqual(count, 7)
+        XCTAssertEqual(Array(messages.suffix(count)).map(\.id), ["u2", "a2a", "a2b", "u3", "a3", "u4", "a4"])
+    }
+
+    func testInitialTranscriptRequestFallsBackToThreeMessagesWithoutUserRounds() {
+        let messages = (0..<20).map {
+            OpenCodeMessage(id: "a\($0)", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil)
+        }
+
+        XCTAssertEqual(
+            OpenCodeChatTranscriptWindowing.messageCountIncludingLatestUserRounds(
+                3,
+                fallbackMessageCount: 3,
+                in: messages
+            ),
+            3
+        )
+    }
+
+    func testActivityBudgetKeepsProtectedContentAndNewestSettledActivity() {
+        let projection = MessageBubbleActivityBudget.project(
+            protectedEntries: Array(repeating: false, count: 20) + [true],
+            limit: 12
+        )
+
+        XCTAssertEqual(projection.hiddenCount, 8)
+        XCTAssertEqual(projection.firstHiddenIndex, 0)
+        XCTAssertEqual(projection.retainedIndices, Set(8...20))
+    }
+
+    func testActivityBudgetDoesNotSpendLimitOnProtectedEntries() {
+        var protectedEntries = Array(repeating: false, count: 20)
+        protectedEntries[2] = true
+
+        let projection = MessageBubbleActivityBudget.project(
+            protectedEntries: protectedEntries,
+            limit: 3
+        )
+
+        XCTAssertEqual(projection.hiddenCount, 16)
+        XCTAssertTrue(projection.retainedIndices.contains(2))
+        XCTAssertTrue(projection.retainedIndices.isSuperset(of: [17, 18, 19]))
+    }
+
+    func testTranscriptWindowLoadsOnlyRequestedSuffixForLongSession() {
+        let messages = (0..<1_500).map { index in
+            message(
+                id: String(format: "msg_%04d", index),
+                role: "assistant",
+                text: "Visible \(index)",
+                sessionID: "ses_test"
+            )
+        }
+        var requestedSuffixes: [Int] = []
+
+        let window = OpenCodeChatTranscriptWindowing.window(
+            totalCount: messages.count,
+            requestedCount: 50,
+            batchSize: 50,
+            loadSuffix: { count in
+                requestedSuffixes.append(count)
+                return Array(messages.suffix(count))
+            },
+            containsMessageID: { id in messages.contains { $0.id == id } },
+            hasDisplayableContent: { !$0.isEmpty }
+        )
+
+        XCTAssertEqual(requestedSuffixes, [50])
+        XCTAssertEqual(window.messages.count, 50)
+        XCTAssertEqual(window.messages.first?.id, "msg_1450")
+        XCTAssertEqual(window.hiddenMessageCount, 1_450)
+    }
+
     func testTranscriptWindowExpandsWhenLatestWindowHasNoDisplayableRows() {
         let sessionID = "ses_test"
         let visible = (0..<60).map { index in
@@ -78,83 +174,51 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(window.hiddenMessageCount, 0)
     }
 
-    func testUpdateCachedMessagesForLiveActivityIfNeededAppliesOffscreenActiveSessionEvent() {
-        let store = ChatStore(cachedMessagesBySessionID: [
-            "ses_live": [message(id: "msg_assistant", role: "assistant", text: "Hello", sessionID: "ses_live")]
-        ])
-        let payload = OpenCodeEventEnvelope(
-            type: "message.part.delta",
-            properties: .init(
-                sessionID: "ses_live",
+    func testDirectorySnapshotUsesReducerAppliedOffscreenTranscript() {
+        let sessionID = "ses_live"
+        let session = OpenCodeSession(
+            id: sessionID,
+            title: "Live",
+            workspaceID: nil,
+            directory: "/tmp/live",
+            projectID: "project",
+            parentID: nil
+        )
+        let registry = DirectoryStoreRegistry()
+        let store = registry.store(for: session.directory)
+        store.sessions = [session]
+        store.applyCanonicalMessages(
+            [message(id: "msg_assistant", role: "assistant", text: "Hello", sessionID: sessionID)],
+            forSessionID: sessionID
+        )
+        let coordinator = EventSyncCoordinator()
+        let state = EventSyncCoordinator.DirectoryEventState(
+            sessions: store.sessions,
+            selectedSession: nil,
+            sessionStatuses: [:],
+            syncState: store.syncState,
+            messages: [],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let application = coordinator.applyDirectoryEvents(
+            [.messagePartDelta(
+                sessionID: sessionID,
                 messageID: "msg_assistant",
                 partID: "part_msg_assistant",
                 field: "text",
                 delta: " world"
-            )
+            )],
+            to: state
         )
+        store.applyReducedEventState(application.state, scopedSessions: application.state.sessions)
 
-        let updated = store.updateCachedMessagesForLiveActivityIfNeeded(
-            payload: payload,
-            sessionID: "ses_live",
-            selectedSessionID: "ses_selected",
-            activeLiveActivitySessionIDs: ["ses_live"],
-            isLiveActivityMessageEvent: true
+        XCTAssertEqual(
+            registry.snapshot(forSessionID: sessionID)?.messages.first?.parts.first?.text,
+            "Hello world"
         )
-
-        XCTAssertEqual(updated?.first?.parts.first?.text, "Hello world")
-        XCTAssertEqual(store.cachedMessagesBySessionID["ses_live"]?.first?.parts.first?.text, "Hello world")
-    }
-
-    func testUpdateCachedMessagesForLiveActivityIfNeededIgnoresSelectedSessionEvent() {
-        let original = message(id: "msg_assistant", role: "assistant", text: "Hello", sessionID: "ses_live")
-        let store = ChatStore(cachedMessagesBySessionID: ["ses_live": [original]])
-        let payload = OpenCodeEventEnvelope(
-            type: "message.part.delta",
-            properties: .init(
-                sessionID: "ses_live",
-                messageID: "msg_assistant",
-                partID: "part_msg_assistant",
-                field: "text",
-                delta: " world"
-            )
-        )
-
-        let updated = store.updateCachedMessagesForLiveActivityIfNeeded(
-            payload: payload,
-            sessionID: "ses_live",
-            selectedSessionID: "ses_live",
-            activeLiveActivitySessionIDs: ["ses_live"],
-            isLiveActivityMessageEvent: true
-        )
-
-        XCTAssertNil(updated)
-        XCTAssertEqual(store.cachedMessagesBySessionID["ses_live"]?.first?.parts.first?.text, "Hello")
-    }
-
-    func testUpdateCachedMessagesForLiveActivityIfNeededIgnoresInactiveLiveActivitySession() {
-        let original = message(id: "msg_assistant", role: "assistant", text: "Hello", sessionID: "ses_live")
-        let store = ChatStore(cachedMessagesBySessionID: ["ses_live": [original]])
-        let payload = OpenCodeEventEnvelope(
-            type: "message.part.delta",
-            properties: .init(
-                sessionID: "ses_live",
-                messageID: "msg_assistant",
-                partID: "part_msg_assistant",
-                field: "text",
-                delta: " world"
-            )
-        )
-
-        let updated = store.updateCachedMessagesForLiveActivityIfNeeded(
-            payload: payload,
-            sessionID: "ses_live",
-            selectedSessionID: "ses_selected",
-            activeLiveActivitySessionIDs: [],
-            isLiveActivityMessageEvent: true
-        )
-
-        XCTAssertNil(updated)
-        XCTAssertEqual(store.cachedMessagesBySessionID["ses_live"]?.first?.parts.first?.text, "Hello")
     }
 
     private func message(id: String, role: String, text: String, sessionID: String, parentID: String? = nil) -> OpenCodeMessageEnvelope {

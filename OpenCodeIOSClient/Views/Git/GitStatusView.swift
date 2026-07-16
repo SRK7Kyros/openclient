@@ -1,40 +1,40 @@
 import SwiftUI
 
 struct GitStatusView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFilesFacade
     let onFileChosen: () -> Void
 
     var body: some View {
         GitStatusContent(
-            snapshot: viewModel.projectFilesSnapshot,
-            workspaceDirectories: viewModel.workspaceDirectories(),
-            workspaceDisplayName: { viewModel.workspaceDisplayName(for: $0) },
-            relativeGitPath: { viewModel.relativeGitPath($0) },
-            isExpandedDirectory: { viewModel.isExpandedDirectory($0) },
-            aggregateStatus: { viewModel.aggregateStatus(for: $0) },
-            onSelectWorkspace: { viewModel.selectFilesWorkspaceDirectory($0) },
-            onSelectMode: { viewModel.selectProjectFilesMode($0) },
+            snapshot: facade.snapshot,
+            workspaceDirectories: facade.workspaceDirectories,
+            workspaceDisplayName: { facade.workspaceDisplayName(for: $0) },
+            relativeGitPath: { facade.relativeGitPath($0) },
+            isExpandedDirectory: { facade.isExpandedDirectory($0) },
+            aggregateStatus: { facade.aggregateStatus(for: $0) },
+            onSelectWorkspace: { facade.selectWorkspaceDirectory($0) },
+            onSelectMode: { facade.selectFilesMode($0) },
             onSelectVCSFile: { path in
-                viewModel.selectVCSFile(path)
+                facade.selectVCSFile(path)
                 withAnimation(opencodeSelectionAnimation) {
                     onFileChosen()
                 }
             },
-            onToggleDirectory: { viewModel.toggleFileTreeDirectory($0) },
+            onToggleDirectory: { facade.toggleDirectory($0) },
             onSelectProjectFile: { node in
-                viewModel.selectProjectFile(node)
+                facade.selectProjectFile(node)
                 withAnimation(opencodeSelectionAnimation) {
                     onFileChosen()
                 }
             },
-            onLoadGitData: { await viewModel.loadGitViewDataIfNeeded() },
-            onLoadFileTree: { await viewModel.loadFileTreeIfNeeded() }
+            onLoadGitData: { await facade.loadGitViewDataIfNeeded() },
+            onLoadFileTree: { await facade.loadFileTreeIfNeeded() }
         )
     }
 }
 
 private struct GitStatusContent: View {
-    let snapshot: AppViewModel.ProjectFilesSnapshot
+    let snapshot: ProjectFilesFacade.Snapshot
     let workspaceDirectories: [String]
     let workspaceDisplayName: (String?) -> String?
     let relativeGitPath: (String) -> String
@@ -228,7 +228,7 @@ private struct GitStatusContent: View {
 }
 
 private struct GitFileTreeRow: View {
-    let row: AppViewModel.FileTreeRow
+    let row: ProjectFilesFacade.FileTreeRow
     let isExpanded: Bool
     let isSelected: Bool
     let aggregateStatus: OpenCodeVCSAggregateStatus?

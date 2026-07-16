@@ -50,7 +50,7 @@ final class ConnectionStore: ObservableObject {
     @Published var recentServerConfigs: [OpenCodeServerConfig]
     @Published var hasSavedServer: Bool
     @Published var showSavedServerPrompt: Bool
-    @Published var savedServerEditorMode: AppViewModel.SavedServerEditorMode
+    @Published var savedServerEditorMode: OpenClientSavedServerEditorMode
 
     init(
         backendMode: AppBackendMode = .none,
@@ -62,7 +62,7 @@ final class ConnectionStore: ObservableObject {
         recentServerConfigs: [OpenCodeServerConfig] = [],
         hasSavedServer: Bool = false,
         showSavedServerPrompt: Bool = false,
-        savedServerEditorMode: AppViewModel.SavedServerEditorMode = .add
+        savedServerEditorMode: OpenClientSavedServerEditorMode = .add
     ) {
         self.backendMode = backendMode
         self.isConnected = isConnected

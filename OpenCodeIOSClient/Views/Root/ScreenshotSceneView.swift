@@ -39,13 +39,12 @@ struct ScreenshotSceneView: View {
     private var screenshotContent: some View {
         switch scene {
         case .connection, .recentServers:
-            RootView(viewModel: viewModel)
+            rootView
         case .projects, .newSession, .providerSetup, .funGames, .sessions, .sessionActions, .sessionPinned, .chat, .permission, .question, .findPlaceGame, .findBugGame, .composerActions:
-            RootView(viewModel: viewModel)
+            rootView
         case .paywall:
             OpenClientPaywallView(
-                viewModel: viewModel,
-                purchaseManager: viewModel.purchaseManager,
+                commerce: viewModel.commerceFacade,
                 reason: .manual
             )
         case .recentWidget:
@@ -74,6 +73,12 @@ struct ScreenshotSceneView: View {
                 permission: OpenClientScreenshotData.permission,
                 question: OpenClientScreenshotData.questionRequest
             )
+        }
+    }
+
+    private var rootView: some View {
+        RootView(shell: viewModel.appShellFacade) { sessionID, presentationRequest in
+            ChatView(chatFacade: viewModel.chatFacade, sessionID: sessionID, presentationRequest: presentationRequest)
         }
     }
 

@@ -2,7 +2,7 @@ import SwiftUI
 
 #if DEBUG
 struct OpenClientDebugEntitlementControls: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var commerce: CommerceFacade
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -10,7 +10,10 @@ struct OpenClientDebugEntitlementControls: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Picker("Debug Entitlement", selection: $viewModel.debugEntitlementOverride) {
+            Picker("Debug Entitlement", selection: Binding(
+                get: { commerce.debugEntitlementOverride },
+                set: { commerce.debugEntitlementOverride = $0 }
+            )) {
                 ForEach(OpenClientDebugEntitlementOverride.allCases) { option in
                     Text(option.title).tag(option)
                 }
@@ -19,11 +22,11 @@ struct OpenClientDebugEntitlementControls: View {
 
             HStack(spacing: 14) {
                 Button("Reset Usage") {
-                    viewModel.resetDebugUsageMeter()
+                    commerce.resetDebugUsageMeter()
                 }
 
                 Button("Show Paywall") {
-                    viewModel.presentPaywall(reason: .manual)
+                    commerce.presentPaywall(reason: .manual)
                 }
             }
             .font(.caption.weight(.medium))

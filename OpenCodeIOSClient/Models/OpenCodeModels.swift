@@ -448,6 +448,39 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
         messagesBySessionID[sessionID]?.count ?? 0
     }
 
+    func userMessageCount(forSessionID sessionID: String) -> Int {
+        messagesBySessionID[sessionID]?.reduce(into: 0) { count, message in
+            if (message.role ?? "").lowercased() == "user" {
+                count += 1
+            }
+        } ?? 0
+    }
+
+    func messageCountIncludingLatestUserRounds(
+        _ roundCount: Int,
+        fallbackMessageCount: Int,
+        forSessionID sessionID: String
+    ) -> Int {
+        let messages = messagesBySessionID[sessionID] ?? []
+        guard !messages.isEmpty else { return 0 }
+        guard roundCount > 0 else { return min(messages.count, max(0, fallbackMessageCount)) }
+
+        var remainingRounds = roundCount
+        var oldestUserIndex: Int?
+        for index in messages.indices.reversed() where (messages[index].role ?? "").lowercased() == "user" {
+            oldestUserIndex = index
+            remainingRounds -= 1
+            if remainingRounds == 0 {
+                return messages.count - index
+            }
+        }
+
+        if let oldestUserIndex {
+            return messages.count - oldestUserIndex
+        }
+        return min(messages.count, max(0, fallbackMessageCount))
+    }
+
     func messageEnvelopes(forSessionID sessionID: String, suffix count: Int) -> [OpenCodeMessageEnvelope] {
         guard count > 0 else { return [] }
         let messages = messagesBySessionID[sessionID] ?? []

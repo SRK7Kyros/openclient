@@ -55,7 +55,7 @@ extension AppViewModel {
                 currentProject = nil
                 selectedDirectory = nil
                 selectedProjectContentTab = .sessions
-                directoryStore.reset()
+                directoryStoreRegistry.reset()
                 streamDirectory = nil
                 reconcileLiveActivities()
                 loadProjectListPreferences()
@@ -68,7 +68,7 @@ extension AppViewModel {
             },
             handleFailure: {
                 stopEventStream()
-                directoryStore.reset()
+                directoryStoreRegistry.reset()
             }
         )
         if isConnected {
@@ -124,7 +124,7 @@ extension AppViewModel {
         connectionOverlayStartedAt = nil
         isShowingConnectionOverlay = false
         stopEventStream()
-        directoryStore.reset()
+        directoryStoreRegistry.reset()
         resetRecentProjectSessionsForConnectionChange()
         connectionStore.applyConnectionCancellation()
     }
@@ -199,7 +199,7 @@ extension AppViewModel {
                 selectedProjectContentTab = .sessions
                 projectSearchQuery = ""
                 projectSearchResults = []
-                directoryStore.reset()
+                directoryStoreRegistry.reset()
                 modelConfigurationStore.reset()
                 funAndGamesPreferences = FunAndGamesPreferences()
                 findPlaceSessionsByID = [:]
@@ -224,7 +224,7 @@ extension AppViewModel {
                 currentProject = nil
                 selectedDirectory = nil
                 selectedProjectContentTab = .sessions
-                directoryStore.reset()
+                directoryStoreRegistry.reset()
             },
             clearComposer: {
                 objectWillChange.send()

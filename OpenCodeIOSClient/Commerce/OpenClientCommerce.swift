@@ -72,7 +72,12 @@ struct OpenClientUsageMeter: Codable, Equatable {
     }
 }
 
-struct OpenClientUsageStore {
+protocol OpenClientUsagePersisting {
+    func load() -> OpenClientUsageMeter
+    func save(_ meter: OpenClientUsageMeter)
+}
+
+struct OpenClientUsageStore: OpenClientUsagePersisting {
     private let service = "com.ntoporcov.openclient.usage-meter"
     private let account = "default"
 

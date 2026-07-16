@@ -7,7 +7,7 @@ import UIKit
 @main
 struct OpenCodeIOSClientApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var viewModel: AppViewModel
+    @StateObject private var composition: OpenClientComposition
 #if DEBUG
     private let screenshotScene: OpenClientScreenshotScene?
 #endif
@@ -17,12 +17,14 @@ struct OpenCodeIOSClientApp: App {
         let screenshotScene = OpenClientScreenshotScene.current
         self.screenshotScene = screenshotScene
         if let screenshotScene {
-            _viewModel = StateObject(wrappedValue: AppViewModel.screenshot(scene: screenshotScene))
+            _composition = StateObject(
+                wrappedValue: OpenClientComposition(viewModel: AppViewModel.screenshot(scene: screenshotScene))
+            )
         } else {
-            _viewModel = StateObject(wrappedValue: AppViewModel())
+            _composition = StateObject(wrappedValue: OpenClientComposition())
         }
 #else
-        _viewModel = StateObject(wrappedValue: AppViewModel())
+        _composition = StateObject(wrappedValue: OpenClientComposition())
 #endif
     }
 
@@ -31,28 +33,38 @@ struct OpenCodeIOSClientApp: App {
             Group {
 #if DEBUG
                 if let screenshotScene {
-                    ScreenshotSceneView(scene: screenshotScene, viewModel: viewModel)
+                    ScreenshotSceneView(scene: screenshotScene, viewModel: composition.viewModel)
                 } else {
-                    RootView(viewModel: viewModel)
+                    rootView
                 }
 #else
-                RootView(viewModel: viewModel)
+                rootView
 #endif
             }
             .opencodeSoftScrollEdgeEffect()
             .onOpenURL { url in
-                viewModel.prepareOpenURLPresentation(url)
-                Task { await viewModel.handleOpenURL(url) }
+                composition.appShell.prepareOpenURLPresentation(url)
+                Task { await composition.appShell.handleOpenURL(url) }
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
-                viewModel.scheduleForegroundChatCatchUp(reason: "app scene active")
+                composition.appShell.scheduleForegroundChatCatchUp(reason: "app scene active")
             }
 #if canImport(UIKit)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                viewModel.scheduleForegroundChatCatchUp(reason: "application did become active")
+                composition.appShell.scheduleForegroundChatCatchUp(reason: "application did become active")
             }
 #endif
+        }
+    }
+
+    private var rootView: some View {
+        RootView(shell: composition.appShell) { sessionID, presentationRequest in
+            ChatView(
+                chatFacade: composition.chat,
+                sessionID: sessionID,
+                presentationRequest: presentationRequest
+            )
         }
     }
 }

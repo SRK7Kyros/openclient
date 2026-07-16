@@ -2,7 +2,7 @@ import SwiftUI
 
 #if DEBUG
 private struct ProjectContentTabSelectorPreviewHost: View {
-    @State private var selection: AppViewModel.ProjectContentTab = .sessions
+    @State private var selection: OpenClientProjectContentTab = .sessions
     let width: CGFloat
     let title: String
 
@@ -10,7 +10,7 @@ private struct ProjectContentTabSelectorPreviewHost: View {
         VStack(spacing: 0) {
             ProjectContentTabSelector(
                 selection: $selection,
-                tabs: AppViewModel.ProjectContentTab.allCases
+                tabs: OpenClientProjectContentTab.allCases
             )
 
             VStack(alignment: .leading, spacing: 8) {

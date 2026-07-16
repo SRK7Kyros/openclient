@@ -1,65 +1,70 @@
 import SwiftUI
 
 struct CreateProjectSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
 
     var body: some View {
+        let snapshot = facade.createProjectSnapshot
+
         NavigationStack {
             List {
                 Section("Directory") {
-                    TextField("Search under \(viewModel.defaultSearchRoot)", text: $viewModel.createProjectQuery)
+                    TextField("Search under \(snapshot.defaultSearchRoot)", text: Binding(
+                        get: { facade.createProjectQuery },
+                        set: { facade.createProjectQuery = $0 }
+                    ))
                         .opencodeDisableTextAutocapitalization()
                         .autocorrectionDisabled()
-                        .onChange(of: viewModel.createProjectQuery) { _, _ in
-                            Task { await viewModel.searchCreateProjectDirectories() }
+                        .onChange(of: facade.createProjectQuery) { _, _ in
+                            Task { await facade.searchCreateProjectDirectories() }
                         }
                 }
 
-                if let selectedDirectory = viewModel.createProjectSelectedDirectory {
+                if let selectedDirectory = snapshot.selectedDirectory {
                     Section("Selected Directory") {
                         VStack(alignment: .leading, spacing: 12) {
                             Button {
-                                Task { await viewModel.createProject(from: selectedDirectory) }
+                                Task { await facade.createProject(from: selectedDirectory) }
                             } label: {
                                 ProjectRow(
-                                    title: viewModel.createProjectResultPath(selectedDirectory).split(separator: "/").last.map(String.init) ?? selectedDirectory,
-                                    subtitle: viewModel.createProjectResultPath(selectedDirectory),
+                                    title: facade.createProjectResultPath(selectedDirectory).split(separator: "/").last.map(String.init) ?? selectedDirectory,
+                                    subtitle: facade.createProjectResultPath(selectedDirectory),
                                     systemImage: "folder.badge.plus",
                                     isSelected: true
                                 )
                             }
                             .buttonStyle(.plain)
-                            .disabled(viewModel.isLoading)
+                            .disabled(snapshot.isLoading)
 
-                            Button(viewModel.isLoading ? "Selecting..." : "Select") {
-                                Task { await viewModel.createProject(from: selectedDirectory) }
+                            Button(snapshot.isLoading ? "Selecting..." : "Select") {
+                                Task { await facade.createProject(from: selectedDirectory) }
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(viewModel.isLoading)
+                            .disabled(snapshot.isLoading)
                         }
                         .padding(.vertical, 4)
                     }
                 }
 
                 Section("Directories") {
-                    if viewModel.createProjectResults.isEmpty {
+                    if snapshot.results.isEmpty {
                         Text("No directories found")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(viewModel.createProjectResults, id: \.self) { directory in
+                        ForEach(snapshot.results, id: \.self) { directory in
                             Button {
-                                Task { await viewModel.selectCreateProjectDirectory(directory) }
+                                Task { await facade.selectCreateProjectDirectory(directory) }
                             } label: {
-                                let displayPath = viewModel.createProjectResultPath(directory)
+                                let displayPath = facade.createProjectResultPath(directory)
                                 ProjectRow(
                                     title: displayPath.split(separator: "/").last.map(String.init) ?? displayPath,
                                     subtitle: displayPath,
                                     systemImage: "folder.badge.plus",
-                                    isSelected: viewModel.createProjectSelectedDirectory == directory
+                                    isSelected: snapshot.selectedDirectory == directory
                                 )
                             }
                             .buttonStyle(.plain)
-                            .disabled(viewModel.isLoading)
+                            .disabled(snapshot.isLoading)
                         }
                     }
                 }
@@ -67,14 +72,14 @@ struct CreateProjectSheet: View {
             .navigationTitle("Create Project")
             .opencodeInlineNavigationTitle()
             .onAppear {
-                if viewModel.createProjectResults.isEmpty {
-                    Task { await viewModel.searchCreateProjectDirectories() }
+                if snapshot.results.isEmpty {
+                    Task { await facade.searchCreateProjectDirectories() }
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .opencodeLeading) {
                     Button("Cancel") {
-                        viewModel.isShowingCreateProjectSheet = false
+                        facade.dismissCreateProject()
                     }
                 }
             }

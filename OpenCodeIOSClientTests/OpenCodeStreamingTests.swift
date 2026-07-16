@@ -1136,7 +1136,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         ))
     }
 
-    func testChatStoreBuffersSelectedActiveTranscriptDeltas() {
+    func testChatStoreBuffersSelectedTranscriptDeltasWhileOffscreen() {
         let event = OpenCodeTypedEvent.messagePartDelta(
             sessionID: "ses_current",
             messageID: "msg_assistant",
@@ -1151,10 +1151,16 @@ final class OpenCodeStreamingTests: XCTestCase {
             activeChatSessionID: "ses_current"
         ))
 
-        XCTAssertFalse(ChatStore.shouldBufferTranscriptEvent(
+        XCTAssertTrue(ChatStore.shouldBufferTranscriptEvent(
             event,
             selectedSessionID: "ses_current",
             activeChatSessionID: "ses_other"
+        ))
+
+        XCTAssertTrue(ChatStore.shouldBufferTranscriptEvent(
+            event,
+            selectedSessionID: "ses_current",
+            activeChatSessionID: nil
         ))
 
         XCTAssertFalse(ChatStore.shouldBufferTranscriptEvent(
@@ -1363,7 +1369,21 @@ final class OpenCodeStreamingTests: XCTestCase {
         store.enqueuePendingTranscriptEvent(pendingDelta(delta: " world"))
 
         XCTAssertTrue(store.hasPendingTranscriptEvents)
+        XCTAssertEqual(store.pendingTranscriptEventCount, 1)
         XCTAssertEqual(store.pendingTranscriptCharacterCount, 11)
+    }
+
+    @MainActor
+    func testChatStoreBoundsRawQueueWhileWaitingForTypedPart() {
+        let store = ChatStore()
+
+        for _ in 0..<10_000 {
+            store.enqueuePendingTranscriptEvent(pendingDelta(delta: "x"))
+        }
+
+        XCTAssertEqual(store.pendingTranscriptCharacterCount, 10_000)
+        XCTAssertLessThanOrEqual(store.pendingTranscriptEventCount, 3)
+        XCTAssertNil(store.drainAvailablePendingTranscriptEvents(in: OpenCodeDirectorySyncState()))
     }
 
     @MainActor
@@ -1374,7 +1394,7 @@ final class OpenCodeStreamingTests: XCTestCase {
 
         let drained = store.drainPendingTranscriptEvents()
 
-        XCTAssertEqual(drained?.events.count, 2)
+        XCTAssertEqual(drained?.events.count, 1)
         XCTAssertEqual(drained?.coalescedEvents.count, 1)
         XCTAssertEqual(drained?.coalescedEvents.first.flatMap(deltaText), "Hello world")
         XCTAssertFalse(store.hasPendingTranscriptEvents)
@@ -1445,7 +1465,7 @@ final class OpenCodeStreamingTests: XCTestCase {
 
         let drained = store.drainAvailablePendingTranscriptEvents(in: syncState)
 
-        XCTAssertEqual(drained?.events.count, 2)
+        XCTAssertEqual(drained?.events.count, 1)
         XCTAssertEqual(drained?.coalescedEvents.count, 1)
         XCTAssertEqual(deltaText(drained!.coalescedEvents[0]), "Hello world")
         XCTAssertFalse(store.hasPendingTranscriptEvents)
@@ -1468,35 +1488,6 @@ final class OpenCodeStreamingTests: XCTestCase {
             pendingRefreshExists: false,
             immediate: true,
             endIfIdle: false
-        ))
-    }
-
-    func testPermissionAndQuestionEventsRefreshLiveActivitiesImmediately() {
-        let coordinator = EventSyncCoordinator()
-
-        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
-            after: .permissionChanged,
-            event: .unknown("permission.asked")
-        ))
-
-        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
-            after: .questionChanged,
-            event: .unknown("question.asked")
-        ))
-
-        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
-            after: .statusChanged,
-            event: .permissionReplied(sessionID: "ses_live", requestID: "perm_1", reply: nil)
-        ))
-
-        XCTAssertTrue(coordinator.shouldRefreshLiveActivityImmediately(
-            after: .statusChanged,
-            event: .questionRejected(sessionID: "ses_live", requestID: "q_1")
-        ))
-
-        XCTAssertFalse(coordinator.shouldRefreshLiveActivityImmediately(
-            after: .message("delta applied"),
-            event: .messagePartDelta(sessionID: "ses_live", messageID: "msg_1", partID: "prt_1", field: "text", delta: "Hello")
         ))
     }
 

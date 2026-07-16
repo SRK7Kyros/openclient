@@ -3,13 +3,13 @@ import SwiftUI
 #if DEBUG
 #Preview("Connection Form") {
     NavigationStack {
-        ConnectionView(viewModel: AppViewModel.preview(isConnected: false))
+        ConnectionPreview(viewModel: AppViewModel.preview(isConnected: false))
     }
 }
 
 #Preview("Reconnect Prompt") {
     NavigationStack {
-        ConnectionView(
+        ConnectionPreview(
             viewModel: AppViewModel.preview(
                 isConnected: false,
                 errorMessage: "Authentication failed",
@@ -21,7 +21,7 @@ import SwiftUI
 }
 #Preview("Recent Servers") {
     NavigationStack {
-        ConnectionView(
+        ConnectionPreview(
             viewModel: AppViewModel.preview(
                 isConnected: false,
                 showSavedServerPrompt: true,
@@ -38,7 +38,7 @@ import SwiftUI
 
 #Preview("Add Server Sheet") {
     NavigationStack {
-        ConnectionView(
+        ConnectionPreview(
             viewModel: AppViewModel.preview(
                 isConnected: false,
                 hasSavedServer: true,
@@ -48,6 +48,21 @@ import SwiftUI
                 ],
                 isShowingAddServerSheet: true
             )
+        )
+    }
+}
+
+private struct ConnectionPreview: View {
+    @StateObject private var viewModel: AppViewModel
+
+    init(viewModel: AppViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    var body: some View {
+        ConnectionView(
+            facade: viewModel.connectionFacade,
+            commerce: viewModel.commerceFacade
         )
     }
 }

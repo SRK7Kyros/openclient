@@ -6,60 +6,50 @@ import AppKit
 #endif
 
 struct ProjectListView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
+    let connection: ConnectionFacade
+    @ObservedObject var configurations: ConfigurationsFacade
+    @ObservedObject var games: FunAndGamesFacade
     let onProjectChosen: () -> Void
     @State private var projectForColorPicker: OpenCodeProject?
     @State private var projectForImagePicker: OpenCodeProject?
 
     var body: some View {
-        let projectIDs = viewModel.projects.map { $0.id }.joined(separator: "|")
-        let recentLoadKey = [
-            viewModel.config.recentServerID,
-            viewModel.isConnected ? "connected" : "disconnected",
-            viewModel.showsRecentSessionsInProjectList ? "recent-on" : "recent-off",
-            projectIDs,
-        ].joined(separator: "|")
-        let recentSessions = viewModel.recentProjectSessions
-        let isLoadingRecentSessions = viewModel.isLoadingRecentProjectSessions
-        let isShowingProjectSessionSearch = !viewModel.projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let snapshot = facade.listSnapshot
+        let projectIDs = snapshot.projects.map { $0.id }.joined(separator: "|")
 
         List {
-            if isShowingProjectSessionSearch {
+            if snapshot.isShowingSearchResults {
                 ProjectSessionSearchSection(
-                    query: viewModel.projectSessionSearchQuery,
-                    results: viewModel.projectSessionSearchResults,
-                    isLoading: viewModel.isSearchingProjectSessions,
+                    query: snapshot.searchQuery,
+                    results: snapshot.searchResults,
+                    isLoading: snapshot.isSearching,
                     onSelect: openProjectSession
                 )
             } else {
                 Section {
-                    ForEach(viewModel.projects) { project in
+                    ForEach(snapshot.projects) { project in
                         let title = projectTitle(project)
                         ProjectRow(
                             title: title,
                             subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
                             systemImage: project.id == "global" ? "globe" : "folder.fill",
                             icon: project.icon,
-                            isSelected: viewModel.isProjectSelected(project)
+                            isSelected: facade.isSelected(project)
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let previousSessionID = viewModel.beginProjectNavigation(project)
+                            let ticket = facade.beginSelection(project)
                             withAnimation(opencodeSelectionAnimation) {
                                 onProjectChosen()
                             }
                             Task { @MainActor in
                                 await Task.yield()
-                                guard viewModel.currentProject?.id == project.id else { return }
-                                await viewModel.selectProject(
-                                    project,
-                                    preservingDraftForSessionID: previousSessionID,
-                                    animatesPreparation: false
-                                )
+                                await facade.completeSelection(ticket)
                             }
                         }
                         .contextMenu {
-                            if viewModel.canEditProjectPreferences(project) {
+                            if facade.canEditPreferences(for: project) {
                                 Button {
                                     projectForColorPicker = project
                                 } label: {
@@ -74,7 +64,7 @@ struct ProjectListView: View {
 
                                 if project.icon?.override?.isEmpty == false {
                                     Button(role: .destructive) {
-                                        Task { await viewModel.setProjectImageOverride(nil, for: project) }
+                                        Task { await facade.setImageOverride(nil, for: project) }
                                     } label: {
                                         Label("Clear Image", systemImage: "trash")
                                     }
@@ -85,13 +75,13 @@ struct ProjectListView: View {
                         }
                     }
                 } header: {
-                    ProjectListSectionHeader(recentSessions: recentSessions, isLoadingRecentSessions: isLoadingRecentSessions) { recent in
+                    ProjectListSectionHeader(recentSessions: snapshot.recentSessions, isLoadingRecentSessions: snapshot.isLoadingRecentSessions) { recent in
                         openProjectSession(recent)
                     }
                     .textCase(nil)
                 }
 
-                if viewModel.funAndGamesPreferences.showsSection {
+                if games.showsSection {
                     Section {
                         ProjectRow(
                             title: "Find the Place",
@@ -102,7 +92,7 @@ struct ProjectListView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            viewModel.presentFindPlaceModelSheet()
+                            games.presentFindPlaceModelSheet()
                         }
 
                         ProjectRow(
@@ -114,7 +104,7 @@ struct ProjectListView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            viewModel.presentFindBugLanguageSheet()
+                            games.presentFindBugLanguageSheet()
                         }
                     } header: {
                         Text("Fun & Games")
@@ -130,39 +120,39 @@ struct ProjectListView: View {
         .scrollClipDisabled()
         .refreshable {
             guard !isScreenshotScene else { return }
-            await viewModel.refreshProjectList()
+            await facade.refreshList()
         }
         .safeAreaInset(edge: .bottom) {
             ProjectListBottomBar(
                 query: Binding(
-                    get: { viewModel.projectSessionSearchQuery },
-                    set: { viewModel.projectSessionSearchQuery = $0 }
+                    get: { facade.projectSessionSearchQuery },
+                    set: { facade.projectSessionSearchQuery = $0 }
                 ),
-                isSearching: viewModel.isSearchingProjectSessions,
+                isSearching: snapshot.isSearching,
                 onNewChat: {
-                    viewModel.presentNewProjectChatSheet()
+                    facade.presentNewChat()
                 }
             )
             .padding(.horizontal, 16)
             .padding(.top, 8)
         }
-        .task(id: recentLoadKey) {
+        .task(id: snapshot.recentLoadKey) {
             guard !isScreenshotScene else { return }
-            await viewModel.loadRecentProjectSessionsAcrossProjects()
+            await facade.loadRecentSessions()
         }
-        .task(id: viewModel.projectSessionSearchQuery) {
+        .task(id: snapshot.searchQuery) {
             guard !isScreenshotScene else { return }
-            let query = viewModel.projectSessionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            let query = snapshot.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
-            await viewModel.searchProjectSessionsAcrossProjects()
+            await facade.searchSessions()
         }
         .navigationTitle("Projects")
         .toolbar {
             ToolbarItem(placement: .opencodeLeading) {
                 Button {
-                    viewModel.disconnect()
+                    connection.disconnect()
                 } label: {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
                 }
@@ -172,7 +162,7 @@ struct ProjectListView: View {
 
             ToolbarItem(placement: .opencodeTrailing) {
                 Button {
-                    viewModel.presentConfigurationsSheet()
+                    configurations.present()
                 } label: {
                     Image(systemName: "gearshape")
                 }
@@ -182,7 +172,7 @@ struct ProjectListView: View {
 
             ToolbarItem(placement: .opencodeTrailing) {
                 Button {
-                    viewModel.presentCreateProjectSheet()
+                    facade.presentCreateProject()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -190,28 +180,43 @@ struct ProjectListView: View {
                 .accessibilityIdentifier("projects.create")
             }
         }
-        .sheet(isPresented: $viewModel.isShowingCreateProjectSheet) {
-            CreateProjectSheet(viewModel: viewModel)
+        .sheet(isPresented: Binding(
+            get: { facade.isShowingCreateProjectSheet },
+            set: { facade.isShowingCreateProjectSheet = $0 }
+        )) {
+            CreateProjectSheet(facade: facade)
         }
-        .sheet(isPresented: $viewModel.isShowingConfigurationsSheet) {
-            ConfigurationsSheet(viewModel: viewModel)
+        .sheet(isPresented: Binding(
+            get: { configurations.isShowingConfigurationsSheet },
+            set: { configurations.isShowingConfigurationsSheet = $0 }
+        )) {
+            ConfigurationsSheet(viewModel: configurations)
         }
-        .sheet(isPresented: $viewModel.isShowingFindPlaceModelSheet) {
-            FindPlaceModelSelectionSheet(viewModel: viewModel, onGameStarted: onProjectChosen)
+        .sheet(isPresented: Binding(
+            get: { games.isShowingFindPlaceModelSheet },
+            set: { games.isShowingFindPlaceModelSheet = $0 }
+        )) {
+            FindPlaceModelSelectionSheet(viewModel: games, onGameStarted: onProjectChosen)
         }
-        .sheet(isPresented: $viewModel.isShowingFindBugLanguageSheet) {
-            FindBugLanguageSelectionSheet(viewModel: viewModel)
+        .sheet(isPresented: Binding(
+            get: { games.isShowingFindBugLanguageSheet },
+            set: { games.isShowingFindBugLanguageSheet = $0 }
+        )) {
+            FindBugLanguageSelectionSheet(viewModel: games)
         }
-        .sheet(isPresented: $viewModel.isShowingFindBugModelSheet) {
-            FindBugModelSelectionSheet(viewModel: viewModel, onGameStarted: onProjectChosen)
+        .sheet(isPresented: Binding(
+            get: { games.isShowingFindBugModelSheet },
+            set: { games.isShowingFindBugModelSheet = $0 }
+        )) {
+            FindBugModelSelectionSheet(viewModel: games, onGameStarted: onProjectChosen)
         }
         .sheet(item: $projectForColorPicker) { project in
-            ProjectColorPickerSheet(viewModel: viewModel, project: project)
+            ProjectColorPickerSheet(facade: facade, project: project)
         }
         .sheet(item: $projectForImagePicker) { project in
-            ProjectImagePickerSheet(viewModel: viewModel, project: project)
+            ProjectImagePickerSheet(facade: facade, project: project)
         }
-        .animation(opencodeSelectionAnimation, value: viewModel.selectedDirectory)
+        .animation(opencodeSelectionAnimation, value: snapshot.selectedDirectory)
         .animation(opencodeSelectionAnimation, value: projectIDs)
     }
 
@@ -227,12 +232,12 @@ struct ProjectListView: View {
     }
 
     private func openProjectSession(_ recent: RecentProjectSession) {
-        viewModel.prepareRecentProjectSessionSelection(recent)
+        facade.prepareRecentSessionSelection(recent)
         withAnimation(opencodeSelectionAnimation) {
             onProjectChosen()
         }
         Task {
-            await viewModel.openRecentProjectSession(recent)
+            await facade.openRecentSession(recent)
         }
     }
 }
@@ -459,61 +464,17 @@ private struct ProjectNewChatModelSection: Identifiable, Equatable {
     let models: [ProjectNewChatModelItem]
 }
 
-private struct ProjectNewChatModelMenu: View, Equatable {
-    let title: String
-    let defaultTitle: String
-    let sections: [ProjectNewChatModelSection]
-    let selectedReference: OpenCodeModelReference?
-    let onSelect: (OpenCodeModelReference?) -> Void
-
-    nonisolated static func == (lhs: ProjectNewChatModelMenu, rhs: ProjectNewChatModelMenu) -> Bool {
-        lhs.title == rhs.title
-            && lhs.defaultTitle == rhs.defaultTitle
-            && lhs.sections == rhs.sections
-            && lhs.selectedReference == rhs.selectedReference
-    }
-
-    var body: some View {
-        Menu {
-            Button {
-                select(nil)
-            } label: {
-                menuSelectionLabel(defaultTitle, isSelected: selectedReference == nil)
-            }
-
-            ForEach(sections) { section in
-                Section(section.name) {
-                    ForEach(section.models) { model in
-                        Button {
-                            select(model.reference)
-                        } label: {
-                            menuSelectionLabel(model.name, isSelected: selectedReference == model.reference)
-                        }
-                    }
-                }
-            }
-        } label: {
-            InlineSubtitleSelectTrigger(title: title)
-        }
-        .accessibilityIdentifier("projects.newChat.model")
-    }
-
-    private func select(_ reference: OpenCodeModelReference?) {
-        onSelect(reference)
-    }
-
-    @ViewBuilder
-    private func menuSelectionLabel(_ title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
-        }
-    }
+private enum ProjectNewChatQuickPicker: Equatable {
+    case project
+    case workspace
+    case agent
+    case model
+    case reasoning
 }
 
-struct ProjectNewChatSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+struct ProjectNewChatSheet: View, Equatable {
+    @ObservedObject var viewModel: NewProjectChatFacade
+    private let facadeIdentity: ObjectIdentifier
     let request: NewProjectChatSheetRequest
     let autoFocusInput: Bool
     let onChatStarted: () -> Void
@@ -538,8 +499,9 @@ struct ProjectNewChatSheet: View {
     @State private var startingSnapshot: NewSessionStartingSnapshot?
     @FocusState private var isChatTitleFocused: Bool
 
-    init(viewModel: AppViewModel, request: NewProjectChatSheetRequest, autoFocusInput: Bool = true, onChatStarted: @escaping () -> Void) {
+    init(viewModel: NewProjectChatFacade, request: NewProjectChatSheetRequest, autoFocusInput: Bool = true, onChatStarted: @escaping () -> Void) {
         self.viewModel = viewModel
+        facadeIdentity = ObjectIdentifier(viewModel)
         self.request = request
         self.autoFocusInput = autoFocusInput
         self.onChatStarted = onChatStarted
@@ -548,6 +510,12 @@ struct ProjectNewChatSheet: View {
         _selectedModelReference = State(initialValue: request.composerSelection?.modelReference)
         _selectedReasoningVariant = State(initialValue: request.composerSelection?.reasoningVariant)
         _attachments = State(initialValue: request.initialContent?.attachments ?? [])
+    }
+
+    nonisolated static func == (lhs: ProjectNewChatSheet, rhs: ProjectNewChatSheet) -> Bool {
+        lhs.facadeIdentity == rhs.facadeIdentity
+            && lhs.request.id == rhs.request.id
+            && lhs.autoFocusInput == rhs.autoFocusInput
     }
 
     var body: some View {
@@ -581,7 +549,7 @@ struct ProjectNewChatSheet: View {
                             draftStore: draftStore,
                             isAccessoryMenuOpen: $isComposerMenuOpen,
                             attachmentCount: attachments.count,
-                            isSending: isStartingChat || viewModel.isLoading,
+                            isSending: isStartingChat,
                             canSend: selectedProject != nil,
                             autoFocus: autoFocusInput && !isEditingChatTitle && !isChatTitleFocused,
                             usesKeyboardBottomPadding: isEditingChatTitle || isChatTitleFocused,
@@ -590,6 +558,7 @@ struct ProjectNewChatSheet: View {
                         )
                     }
                 }
+
             }
             .sheet(item: $selectedAttachmentPreview) { attachment in
                 NavigationStack {
@@ -770,7 +739,7 @@ struct ProjectNewChatSheet: View {
         ViewThatFits(in: .horizontal) {
             destinationLineContent
 
-            VStack(spacing: 9) {
+            VStack(spacing: 4) {
                 HStack(spacing: 7) {
                     Text("New session in")
                     projectSelectTrigger
@@ -803,7 +772,7 @@ struct ProjectNewChatSheet: View {
         ViewThatFits(in: .horizontal) {
             composerSettingsLineContent
 
-            VStack(spacing: 9) {
+            VStack(spacing: 4) {
                 HStack(spacing: 7) {
                     Text("With")
                     agentSelectTrigger
@@ -873,113 +842,201 @@ struct ProjectNewChatSheet: View {
                 .lineLimit(1)
                 .accessibilityIdentifier("projects.newChat.project")
         } else {
-            Menu {
-                ForEach(viewModel.projects) { project in
-                    Button {
-                        selectedProjectID = project.id
-                    } label: {
-                        Label(projectTitle(project), systemImage: project.id == "global" ? "globe" : "folder.fill")
-                    }
-                }
-            } label: {
+            StablePickerMenu(
+                elements: quickPickerMenuElements(.project),
+                accessibilityLabel: "Project",
+                accessibilityValue: selectedProject.map(projectTitle) ?? "Project",
+                accessibilityIdentifier: "projects.newChat.project",
+                onSelect: { selectQuickPickerOption($0, in: .project) }
+            ) {
                 InlineSubtitleSelectTrigger(title: selectedProject.map(projectTitle) ?? "Project")
             }
-            .accessibilityIdentifier("projects.newChat.project")
         }
     }
 
     private var workspaceSelectTrigger: some View {
-        Menu {
-            Button {
-                workspaceSelection = .main
-            } label: {
-                menuSelectionLabel(workspaceTitle(selectedProject?.worktree ?? ""), isSelected: workspaceSelection == .main)
-            }
-
-            ForEach(workspaceDirectories, id: \.self) { directory in
-                if directory != selectedProject?.worktree {
-                    Button {
-                        workspaceSelection = .directory(directory)
-                    } label: {
-                        menuSelectionLabel(workspaceTitle(directory), isSelected: workspaceSelection == .directory(directory))
-                    }
-                }
-            }
-
-            Button {
-                workspaceSelection = .createNew
-            } label: {
-                menuSelectionLabel("Create new worktree", isSelected: workspaceSelection == .createNew)
-            }
-        } label: {
+        StablePickerMenu(
+            elements: quickPickerMenuElements(.workspace),
+            accessibilityLabel: "Workspace",
+            accessibilityValue: workspaceSelectionTitle,
+            accessibilityIdentifier: "projects.newChat.worktree",
+            onSelect: { selectQuickPickerOption($0, in: .workspace) }
+        ) {
             InlineSubtitleSelectTrigger(title: workspaceSelectionTitle)
         }
-        .accessibilityIdentifier("projects.newChat.worktree")
     }
 
     private var agentSelectTrigger: some View {
-        Menu {
-            Button {
-                selectedAgentName = nil
-            } label: {
-                menuSelectionLabel("Default", isSelected: selectedAgentName == nil)
-            }
-
-            ForEach(viewModel.selectableAgents) { agent in
-                Button {
-                    selectedAgentName = agent.name
-                } label: {
-                    menuSelectionLabel(agent.name.capitalized, isSelected: selectedAgentName == agent.name)
-                }
-            }
-        } label: {
+        StablePickerMenu(
+            elements: quickPickerMenuElements(.agent),
+            accessibilityLabel: "Agent",
+            accessibilityValue: agentTitle,
+            accessibilityIdentifier: "projects.newChat.agent",
+            onSelect: { selectQuickPickerOption($0, in: .agent) }
+        ) {
             InlineSubtitleSelectTrigger(title: agentTitle)
         }
-        .accessibilityIdentifier("projects.newChat.agent")
     }
 
     private var modelSelectTrigger: some View {
-        ProjectNewChatModelMenu(
-            title: modelTitle,
-            defaultTitle: modelDefaultOptionTitle,
-            sections: modelPickerSourceSections,
-            selectedReference: selectedModelReference,
-            onSelect: { reference in
-                selectedModelReference = reference
-                syncReasoningSelection()
-            }
-        )
-        .equatable()
+        StablePickerMenu(
+            elements: quickPickerMenuElements(.model),
+            accessibilityLabel: "Model",
+            accessibilityValue: modelTitle,
+            accessibilityIdentifier: "projects.newChat.model",
+            onSelect: { selectQuickPickerOption($0, in: .model) }
+        ) {
+            InlineSubtitleSelectTrigger(title: modelTitle)
+        }
     }
 
     private var reasoningSelectTrigger: some View {
-        Menu {
-            Button {
-                selectedReasoningVariant = nil
-            } label: {
-                menuSelectionLabel("Default", isSelected: selectedReasoningVariant == nil)
-            }
-
-            ForEach(reasoningVariants, id: \.self) { variant in
-                Button {
-                    selectedReasoningVariant = variant
-                } label: {
-                    menuSelectionLabel(viewModel.formattedVariantTitle(variant), isSelected: selectedReasoningVariant == variant)
-                }
-            }
-        } label: {
+        StablePickerMenu(
+            elements: quickPickerMenuElements(.reasoning),
+            accessibilityLabel: "Reasoning",
+            accessibilityValue: reasoningTitle,
+            accessibilityIdentifier: "projects.newChat.reasoning",
+            onSelect: { selectQuickPickerOption($0, in: .reasoning) }
+        ) {
             InlineSubtitleSelectTrigger(title: reasoningTitle)
         }
-        .accessibilityIdentifier("projects.newChat.reasoning")
     }
 
-    @ViewBuilder
-    private func menuSelectionLabel(_ title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
+    private func quickPickerMenuElements(_ picker: ProjectNewChatQuickPicker) -> [StablePickerMenuElement] {
+        switch picker {
+        case .project:
+            return [.inline(
+                id: "projects",
+                title: nil,
+                children: viewModel.projects.map { project in
+                    .action(
+                        id: project.id,
+                        title: projectTitle(project),
+                        systemImage: project.id == "global" ? "globe" : "folder.fill",
+                        isSelected: selectedProject?.id == project.id
+                    )
+                }
+            )]
+
+        case .workspace:
+            guard let selectedProject else { return [] }
+            var options = [StablePickerMenuElement.action(
+                id: "main",
+                title: workspaceTitle(selectedProject.worktree),
+                systemImage: "folder.fill",
+                isSelected: workspaceSelection == .main
+            )]
+            options += workspaceDirectories.compactMap { directory in
+                guard viewModel.workspaceKey(directory) != viewModel.workspaceKey(selectedProject.worktree) else { return nil }
+                return .action(
+                    id: "directory:\(viewModel.workspaceKey(directory))",
+                    title: workspaceTitle(directory),
+                    systemImage: "folder",
+                    isSelected: workspaceSelection == .directory(directory)
+                )
+            }
+            options.append(.action(
+                id: "create",
+                title: "Create new worktree",
+                systemImage: "plus.rectangle.on.folder",
+                isSelected: workspaceSelection == .createNew
+            ))
+            return [.inline(id: "workspaces", title: nil, children: options)]
+
+        case .agent:
+            let options = [StablePickerMenuElement.action(
+                id: "default",
+                title: "Default",
+                systemImage: "sparkles",
+                isSelected: selectedAgentName == nil
+            )] + viewModel.selectableAgents.map { agent in
+                .action(
+                    id: agent.name,
+                    title: agent.name.capitalized,
+                    systemImage: "person.crop.circle",
+                    isSelected: selectedAgentName == agent.name
+                )
+            }
+            return [.inline(id: "agents", title: nil, children: options)]
+
+        case .model:
+            var sections = [StablePickerMenuElement.inline(
+                id: "default",
+                title: nil,
+                children: [.action(
+                    id: "default",
+                    title: modelDefaultOptionTitle,
+                    systemImage: nil,
+                    isSelected: selectedModelReference == nil
+                )]
+            )]
+            sections += modelPickerSourceSections.map { section in
+                .inline(
+                    id: section.id,
+                    title: section.name,
+                    children: section.models.map { model in
+                        .action(
+                            id: model.id,
+                            title: model.name,
+                            systemImage: nil,
+                            isSelected: selectedModelReference == model.reference
+                        )
+                    }
+                )
+            }
+            return sections
+
+        case .reasoning:
+            let options = [StablePickerMenuElement.action(
+                id: "default",
+                title: "Default",
+                systemImage: "sparkles",
+                isSelected: selectedReasoningVariant == nil
+            )] + reasoningVariants.map { variant in
+                .action(
+                    id: variant,
+                    title: viewModel.formattedVariantTitle(variant),
+                    systemImage: "brain.head.profile",
+                    isSelected: selectedReasoningVariant == variant
+                )
+            }
+            return [.inline(id: "reasoning", title: nil, children: options)]
         }
+    }
+
+    private func selectQuickPickerOption(_ optionID: String, in picker: ProjectNewChatQuickPicker) {
+        switch picker {
+        case .project:
+            if let project = viewModel.projects.first(where: { $0.id == optionID }) {
+                selectedProjectID = project.id
+            }
+
+        case .workspace:
+            if optionID == "main" {
+                workspaceSelection = .main
+            } else if optionID == "create" {
+                workspaceSelection = .createNew
+            } else if let directory = workspaceDirectories.first(where: {
+                optionID == "directory:\(viewModel.workspaceKey($0))"
+            }) {
+                workspaceSelection = .directory(directory)
+            }
+
+        case .agent:
+            selectedAgentName = optionID == "default" ? nil : optionID
+
+        case .model:
+            if optionID == "default" {
+                selectedModelReference = nil
+            } else if let model = modelPickerSourceSections.lazy.flatMap(\.models).first(where: { $0.id == optionID }) {
+                selectedModelReference = model.reference
+            }
+            syncReasoningSelection()
+
+        case .reasoning:
+            selectedReasoningVariant = optionID == "default" ? nil : optionID
+        }
+
     }
 
     private var effectiveModelReference: OpenCodeModelReference? {
@@ -1030,7 +1087,7 @@ struct ProjectNewChatSheet: View {
             viewModel.newSessionDefaults.reasoningVariant ?? "",
             viewModel.selectableAgents.map(\.name).joined(separator: ","),
             viewModel.sortedProviders.map { provider in
-                let modelIDs = viewModel.modelConfigurationStore.visibleModels(for: provider).map(\.id).joined(separator: ",")
+                let modelIDs = viewModel.visibleModels(for: provider).map(\.id).joined(separator: ",")
                 return "\(provider.id):\(modelIDs)"
             }.joined(separator: "|")
         ].joined(separator: "|")
@@ -1038,7 +1095,7 @@ struct ProjectNewChatSheet: View {
 
     private var modelPickerSourceSections: [ProjectNewChatModelSection] {
         viewModel.sortedProviders.compactMap { provider in
-            let models = viewModel.modelConfigurationStore.visibleModels(for: provider).map { model in
+            let models = viewModel.visibleModels(for: provider).map { model in
                 ProjectNewChatModelItem(providerID: provider.id, modelID: model.id, name: model.name)
             }
             guard !models.isEmpty else { return nil }
@@ -1060,7 +1117,7 @@ struct ProjectNewChatSheet: View {
 
     private var showsWorkspacePicker: Bool {
         guard let selectedProject else { return false }
-        return viewModel.isProjectWorkspacesEnabled(for: selectedProject)
+        return viewModel.isWorkspacesEnabled(for: selectedProject)
     }
 
     private func initializeSelectionIfNeeded() {
@@ -1139,7 +1196,7 @@ struct ProjectNewChatSheet: View {
 
     private func startChat() {
         guard let selectedProject else { return }
-        guard !isStartingChat && !viewModel.isLoading else { return }
+        guard !isStartingChat else { return }
         guard !draftStore.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         let workspaceDirectory = selectedProject.id == "global" ? nil : workspaceDirectoryForSelection
         let prompt = draftStore.text
@@ -1170,7 +1227,7 @@ struct ProjectNewChatSheet: View {
                     startingSnapshot?.phase = .sendingMessage
                 }
             }
-            let didStart = await viewModel.startNewProjectChat(
+            let didStart = await viewModel.startNewChat(
                 title: submittedChatTitle,
                 prompt: prompt,
                 agentMentions: agentMentions,
@@ -1232,7 +1289,7 @@ struct ProjectNewChatSheet: View {
     }
 
     private func dismissSheet() {
-        viewModel.dismissNewProjectChatSheet()
+        viewModel.dismissNewChat()
         dismiss()
     }
 
@@ -1494,7 +1551,7 @@ private enum ProjectListLayout {
 }
 
 private struct ProjectColorPickerSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
     let project: OpenCodeProject
     @Environment(\.dismiss) private var dismiss
 
@@ -1517,7 +1574,7 @@ private struct ProjectColorPickerSheet: View {
                     ForEach(colors, id: \.self) { color in
                         Button {
                             Task {
-                                await viewModel.setProjectColor(color, for: project)
+                                await facade.setColor(color, for: project)
                                 dismiss()
                             }
                         } label: {
@@ -1554,7 +1611,7 @@ private struct ProjectColorPickerSheet: View {
 }
 
 private struct ProjectImagePickerSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: ProjectFacade
     let project: OpenCodeProject
     @Environment(\.dismiss) private var dismiss
     @State private var candidates: [ProjectImageCandidate] = []
@@ -1610,7 +1667,7 @@ private struct ProjectImagePickerSheet: View {
                     if project.icon?.override?.isEmpty == false {
                         Button("Clear", role: .destructive) {
                             Task {
-                                await viewModel.setProjectImageOverride(nil, for: project)
+                                await facade.setImageOverride(nil, for: project)
                                 dismiss()
                             }
                         }
@@ -1618,7 +1675,7 @@ private struct ProjectImagePickerSheet: View {
                 }
             }
             .task {
-                candidates = await viewModel.discoverProjectImageCandidates(for: project)
+                candidates = await facade.discoverImageCandidates(for: project)
                 isLoading = false
             }
         }
@@ -1627,7 +1684,7 @@ private struct ProjectImagePickerSheet: View {
 
     private func loadThumbnailIfNeeded(_ candidate: ProjectImageCandidate) async {
         guard thumbnails[candidate.path] == nil else { return }
-        guard let dataURL = await viewModel.projectImageDataURL(for: candidate, project: project) else { return }
+        guard let dataURL = await facade.imageDataURL(for: candidate, project: project) else { return }
         thumbnails[candidate.path] = dataURL
     }
 
@@ -1640,7 +1697,7 @@ private struct ProjectImagePickerSheet: View {
             selectedPath = nil
             return
         }
-        await viewModel.setProjectImageOverride(dataURL, for: project)
+        await facade.setImageOverride(dataURL, for: project)
         dismiss()
     }
 }
@@ -1732,7 +1789,7 @@ private func projectPreferencePlatformImageView(_ image: NSImage) -> Image {
 #endif
 
 private struct FindBugLanguageSelectionSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: FunAndGamesFacade
 
     var body: some View {
         NavigationStack {
@@ -1776,7 +1833,7 @@ private struct FindBugLanguageSelectionSheet: View {
 }
 
 private struct FindBugModelSelectionSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: FunAndGamesFacade
     let onGameStarted: () -> Void
 
     var body: some View {
@@ -1824,8 +1881,7 @@ private struct FindBugModelSelectionSheet: View {
                 }
                 ToolbarItem(placement: .opencodeTrailing) {
                     Button("Cancel") {
-                        viewModel.isShowingFindBugModelSheet = false
-                        viewModel.pendingFindBugLanguage = nil
+                        viewModel.cancelFindBugModelSelection()
                     }
                 }
             }
@@ -1835,7 +1891,7 @@ private struct FindBugModelSelectionSheet: View {
 }
 
 private struct FindPlaceModelSelectionSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: FunAndGamesFacade
     let onGameStarted: () -> Void
 
     var body: some View {

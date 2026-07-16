@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct CreateSessionSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: SessionListFacade
     @State private var startingSnapshot: NewSessionStartingSnapshot?
 
     var body: some View {
+        let snapshot = facade.createSessionSnapshot
+
         NavigationStack {
             Group {
                 if let startingSnapshot {
@@ -21,36 +23,44 @@ struct CreateSessionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .opencodeLeading) {
                     Button("Cancel") {
-                        viewModel.isShowingCreateSessionSheet = false
+                        facade.dismissCreateSession()
                     }
                     .disabled(startingSnapshot != nil)
                 }
             }
         }
-        .presentationDetents(viewModel.hasProUnlock && !showsWorkspacePicker ? [.medium] : [.large])
+        .presentationDetents(snapshot.hasProUnlock && !snapshot.showsWorkspacePicker ? [.medium] : [.large])
     }
 
     private var createSessionForm: some View {
-        Form {
+        let snapshot = facade.createSessionSnapshot
+
+        return Form {
             Section("Session Name") {
-                TextField("Optional title", text: $viewModel.draftTitle)
+                TextField("Optional title", text: Binding(
+                    get: { facade.createSessionTitle },
+                    set: { facade.createSessionTitle = $0 }
+                ))
                     .accessibilityIdentifier("sessions.create.title")
             }
 
             Section("Scope") {
-                Text(viewModel.projectScopeTitle)
+                Text(snapshot.projectScopeTitle)
                     .foregroundStyle(.secondary)
             }
 
-            if showsWorkspacePicker {
+            if snapshot.showsWorkspacePicker {
                 Section("Workspace") {
-                    Picker("Workspace", selection: $viewModel.newSessionWorkspaceSelection) {
-                        Text(viewModel.newSessionWorkspaceTitle(for: .main))
+                    Picker("Workspace", selection: Binding(
+                        get: { facade.newSessionWorkspaceSelection },
+                        set: { facade.newSessionWorkspaceSelection = $0 }
+                    )) {
+                        Text(facade.workspaceTitle(for: .main))
                             .tag(NewSessionWorkspaceSelection.main)
 
-                        ForEach(workspaceDirectories, id: \.self) { directory in
-                            if directory != viewModel.currentProject?.worktree {
-                                Text(viewModel.newSessionWorkspaceTitle(for: .directory(directory)))
+                        ForEach(snapshot.workspaceDirectories, id: \.self) { directory in
+                            if directory != snapshot.currentProject?.worktree {
+                                Text(facade.workspaceTitle(for: .directory(directory)))
                                     .tag(NewSessionWorkspaceSelection.directory(directory))
                             }
                         }
@@ -59,8 +69,11 @@ struct CreateSessionSheet: View {
                             .tag(NewSessionWorkspaceSelection.createNew)
                     }
 
-                    if viewModel.newSessionWorkspaceSelection == .createNew {
-                        TextField("Worktree name (optional)", text: $viewModel.newWorkspaceName)
+                    if snapshot.workspaceSelection == .createNew {
+                        TextField("Worktree name (optional)", text: Binding(
+                            get: { facade.newWorkspaceName },
+                            set: { facade.newWorkspaceName = $0 }
+                        ))
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .accessibilityIdentifier("sessions.create.worktree.name")
@@ -76,14 +89,13 @@ struct CreateSessionSheet: View {
                 }
             }
 
-            if !viewModel.hasProUnlock {
+            if !snapshot.hasProUnlock {
                 Section("Free Plan") {
-                    Text(viewModel.canCreateFreeSession ? "Your first session is included. Upgrade for unlimited sessions and prompts." : "Upgrade to create more sessions.")
+                    Text(snapshot.canCreateFreeSession ? "Your first session is included. Upgrade for unlimited sessions and prompts." : "Upgrade to create more sessions.")
                         .foregroundStyle(.secondary)
 
                     Button("Upgrade to Pro") {
-                        viewModel.isShowingCreateSessionSheet = false
-                        viewModel.presentPaywall(reason: .sessionLimit)
+                        facade.presentSessionLimitPaywall()
                     }
                 }
             }
@@ -92,24 +104,17 @@ struct CreateSessionSheet: View {
                 Button(createButtonTitle) {
                     startCreatingSession()
                 }
-                .disabled(viewModel.isLoading)
+                .disabled(snapshot.isLoading)
                 .accessibilityIdentifier("sessions.create.confirm")
             }
         }
     }
 
-    private var showsWorkspacePicker: Bool {
-        viewModel.isProjectWorkspacesEnabled && viewModel.hasGitProject
-    }
-
-    private var workspaceDirectories: [String] {
-        viewModel.workspaceDirectories()
-    }
-
     private var selectedWorkspaceDescription: String {
-        switch viewModel.newSessionWorkspaceSelection {
+        let snapshot = facade.createSessionSnapshot
+        switch snapshot.workspaceSelection {
         case .main:
-            return viewModel.currentProject?.worktree ?? viewModel.projectScopeTitle
+            return snapshot.currentProject?.worktree ?? snapshot.projectScopeTitle
         case let .directory(directory):
             return directory
         case .createNew:
@@ -118,32 +123,33 @@ struct CreateSessionSheet: View {
     }
 
     private var createButtonTitle: String {
-        if viewModel.isLoading, viewModel.newSessionWorkspaceSelection == .createNew {
+        let snapshot = facade.createSessionSnapshot
+        if snapshot.isLoading, snapshot.workspaceSelection == .createNew {
             return "Creating Worktree..."
         }
 
-        return viewModel.isLoading ? "Creating..." : "Create Session"
+        return snapshot.isLoading ? "Creating..." : "Create Session"
     }
 
     private func startCreatingSession() {
         startingSnapshot = NewSessionStartingSnapshot(
             title: submittedTitle,
-            subtitle: viewModel.projectScopeTitle,
+            subtitle: facade.createSessionSnapshot.projectScopeTitle,
             promptPreview: nil,
             attachmentCount: 0,
-            phase: viewModel.newSessionWorkspaceSelection == .createNew ? .creatingWorktree : .creatingSession
+            phase: facade.createSessionSnapshot.workspaceSelection == .createNew ? .creatingWorktree : .creatingSession
         )
 
         Task { @MainActor in
-            await viewModel.createSession()
-            if viewModel.isShowingCreateSessionSheet {
+            await facade.createSession()
+            if facade.createSessionSnapshot.isPresented {
                 startingSnapshot = nil
             }
         }
     }
 
     private var submittedTitle: String {
-        let title = viewModel.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = facade.createSessionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? "New Session" : title
     }
 }

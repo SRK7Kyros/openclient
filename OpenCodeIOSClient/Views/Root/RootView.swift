@@ -1,39 +1,32 @@
 import SwiftUI
 
-struct RootView: View {
-    @ObservedObject var viewModel: AppViewModel
+struct RootView<ChatDestination: View>: View {
+    @ObservedObject var shell: AppShellFacade
+    let chatDestination: (String, Int) -> ChatDestination
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
 
-    private var primarySheet: Binding<RootPrimarySheet?> {
+    init(
+        shell: AppShellFacade,
+        @ViewBuilder chatDestination: @escaping (String, Int) -> ChatDestination
+    ) {
+        self.shell = shell
+        self.chatDestination = chatDestination
+    }
+
+    private var primarySheet: Binding<AppShellPrimarySheet?> {
         Binding(
-            get: {
-                if let request = viewModel.newProjectChatSheetRequest {
-                    return .newProjectChat(request)
-                }
-
-                if isShowingConnectionSheetContent {
-                    return .connection
-                }
-
-                return nil
-            },
+            get: { shell.primarySheet },
             set: { sheet in
                 guard sheet == nil else { return }
-                if viewModel.newProjectChatSheetRequest != nil {
-                    viewModel.dismissNewProjectChatSheet()
-                }
+                shell.dismissPrimarySheet()
             }
         )
     }
 
-    private var isShowingConnectionSheetContent: Bool {
-        return !viewModel.isConnected || viewModel.isUsingAppleIntelligence || viewModel.isShowingConnectionOverlay
-    }
-
     private var isShowingConnectionExperience: Bool {
-        !viewModel.isConnected || viewModel.isShowingConnectionOverlay
+        shell.hidesShellForConnectionExperience
     }
 
     private var shouldAutoFocusNewChatInput: Bool {
@@ -54,7 +47,7 @@ struct RootView: View {
             appShell
                 .opacity(isShowingConnectionExperience ? 0 : 1)
 
-            if let message = viewModel.openURLNavigationMessage {
+            if let message = shell.openURLNavigationMessage {
                 RootDeepLinkProgressOverlay(message: message)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
@@ -62,32 +55,42 @@ struct RootView: View {
         .sheet(item: primarySheet) { sheet in
             switch sheet {
             case .connection:
-                ConnectionSheetView(viewModel: viewModel)
+                ConnectionSheetView(
+                    facade: shell.connection,
+                    commerce: shell.commerce
+                ) { sessionID in
+                    chatDestination(sessionID, 0)
+                        .id(sessionID)
+                }
             case let .newProjectChat(request):
-                ProjectNewChatSheet(viewModel: viewModel, request: request, autoFocusInput: shouldAutoFocusNewChatInput) {
+                ProjectNewChatSheet(viewModel: shell.newProjectChat, request: request, autoFocusInput: shouldAutoFocusNewChatInput) {
                     withAnimation(opencodeSelectionAnimation) {
                         showDetailColumn()
                     }
                 }
+                .equatable()
             }
         }
-        .sheet(item: $viewModel.paywallReason) { reason in
-            OpenClientPaywallView(viewModel: viewModel, purchaseManager: viewModel.purchaseManager, reason: reason)
+        .sheet(item: Binding(
+            get: { shell.commerce.paywallReason },
+            set: { shell.commerce.paywallReason = $0 }
+        )) { reason in
+            OpenClientPaywallView(commerce: shell.commerce, reason: reason)
         }
-        .animation(.snappy(duration: 0.34, extraBounce: 0.02), value: viewModel.isShowingConnectionOverlay)
-        .onChange(of: viewModel.isConnected) { _, _ in
+        .animation(.snappy(duration: 0.34, extraBounce: 0.02), value: shell.isShowingConnectionOverlay)
+        .onChange(of: shell.isConnected) { _, _ in
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
         }
-        .onChange(of: viewModel.isShowingConnectionOverlay) { _, isShowing in
+        .onChange(of: shell.isShowingConnectionOverlay) { _, isShowing in
             guard !isShowing else { return }
 
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
         }
-        .animation(opencodeSelectionAnimation, value: viewModel.hasActiveWorkspace)
+        .animation(opencodeSelectionAnimation, value: shell.hasActiveWorkspace)
     }
 
     @ViewBuilder
@@ -97,54 +100,50 @@ struct RootView: View {
 
     private var splitShell: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
-            ProjectListView(viewModel: viewModel) {
-                guard viewModel.currentProject != nil else { return }
+            ProjectListView(
+                facade: shell.projects,
+                connection: shell.connection,
+                configurations: shell.configurations,
+                games: shell.funAndGames
+            ) {
+                guard shell.hasCurrentProject else { return }
 
                 withAnimation(opencodeSelectionAnimation) {
                     showProjectContentOrDetail()
                 }
             }
         } content: {
-            if viewModel.currentProject == nil {
+            switch shell.contentRoute(isCompact: horizontalSizeClass == .compact) {
+            case .selectProject:
                 ContentUnavailableView("Select a Project", systemImage: "folder")
-            } else if horizontalSizeClass == .compact,
-                      viewModel.isLoadingSessions,
-                      viewModel.allSessions.isEmpty {
+            case .loadingProject:
                 CompactRouteLoadingView(title: "Loading project...")
-            } else {
-                ProjectContentView(viewModel: viewModel) {
+            case .projectContent:
+                ProjectContentView(shell: shell) {
                     withAnimation(opencodeSelectionAnimation) {
                         preferredCompactColumn = .detail
                     }
                 }
             }
         } detail: {
-            if viewModel.selectedProjectContentTab == .git, viewModel.hasGitProject {
-                if viewModel.selectedProjectFileIsChanged {
-                    GitDiffView(viewModel: viewModel)
-                } else {
-                    ProjectFileContentView(viewModel: viewModel)
-                }
-            } else if viewModel.selectedProjectContentTab == .mcp {
+            switch shell.detailRoute(isCompact: horizontalSizeClass == .compact) {
+            case .gitDiff:
+                GitDiffView(facade: shell.projectFiles)
+            case .gitFile:
+                ProjectFileContentView(facade: shell.projectFiles)
+            case .mcp:
                 ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
-            } else if let session = viewModel.selectedSession, viewModel.isUsingAppleIntelligence == false {
-                if horizontalSizeClass == .compact,
-                   viewModel.chatStore.preparedSessionID != session.id {
-                    CompactRouteLoadingView(title: "Loading chat...")
-                        .id(session.id)
-                } else {
-                    ChatRouteView(
-                        viewModel: viewModel,
-                        sessionID: session.id,
-                        presentationRequest: viewModel.chatDetailPresentationRequest
-                    )
-                        .equatable()
-                }
-            } else {
+            case let .loadingChat(sessionID):
+                CompactRouteLoadingView(title: "Loading chat...")
+                    .id(sessionID)
+            case let .chat(route):
+                ChatRouteView(route: route, destination: chatDestination)
+                    .equatable()
+            case .selectSession:
                 ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
             }
         }
-        .onChange(of: viewModel.selectedSession?.id) { _, sessionID in
+        .onChange(of: shell.selectedSessionID) { _, sessionID in
             if sessionID != nil {
                 withAnimation(opencodeSelectionAnimation) {
                     showDetailColumn()
@@ -152,7 +151,7 @@ struct RootView: View {
                 return
             }
 
-            guard viewModel.currentProject != nil else {
+            guard shell.hasCurrentProject else {
                 withAnimation(opencodeSelectionAnimation) {
                     columnVisibility = .all
                     preferredCompactColumn = .sidebar
@@ -165,7 +164,7 @@ struct RootView: View {
                 preferredCompactColumn = .content
             }
         }
-        .onChange(of: viewModel.currentProject?.id) { _, projectID in
+        .onChange(of: shell.currentProjectID) { _, projectID in
             withAnimation(opencodeSelectionAnimation) {
                 if projectID == nil {
                     showProjectSidebarIfNeeded()
@@ -174,8 +173,8 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: viewModel.chatDetailPresentationRequest) { _, _ in
-            guard viewModel.selectedSession != nil else { return }
+        .onChange(of: shell.chatDetailPresentationRequest) { _, _ in
+            guard shell.selectedSessionID != nil else { return }
             withAnimation(opencodeSelectionAnimation) {
                 showDetailColumn()
             }
@@ -183,16 +182,16 @@ struct RootView: View {
         .onAppear {
             showCurrentRoute()
         }
-        .animation(opencodeSelectionAnimation, value: viewModel.selectedSession?.id)
+        .animation(opencodeSelectionAnimation, value: shell.selectedSessionID)
     }
 
     private func showCurrentRoute() {
-        if viewModel.selectedSession != nil {
+        if shell.selectedSessionID != nil {
             showDetailColumn()
             return
         }
 
-        guard viewModel.currentProject != nil else {
+        guard shell.hasCurrentProject else {
             showProjectSidebarIfNeeded()
             return
         }
@@ -201,14 +200,14 @@ struct RootView: View {
     }
 
     private func showProjectSidebarIfNeeded() {
-        guard viewModel.currentProject == nil, viewModel.selectedSession == nil else { return }
+        guard !shell.hasCurrentProject, shell.selectedSessionID == nil else { return }
 
         columnVisibility = .all
         preferredCompactColumn = .sidebar
     }
 
     private func showProjectContentOrDetail() {
-        if viewModel.selectedSession == nil {
+        if shell.selectedSessionID == nil {
             columnVisibility = .doubleColumn
             preferredCompactColumn = .content
         } else {
@@ -222,40 +221,17 @@ struct RootView: View {
     }
 }
 
-private enum RootPrimarySheet: Identifiable {
-    case connection
-    case newProjectChat(NewProjectChatSheetRequest)
-
-    var id: String {
-        switch self {
-        case .connection:
-            return "connection"
-        case let .newProjectChat(request):
-            return "newProjectChat-\(request.id.uuidString)"
-        }
-    }
-}
-
-private struct ChatRouteView: View, Equatable {
-    let viewModel: AppViewModel
-    let viewModelID: ObjectIdentifier
-    let sessionID: String
-    let presentationRequest: Int
-
-    init(viewModel: AppViewModel, sessionID: String, presentationRequest: Int) {
-        self.viewModel = viewModel
-        viewModelID = ObjectIdentifier(viewModel)
-        self.sessionID = sessionID
-        self.presentationRequest = presentationRequest
-    }
+private struct ChatRouteView<Destination: View>: View, Equatable {
+    let route: AppShellChatRoute
+    let destination: (String, Int) -> Destination
 
     nonisolated static func == (lhs: ChatRouteView, rhs: ChatRouteView) -> Bool {
-        lhs.viewModelID == rhs.viewModelID && lhs.sessionID == rhs.sessionID && lhs.presentationRequest == rhs.presentationRequest
+        lhs.route == rhs.route
     }
 
     var body: some View {
-        ChatView(viewModel: viewModel, sessionID: sessionID, presentationRequest: presentationRequest)
-            .id(sessionID)
+        destination(route.sessionID, route.presentationRequest)
+            .id(route.sessionID)
     }
 }
 

@@ -35,36 +35,12 @@ final class EventSyncCoordinator {
     typealias DirectoryEventApplication = OpenCodeDirectoryEventApplication
 
     enum GlobalEventAction {
+        case applied
         case refreshProjectsAndSessions
     }
 
     func shouldProcessEvent(isConnected: Bool) -> Bool {
         isConnected
-    }
-
-    nonisolated func shouldPublishWidgetSnapshots(after result: SessionEventResult) -> Bool {
-        switch result {
-        case .sessionChanged, .todoChanged, .permissionChanged, .questionChanged, .statusChanged, .idle:
-            return true
-        case .message, .ignored:
-            return false
-        }
-    }
-
-    nonisolated func shouldRefreshLiveActivityImmediately(after result: SessionEventResult, event: OpenCodeTypedEvent) -> Bool {
-        switch result {
-        case .permissionChanged, .questionChanged:
-            return true
-        default:
-            break
-        }
-
-        switch event {
-        case .permissionAsked, .permissionReplied, .questionAsked, .questionReplied, .questionRejected:
-            return true
-        default:
-            return false
-        }
     }
 
     func shouldProcessLiveMessageEvent(
@@ -206,7 +182,7 @@ final class EventSyncCoordinator {
         case .serverConnected, .globalDisposed:
             return .refreshProjectsAndSessions
         default:
-            return nil
+            return .applied
         }
     }
 

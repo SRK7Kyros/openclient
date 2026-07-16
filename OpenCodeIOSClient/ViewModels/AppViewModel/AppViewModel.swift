@@ -29,46 +29,39 @@ final class ChatPresentationStore: ObservableObject {
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    enum SavedServerEditorMode: Equatable {
-        case add
-        case edit(originalServerID: String)
-    }
-
-    enum ProjectContentTab: String, CaseIterable {
-        case sessions
-        case git
-        case mcp
-
-        var title: String {
-            switch self {
-            case .sessions:
-                return "Sessions"
-            case .git:
-                return "Files"
-            case .mcp:
-                return "MCP"
-            }
-        }
-    }
-
-    enum StorageKey {
-        static let recentServerConfigs = "recentServerConfigs"
-        static let newSessionDefaults = "newSessionDefaults"
-        static let appleIntelligenceWorkspaces = "appleIntelligenceWorkspaces"
-        static let sessionPreviews = "sessionPreviews"
-        static let pinnedSessionsByScope = "pinnedSessionsByScope"
-        static let liveActivityAutoStartByScope = "liveActivityAutoStartByScope"
-        static let projectWorkspacesEnabledByScope = "projectWorkspacesEnabledByScope"
-        static let projectActionsByScope = "projectActionsByScope"
-        static let messageDraftsByChat = "messageDraftsByChat"
-        static let chatBreadcrumbs = "chatBreadcrumbs"
-    }
+    typealias StorageKey = OpenClientStorageKey
 
     @Published var config = OpenCodeServerConfig()
     let connectionStore = ConnectionStore()
+    lazy var connectionFacade = ConnectionFacade(viewModel: self)
     lazy var connectionCoordinator = ConnectionCoordinator(connectionStore: connectionStore)
     let eventSyncCoordinator = EventSyncCoordinator()
+    lazy var directorySyncFacade = DirectorySyncFacade(
+        registry: directoryStoreRegistry,
+        coordinator: eventSyncCoordinator
+    )
     let projectCoordinator = ProjectCoordinator()
+    lazy var projectFacade = ProjectFacade(viewModel: self)
+    lazy var newProjectChatFacade = NewProjectChatFacade(viewModel: self)
+    lazy var configurationsFacade = ConfigurationsFacade(viewModel: self)
+    lazy var funAndGamesFacade = FunAndGamesFacade(viewModel: self)
+    lazy var appShellFacade = AppShellFacade(viewModel: self)
+    lazy var widgetSnapshotPublisher: WidgetSnapshotPublisher = {
+        let publisher = WidgetSnapshotPublisher(inputProvider: { [weak self] includeModelOptions in
+            self?.widgetSnapshotInput(includeModelOptions: includeModelOptions)
+        })
+        publisher.observe(
+            contentChanges: [
+                objectWillChange.eraseToAnyPublisher(),
+                projectStore.objectWillChange.eraseToAnyPublisher(),
+                projectPreferencesStore.objectWillChange.eraseToAnyPublisher(),
+                sessionListStore.objectWillChange.eraseToAnyPublisher(),
+                sessionInteractionStore.objectWillChange.eraseToAnyPublisher(),
+            ],
+            modelChanges: modelConfigurationStore.objectWillChange.eraseToAnyPublisher()
+        )
+        return publisher
+    }()
     let sessionCoordinator = SessionCoordinator()
     var backendMode: AppBackendMode {
         get { connectionStore.backendMode }
@@ -104,51 +97,31 @@ final class AppViewModel: ObservableObject {
     @Published var activeAppleIntelligenceWorkspaceID: String?
     @Published var isShowingAppleIntelligenceFolderPicker = false
     let mcpStore = MCPStore()
+    lazy var mcpFacade = MCPFacade(
+        store: mcpStore,
+        clientProvider: { [weak self] in self?.client },
+        directoryProvider: { [weak self] in self?.effectiveSelectedDirectory }
+    )
     let projectFilesStore = ProjectFilesStore()
+    lazy var projectFilesFacade = ProjectFilesFacade(
+        store: projectFilesStore,
+        clientProvider: { [weak self] in self?.client },
+        hasGitProjectProvider: { [weak self] in
+            self?.currentProject?.vcs == "git" && self?.effectiveSelectedDirectory != nil
+        },
+        effectiveSelectedDirectoryProvider: { [weak self] in self?.effectiveSelectedDirectory },
+        currentProjectProvider: { [weak self] in self?.currentProject },
+        workspaceDirectoriesProvider: { [weak self] in self?.workspaceDirectories() ?? [] },
+        workspaceDisplayNameProvider: { [weak self] in self?.workspaceDisplayName(for: $0) },
+        workspaceKeyProvider: { [weak self] in self?.workspaceKey($0) ?? $0 },
+        isFilesPresentedProvider: { [weak self] in self?.selectedProjectContentTab == .git },
+        preserveNavigationState: { [weak self] in self?.preserveCurrentMessageDraftForNavigation() },
+        showFilesRoute: { [weak self] in
+            self?.selectedProjectContentTab = .git
+            self?.selectedSession = nil
+        }
+    )
     let sessionInteractionStore = SessionInteractionStore()
-    var mcpStatuses: [String: OpenCodeMCPStatus] {
-        get { mcpStore.statuses }
-        set {
-            objectWillChange.send()
-            mcpStore.statuses = newValue
-        }
-        _modify {
-            objectWillChange.send()
-            yield &mcpStore.statuses
-        }
-    }
-    var isMCPReady: Bool {
-        get { mcpStore.isReady }
-        set {
-            objectWillChange.send()
-            mcpStore.isReady = newValue
-        }
-    }
-    var isLoadingMCP: Bool {
-        get { mcpStore.isLoading }
-        set {
-            objectWillChange.send()
-            mcpStore.isLoading = newValue
-        }
-    }
-    var togglingMCPServerNames: Set<String> {
-        get { mcpStore.togglingServerNames }
-        set {
-            objectWillChange.send()
-            mcpStore.togglingServerNames = newValue
-        }
-        _modify {
-            objectWillChange.send()
-            yield &mcpStore.togglingServerNames
-        }
-    }
-    var mcpErrorMessage: String? {
-        get { mcpStore.errorMessage }
-        set {
-            objectWillChange.send()
-            mcpStore.errorMessage = newValue
-        }
-    }
     let projectStore = ProjectStore()
     var projects: [OpenCodeProject] {
         get { projectStore.projects }
@@ -175,11 +148,15 @@ final class AppViewModel: ObservableObject {
     var selectedDirectory: String? {
         get { projectStore.selectedDirectory }
         set {
+            if DirectoryStoreRegistry.key(for: newValue) != directoryStoreRegistry.activeKey {
+                prepareForDirectoryStoreActivation()
+            }
             objectWillChange.send()
             projectStore.selectedDirectory = newValue
+            directoryStoreRegistry.activate(newValue)
         }
     }
-    var selectedProjectContentTab: ProjectContentTab {
+    var selectedProjectContentTab: OpenClientProjectContentTab {
         get { projectStore.selectedContentTab }
         set {
             objectWillChange.send()
@@ -243,7 +220,8 @@ final class AppViewModel: ObservableObject {
             projectStore.createProjectSelectedDirectory = newValue
         }
     }
-    let directoryStore = DirectoryStore()
+    let directoryStoreRegistry = DirectoryStoreRegistry()
+    var directoryStore: DirectoryStore { directoryStoreRegistry.activeStore }
     var isLoadingSessions: Bool {
         get { directoryStore.isLoadingSessions }
         set {
@@ -286,6 +264,7 @@ final class AppViewModel: ObservableObject {
         }
     }
     let chatStore = ChatStore()
+    lazy var chatFacade = ChatFacade(viewModel: self)
     var toolMessageDetails: [String: OpenCodeMessageEnvelope] {
         get { chatStore.toolMessageDetails }
         set {
@@ -309,6 +288,7 @@ final class AppViewModel: ObservableObject {
         }
     }
     let sessionListStore = SessionListStore()
+    lazy var sessionListFacade = SessionListFacade(viewModel: self)
     var sessionPreviews: [String: SessionPreview] {
         get { sessionListStore.previews }
         set {
@@ -397,7 +377,6 @@ final class AppViewModel: ObservableObject {
     @Published var draftTitle = ""
     @Published var newSessionWorkspaceSelection: NewSessionWorkspaceSelection = .main
     @Published var newWorkspaceName = ""
-    @Published var selectedFilesWorkspaceDirectory: String?
     let composerStore = ComposerStore()
     var draftMessage: String {
         get { composerStore.draftMessage }
@@ -508,7 +487,7 @@ final class AppViewModel: ObservableObject {
         }
     }
     @Published var isShowingAddServerSheet = false
-    var savedServerEditorMode: SavedServerEditorMode {
+    var savedServerEditorMode: OpenClientSavedServerEditorMode {
         get { connectionStore.savedServerEditorMode }
         set {
             objectWillChange.send()
@@ -699,6 +678,7 @@ final class AppViewModel: ObservableObject {
         }
     }
     let liveActivityStore = LiveActivityStore()
+    lazy var liveActivityFacade = LiveActivityFacade(viewModel: self)
     var activeLiveActivitySessionIDs: Set<String> {
         get { liveActivityStore.activeSessionIDs }
         set {
@@ -713,22 +693,32 @@ final class AppViewModel: ObservableObject {
         }
     }
     var activeChatSessionID: String? {
-        get { liveActivityStore.activeChatSessionID }
+        get { chatStore.activeChatSessionID }
         set {
             objectWillChange.send()
-            liveActivityStore.activeChatSessionID = newValue
+            chatStore.activeChatSessionID = newValue
             updateEventInterestSnapshot()
         }
     }
-    @Published var usageMeter = OpenClientUsageMeter.empty
-    @Published var paywallReason: OpenClientPaywallReason?
+    let commerceStore = CommerceStore()
+    lazy var commerceFacade = CommerceFacade(store: commerceStore)
+    var usageMeter: OpenClientUsageMeter {
+        get { commerceFacade.usageMeter }
+        set { commerceFacade.usageMeter = newValue }
+    }
+    var paywallReason: OpenClientPaywallReason? {
+        get { commerceFacade.paywallReason }
+        set { commerceFacade.paywallReason = newValue }
+    }
 #if DEBUG
-    @Published var debugEntitlementOverride: OpenClientDebugEntitlementOverride = .unlocked
+    var debugEntitlementOverride: OpenClientDebugEntitlementOverride {
+        get { commerceFacade.debugEntitlementOverride }
+        set { commerceFacade.debugEntitlementOverride = newValue }
+    }
 #endif
 
     let passwordStore = OpenCodeServerPasswordStore()
-    let usageStore = OpenClientUsageStore()
-    let purchaseManager = OpenClientPurchaseManager()
+    var purchaseManager: OpenClientPurchaseManager { commerceFacade.purchaseManager }
 
     let eventManager = OpenCodeEventManager()
     let eventInterestSnapshot = OpenCodeEventInterestSnapshot()
@@ -739,9 +729,6 @@ final class AppViewModel: ObservableObject {
     var pendingRecentSessionOpenID: String?
     var recentProjectSessionsLoadTask: Task<Void, Never>?
     var recentProjectSessionsLoadGeneration = 0
-    var vcsEventRefreshTask: Task<Void, Never>?
-    var widgetSnapshotPublishTask: Task<Void, Never>?
-    var pendingWidgetSnapshotIncludesModelOptions = false
     var connectionAttemptTask: Task<Void, Never>?
     var appleIntelligenceResponseTask: Task<Void, Never>?
     var activeAppleIntelligenceWorkspaceURL: URL?
@@ -759,8 +746,7 @@ final class AppViewModel: ObservableObject {
     }
     var pendingTranscriptEvents: [OpenCodePendingTranscriptEvent] {
         get { chatStore.pendingTranscriptEvents }
-        set { chatStore.pendingTranscriptEvents = newValue }
-        _modify { yield &chatStore.pendingTranscriptEvents }
+        set { chatStore.replacePendingTranscriptEvents(newValue) }
     }
     var streamDeltaFlushTask: Task<Void, Never>? {
         get { chatStore.streamDeltaFlushTask }
@@ -806,13 +792,9 @@ final class AppViewModel: ObservableObject {
         appleIntelligenceRecentWorkspaces = loadAppleIntelligenceWorkspaces()
         appleIntelligenceUserInstructions = defaultAppleIntelligenceUserInstructions
         appleIntelligenceSystemInstructions = defaultAppleIntelligenceSystemInstructions
-        usageMeter = usageStore.load()
-#if DEBUG
-        if let override = ProcessInfo.processInfo.environment["OPENCLIENT_DEBUG_ENTITLEMENT"],
-           let value = OpenClientDebugEntitlementOverride(rawValue: override) {
-            debugEntitlementOverride = value
-        }
-#endif
+        commerceFacade.hydratePersistedState(
+            debugEntitlementRawValue: ProcessInfo.processInfo.environment["OPENCLIENT_DEBUG_ENTITLEMENT"]
+        )
         sessionPreviews = loadSessionPreviews()
         pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
         liveActivityAutoStartByScope = loadLiveActivityAutoStartByScope()
@@ -834,6 +816,8 @@ final class AppViewModel: ObservableObject {
             // Observing all stores here doubles invalidations during hot paths like send.
             // ConnectionStore changes are low-frequency and are mostly routed through helpers.
             connectionStore.objectWillChange.eraseToAnyPublisher(),
+            directoryStoreRegistry.objectWillChange.eraseToAnyPublisher(),
+            commerceFacade.objectWillChange.eraseToAnyPublisher(),
             // Provider configuration changes need to invalidate configuration sheets immediately.
             modelConfigurationStore.objectWillChange.eraseToAnyPublisher(),
             // ProjectFilesStore still has a few direct dictionary/set mutations during tree loading.
@@ -929,10 +913,10 @@ final class AppViewModel: ObservableObject {
     func commands(canFork: Bool) -> [OpenCodeCommand] {
         var result = directoryCommands
         if selectedSession != nil, !result.contains(where: { $0.name == "compact" }) {
-            result.append(Self.compactClientCommand)
+            result.append(OpenClientChatCommands.compact)
         }
         if selectedSession != nil, canFork, !result.contains(where: { $0.name == "fork" }) {
-            result.append(Self.forkClientCommand)
+            result.append(OpenClientChatCommands.fork)
         }
         return result
     }
@@ -969,140 +953,5 @@ final class AppViewModel: ObservableObject {
             yield &sessionInteractionStore.questions
         }
     }
-    var vcsInfo: OpenCodeVCSInfo? {
-        get { projectFilesStore.vcsInfo }
-        set {
-            objectWillChange.send()
-            projectFilesStore.vcsInfo = newValue
-        }
-    }
-    var vcsFileStatuses: [OpenCodeVCSFileStatus] {
-        get { projectFilesStore.vcsFileStatuses }
-        set {
-            objectWillChange.send()
-            projectFilesStore.vcsFileStatuses = newValue
-        }
-        _modify {
-            objectWillChange.send()
-            yield &projectFilesStore.vcsFileStatuses
-        }
-    }
-    var projectFilesMode: OpenCodeProjectFilesMode {
-        get { projectFilesStore.mode }
-        set {
-            objectWillChange.send()
-            projectFilesStore.mode = newValue
-        }
-    }
-    var fileTreeRootNodes: [OpenCodeFileNode] {
-        get { projectFilesStore.fileTreeRootNodes }
-        set {
-            objectWillChange.send()
-            projectFilesStore.fileTreeRootNodes = newValue
-        }
-        _modify {
-            objectWillChange.send()
-            yield &projectFilesStore.fileTreeRootNodes
-        }
-    }
-    var selectedProjectFilePath: String? {
-        get { projectFilesStore.selectedFilePath }
-        set {
-            objectWillChange.send()
-            projectFilesStore.selectedFilePath = newValue
-        }
-    }
-    var selectedVCSDiffMode: OpenCodeVCSDiffMode {
-        get { projectFilesStore.selectedVCSMode }
-        set {
-            objectWillChange.send()
-            projectFilesStore.selectedVCSMode = newValue
-        }
-    }
-    var selectedVCSFile: String? {
-        get { projectFilesStore.selectedVCSFile }
-        set {
-            objectWillChange.send()
-            projectFilesStore.selectedVCSFile = newValue
-        }
-    }
-
-    static let forkClientCommand = OpenCodeCommand(
-        name: "fork",
-        description: "Create a new session from a previous message",
-        agent: nil,
-        model: nil,
-        source: "client",
-        template: "",
-        subtask: false,
-        hints: []
-    )
-
-    static let compactClientCommand = OpenCodeCommand(
-        name: "compact",
-        description: "Summarize the session context",
-        agent: nil,
-        model: nil,
-        source: "client",
-        template: "",
-        subtask: false,
-        hints: []
-    )
     var hasGitProject: Bool { currentProject?.vcs == "git" && effectiveSelectedDirectory != nil }
-    var currentVCSDiffs: [OpenCodeVCSFileDiff] { projectFilesStore.vcsDiffsByMode[selectedVCSDiffMode] ?? [] }
-    var selectedProjectFileContent: OpenCodeFileContent? {
-        guard let selectedProjectFilePath else { return nil }
-        return projectFilesStore.fileContentsByPath[selectedProjectFilePath]
-    }
-    var selectedVCSFileDiff: OpenCodeVCSFileDiff? {
-        let path = selectedProjectFilePath ?? selectedVCSFile
-        guard let path else { return nil }
-        return currentVCSDiffs.first { $0.file == path }
-    }
-    var selectedProjectFileIsChanged: Bool {
-        guard let selectedProjectFilePath else { return false }
-        return vcsFileStatuses.contains { $0.path == selectedProjectFilePath }
-    }
-    var isLoadingVCS: Bool {
-        get { projectFilesStore.isLoadingVCS }
-        set {
-            objectWillChange.send()
-            projectFilesStore.isLoadingVCS = newValue
-        }
-    }
-    var isLoadingFileTree: Bool {
-        get { projectFilesStore.isLoadingFileTree }
-        set {
-            objectWillChange.send()
-            projectFilesStore.isLoadingFileTree = newValue
-        }
-    }
-    var isLoadingSelectedFileContent: Bool {
-        get { projectFilesStore.isLoadingSelectedFileContent }
-        set {
-            objectWillChange.send()
-            projectFilesStore.isLoadingSelectedFileContent = newValue
-        }
-    }
-    var vcsErrorMessage: String? {
-        get { projectFilesStore.vcsErrorMessage }
-        set {
-            objectWillChange.send()
-            projectFilesStore.vcsErrorMessage = newValue
-        }
-    }
-    var fileTreeErrorMessage: String? {
-        get { projectFilesStore.fileTreeErrorMessage }
-        set {
-            objectWillChange.send()
-            projectFilesStore.fileTreeErrorMessage = newValue
-        }
-    }
-    var fileContentErrorMessage: String? {
-        get { projectFilesStore.fileContentErrorMessage }
-        set {
-            objectWillChange.send()
-            projectFilesStore.fileContentErrorMessage = newValue
-        }
-    }
 }

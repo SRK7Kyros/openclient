@@ -10,6 +10,26 @@ private extension String {
     }
 }
 
+struct MessageBubbleActivityBudgetProjection: Equatable {
+    let retainedIndices: Set<Int>
+    let firstHiddenIndex: Int?
+    let hiddenCount: Int
+}
+
+enum MessageBubbleActivityBudget {
+    static func project(protectedEntries: [Bool], limit: Int) -> MessageBubbleActivityBudgetProjection {
+        let budgetableIndices = protectedEntries.indices.filter { !protectedEntries[$0] }
+        let retainedBudgetableIndices = Set(budgetableIndices.suffix(max(0, limit)))
+        let retainedIndices = Set(protectedEntries.indices.filter { protectedEntries[$0] }).union(retainedBudgetableIndices)
+        let hiddenIndices = protectedEntries.indices.filter { !retainedIndices.contains($0) }
+        return MessageBubbleActivityBudgetProjection(
+            retainedIndices: retainedIndices,
+            firstHiddenIndex: hiddenIndices.first,
+            hiddenCount: hiddenIndices.count
+        )
+    }
+}
+
 struct MessageBubble: View {
     let message: OpenCodeMessageEnvelope
     let detailedMessage: OpenCodeMessageEnvelope?
@@ -20,6 +40,7 @@ struct MessageBubble: View {
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
     let expandedReasoningPartIDs: Set<String>
+    let showsAllActivity: Bool
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
     let onOpenTaskSession: (String) -> Void
@@ -27,6 +48,7 @@ struct MessageBubble: View {
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
     let onToggleReasoningPart: (String) -> Void
+    let onShowEarlierActivity: () -> Void
 
     @State private var expandedContextGroupIDs: Set<String> = []
     @State private var entryAnimationStartDate: Date?
@@ -53,7 +75,7 @@ struct MessageBubble: View {
         MessageBubbleShape(isOutgoing: isUser, cornerRadius: isUser ? 22 : 18)
     }
 
-    private var displayEntries: [DisplayEntry] {
+    private var fullDisplayEntries: [DisplayEntry] {
         let parts = effectiveMessage.parts
         let key = MessageBubbleDisplayEntryCacheKey(
             messageID: effectiveMessage.id,
@@ -64,6 +86,30 @@ struct MessageBubble: View {
             makeDisplayEntryPlan(from: parts)
         }
         return materializeDisplayEntryPlan(plan, parts: parts)
+    }
+
+    private var displayEntries: [DisplayEntry] {
+        let entries = fullDisplayEntries
+        guard !isUser, !showsAllActivity, !isStreamingMessage else {
+            return entries
+        }
+
+        let projection = MessageBubbleActivityBudget.project(
+            protectedEntries: entries.map(isProtectedFromActivityBudget),
+            limit: 12
+        )
+        guard projection.hiddenCount > 0 else { return entries }
+
+        var result: [DisplayEntry] = []
+        for (index, entry) in entries.enumerated() {
+            if index == projection.firstHiddenIndex {
+                result.append(.earlierActivity(hiddenCount: projection.hiddenCount))
+            }
+            if projection.retainedIndices.contains(index) {
+                result.append(entry)
+            }
+        }
+        return result
     }
 
     var body: some View {
@@ -134,6 +180,15 @@ struct MessageBubble: View {
                 case let .context(group):
                     revealWrappedContextGroupView(group)
                         .transition(.identity)
+                case let .earlierActivity(hiddenCount):
+                    Button(action: onShowEarlierActivity) {
+                        Label("Show earlier activity", systemImage: "clock.arrow.circlepath")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue("\(hiddenCount) hidden items")
+                    .accessibilityIdentifier("chat.showEarlierActivity.\(effectiveMessage.id)")
                 }
             }
 
@@ -560,6 +615,24 @@ struct MessageBubble: View {
 
     private func isReasoningRunning(_ part: OpenCodePart) -> Bool {
         isRunning(part) || isStreamingMessage
+    }
+
+    private func isProtectedFromActivityBudget(_ entry: DisplayEntry) -> Bool {
+        switch entry {
+        case let .part(indexed):
+            let part = indexed.part
+            if attachment(for: part) != nil { return true }
+            if activityStyle(for: part) != nil { return isRunning(part) }
+            guard renderableText(for: part) != nil else {
+                return shouldShowUnknownStreamingPartPlaceholder(part)
+            }
+            if textStyle(for: part) == .standard { return true }
+            return isReasoningRunning(part) || isReasoningExpanded(part: part, index: indexed.index)
+        case let .context(group):
+            return expandedContextGroupIDs.contains(group.id) || group.parts.contains { isRunning($0.part) }
+        case .earlierActivity:
+            return true
+        }
     }
 
     private func displayEntryCachePartKey(for part: OpenCodePart) -> MessageBubbleDisplayEntryCacheKey.PartKey {
@@ -1046,6 +1119,7 @@ private final class MessageBubbleDisplayEntryCache {
 private enum DisplayEntry: Identifiable {
     case part(IndexedPart)
     case context(ContextGroup)
+    case earlierActivity(hiddenCount: Int)
 
     var id: String {
         switch self {
@@ -1053,6 +1127,8 @@ private enum DisplayEntry: Identifiable {
             return indexed.id
         case let .context(group):
             return group.id
+        case .earlierActivity:
+            return "earlier-activity"
         }
     }
 }

@@ -1,25 +1,25 @@
 import SwiftUI
 
 struct MCPListView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var facade: MCPFacade
     @State private var searchText = ""
 
     var body: some View {
         MCPListContent(
-            snapshot: viewModel.mcpSnapshot,
+            snapshot: facade.snapshot,
             searchText: $searchText,
             onLoad: {
-                await viewModel.loadMCPStatusIfNeeded()
+                await facade.loadIfNeeded()
             },
             onToggle: { name in
-                await viewModel.toggleMCPServer(name: name)
+                await facade.toggleServer(name: name)
             }
         )
     }
 }
 
 private struct MCPListContent: View {
-    let snapshot: AppViewModel.MCPSnapshot
+    let snapshot: MCPFacade.Snapshot
     @Binding var searchText: String
     let onLoad: () async -> Void
     let onToggle: (String) async -> Void
@@ -161,6 +161,12 @@ private struct MCPServerRow: View {
 
 #if DEBUG
 #Preview {
-    MCPListView(viewModel: AppViewModel.preview())
+    MCPListView(
+        facade: MCPFacade(
+            store: MCPStore(isReady: true),
+            clientProvider: { OpenCodeAPIClient(config: OpenCodeServerConfig()) },
+            directoryProvider: { nil }
+        )
+    )
 }
 #endif

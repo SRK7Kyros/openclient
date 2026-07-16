@@ -7,8 +7,7 @@ import UIKit
 #endif
 
 struct OpenClientPaywallView: View {
-    @ObservedObject var viewModel: AppViewModel
-    @ObservedObject var purchaseManager: OpenClientPurchaseManager
+    @ObservedObject var commerce: CommerceFacade
     let reason: OpenClientPaywallReason
 
     var body: some View {
@@ -57,7 +56,7 @@ struct OpenClientPaywallView: View {
 
                 VStack(spacing: 10) {
                     Button {
-                        Task { await viewModel.purchaseProUnlock() }
+                        Task { await commerce.purchaseProUnlock() }
                     } label: {
                         Text(purchaseButtonTitle)
                             .font(.headline)
@@ -67,11 +66,11 @@ struct OpenClientPaywallView: View {
                     .controlSize(.large)
 
                     Button("Restore Purchases") {
-                        Task { await viewModel.restoreProUnlock() }
+                        Task { await commerce.restoreProUnlock() }
                     }
                     .font(.subheadline.weight(.medium))
 
-                    if !isScreenshotScene, let error = purchaseManager.purchaseError {
+                    if !isScreenshotScene, let error = commerce.purchaseError {
                         Text(error)
                             .font(.footnote)
                             .foregroundStyle(.red)
@@ -81,7 +80,7 @@ struct OpenClientPaywallView: View {
 
 #if DEBUG
                 if !isScreenshotScene {
-                    OpenClientDebugEntitlementControls(viewModel: viewModel)
+                    OpenClientDebugEntitlementControls(commerce: commerce)
                         .padding(.top, 4)
                 }
 #endif
@@ -94,13 +93,13 @@ struct OpenClientPaywallView: View {
             .toolbar {
                 ToolbarItem(placement: .opencodeTrailing) {
                     Button("Done") {
-                        viewModel.paywallReason = nil
+                        commerce.dismissPaywall()
                     }
                 }
             }
-            .onChange(of: purchaseManager.hasProUnlock) { _, unlocked in
+            .onChange(of: commerce.storeKitHasProUnlock) { _, unlocked in
                 if unlocked {
-                    viewModel.paywallReason = nil
+                    commerce.dismissPaywall()
                 }
             }
         }
@@ -110,10 +109,10 @@ struct OpenClientPaywallView: View {
         if isScreenshotScene {
             return "Unlock for $9.99"
         }
-        if purchaseManager.isLoadingProducts {
+        if commerce.isLoadingProducts {
             return "Loading..."
         }
-        if let price = purchaseManager.proProduct?.displayPrice {
+        if let price = commerce.proDisplayPrice {
             return "Unlock for \(price)"
         }
         return "Unlock Pro"

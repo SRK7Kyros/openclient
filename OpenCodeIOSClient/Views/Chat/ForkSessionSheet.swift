@@ -1,16 +1,19 @@
 import SwiftUI
 
 struct ForkSessionSheet: View {
-    @ObservedObject var viewModel: AppViewModel
-    let sessionID: String
+    @ObservedObject var chatFacade: ChatFacade
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
 
+    private var snapshot: ChatFacade.ForkSessionSnapshot {
+        chatFacade.forkSessionSnapshot
+    }
+
     private var messages: [OpenCodeForkableMessage] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return viewModel.forkableMessages }
-        return viewModel.forkableMessages.filter { $0.text.localizedCaseInsensitiveContains(query) }
+        guard !query.isEmpty else { return snapshot.messages }
+        return snapshot.messages.filter { $0.text.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -26,14 +29,14 @@ struct ForkSessionSheet: View {
                 ForEach(messages) { message in
                     Button {
                         Task {
-                            await viewModel.forkSelectedSession(from: message.id)
+                            await chatFacade.forkSelectedSession(from: message.id)
                             dismiss()
                         }
                     } label: {
-                        ForkMessageRow(message: message, isPreparing: viewModel.pendingForkMessageID == message.id)
+                        ForkMessageRow(message: message, isPreparing: snapshot.pendingMessageID == message.id)
                     }
                     .buttonStyle(.plain)
-                    .disabled(viewModel.pendingForkMessageID != nil)
+                    .disabled(snapshot.pendingMessageID != nil)
                     .accessibilityIdentifier("chat.fork.message.\(message.id)")
                 }
             }
@@ -44,10 +47,10 @@ struct ForkSessionSheet: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
-                    viewModel.isShowingForkSessionSheet = false
+                    chatFacade.dismissForkSessionSheet()
                     dismiss()
                 }
-                .disabled(viewModel.pendingForkMessageID != nil)
+                .disabled(snapshot.pendingMessageID != nil)
             }
         }
     }

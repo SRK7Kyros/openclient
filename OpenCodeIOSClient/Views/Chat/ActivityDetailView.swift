@@ -15,7 +15,7 @@ struct ActivityDetail: Identifiable {
 }
 
 struct ActivityDetailView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var chatFacade: ChatFacade
     let detail: ActivityDetail
     @State private var loadedMessage: OpenCodeMessageEnvelope?
     @State private var loadError: String?
@@ -140,7 +140,10 @@ struct ActivityDetailView: View {
         .task {
             guard !detail.sessionID.isEmpty, !detail.messageID.isEmpty else { return }
             do {
-                loadedMessage = try await viewModel.fetchMessageDetails(sessionID: detail.sessionID, messageID: detail.messageID)
+                loadedMessage = try await chatFacade.fetchMessageDetails(
+                    sessionID: detail.sessionID,
+                    messageID: detail.messageID
+                )
                 loadError = nil
             } catch {
                 loadError = error.localizedDescription

@@ -1442,6 +1442,7 @@ private struct MessageBubbleSnapshot: Equatable {
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
     let expandedReasoningPartIDs: Set<String>
+    let showsAllActivity: Bool
     let streamingReservePadding: CGFloat
 }
 
@@ -1512,6 +1513,7 @@ private struct ComposerOverlayModeSnapshot {
 private struct ChatDisplaySnapshot {
     let messages: [OpenCodeMessageEnvelope]
     let hiddenMessageCount: Int
+    let hiddenRoundCount: Int
     let items: [ChatDisplayItem]
     let showsThinking: Bool
 
@@ -1529,35 +1531,90 @@ struct OpenCodeChatTranscriptWindow: Equatable {
     let hiddenMessageCount: Int
 }
 
+private extension Collection where Element == OpenCodeMessageEnvelope {
+    var userMessageCount: Int {
+        reduce(into: 0) { count, message in
+            if (message.info.role ?? "").lowercased() == "user" {
+                count += 1
+            }
+        }
+    }
+}
+
 enum OpenCodeChatTranscriptWindowing {
+    static func messageCountIncludingLatestUserRounds(
+        _ roundCount: Int,
+        fallbackMessageCount: Int,
+        in messages: [OpenCodeMessage]
+    ) -> Int {
+        guard !messages.isEmpty else { return 0 }
+        guard roundCount > 0 else { return min(messages.count, max(0, fallbackMessageCount)) }
+
+        var remainingRounds = roundCount
+        var oldestUserIndex: Int?
+        for index in messages.indices.reversed() where (messages[index].role ?? "").lowercased() == "user" {
+            oldestUserIndex = index
+            remainingRounds -= 1
+            if remainingRounds == 0 {
+                return messages.count - index
+            }
+        }
+
+        if let oldestUserIndex {
+            return messages.count - oldestUserIndex
+        }
+        return min(messages.count, max(0, fallbackMessageCount))
+    }
+
     static func window(
         from messages: [OpenCodeMessageEnvelope],
         requestedCount: Int,
         batchSize: Int,
         hasDisplayableContent: ([OpenCodeMessageEnvelope]) -> Bool
     ) -> OpenCodeChatTranscriptWindow {
-        guard !messages.isEmpty else {
+        let messageIDs = Set(messages.map(\.id))
+        return window(
+            totalCount: messages.count,
+            requestedCount: requestedCount,
+            batchSize: batchSize,
+            loadSuffix: { Array(messages.suffix($0)) },
+            containsMessageID: { messageIDs.contains($0) },
+            hasDisplayableContent: hasDisplayableContent
+        )
+    }
+
+    static func window(
+        totalCount: Int,
+        requestedCount: Int,
+        batchSize: Int,
+        loadSuffix: (Int) -> [OpenCodeMessageEnvelope],
+        containsMessageID: (String) -> Bool,
+        hasDisplayableContent: ([OpenCodeMessageEnvelope]) -> Bool
+    ) -> OpenCodeChatTranscriptWindow {
+        guard totalCount > 0 else {
             return OpenCodeChatTranscriptWindow(messages: [], hiddenMessageCount: 0)
         }
 
         let minimumBatchSize = max(1, batchSize)
-        let messageIDs = Set(messages.map(\.id))
-        var count = min(messages.count, max(requestedCount, minimumBatchSize))
-        var window = Array(messages.suffix(count))
+        var count = min(totalCount, max(requestedCount, minimumBatchSize))
+        var window = loadSuffix(count)
 
-        while count < messages.count,
-              !hasDisplayableContent(window) || hasAssistantChildMissingParent(window, in: messageIDs) {
-            count = min(messages.count, count + minimumBatchSize)
-            window = Array(messages.suffix(count))
+        while count < totalCount,
+              !hasDisplayableContent(window) || hasAssistantChildMissingParent(window, containsMessageID: containsMessageID) {
+            count = min(totalCount, count + minimumBatchSize)
+            window = loadSuffix(count)
         }
 
         return OpenCodeChatTranscriptWindow(
             messages: window,
-            hiddenMessageCount: max(0, messages.count - window.count)
+            hiddenMessageCount: max(0, totalCount - window.count)
         )
     }
 
-    private static func hasAssistantChildMissingParent(_ window: [OpenCodeMessageEnvelope], in messageIDs: Set<String>) -> Bool {
+    private static func hasAssistantChildMissingParent(
+        _ window: [OpenCodeMessageEnvelope],
+        containsMessageID: (String) -> Bool
+    ) -> Bool {
         let windowIDs = Set(window.map(\.id))
         return window.contains { message in
             guard (message.info.role ?? "").lowercased() == "assistant",
@@ -1565,7 +1622,7 @@ enum OpenCodeChatTranscriptWindowing {
                   !parentID.isEmpty else {
                 return false
             }
-            return messageIDs.contains(parentID) && !windowIDs.contains(parentID)
+            return containsMessageID(parentID) && !windowIDs.contains(parentID)
         }
     }
 }
@@ -1579,6 +1636,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
     let onToggleReasoningPart: (String) -> Void
+    let onShowEarlierActivity: () -> Void
 
     nonisolated static func == (lhs: EquatableMessageBubbleHost, rhs: EquatableMessageBubbleHost) -> Bool {
         lhs.snapshot == rhs.snapshot
@@ -1595,13 +1653,15 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             reserveEntryFromComposer: snapshot.reserveEntryFromComposer,
             animateEntryFromComposer: snapshot.animateEntryFromComposer,
             expandedReasoningPartIDs: snapshot.expandedReasoningPartIDs,
+            showsAllActivity: snapshot.showsAllActivity,
             resolveTaskSessionID: resolveTaskSessionID,
             onSelectPart: onSelectPart,
             onOpenTaskSession: onOpenTaskSession,
             onForkMessage: onForkMessage,
             onInspectDebugMessage: onInspectDebugMessage,
             onEntryAnimationStarted: onEntryAnimationStarted,
-            onToggleReasoningPart: onToggleReasoningPart
+            onToggleReasoningPart: onToggleReasoningPart,
+            onShowEarlierActivity: onShowEarlierActivity
         )
         .padding(.bottom, snapshot.streamingReservePadding)
     }
@@ -1761,12 +1821,12 @@ private struct EquatableMessageComposerHost: View, Equatable {
 struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
 
-    let viewModel: AppViewModel
     @ObservedObject private var connectionStore: ConnectionStore
     @ObservedObject private var projectStore: ProjectStore
     @ObservedObject private var directoryStore: DirectoryStore
     @ObservedObject private var sessionListStore: SessionListStore
     @ObservedObject private var chatStore: ChatStore
+    private let chatFacade: ChatFacade
     @ObservedObject private var sessionInteractionStore: SessionInteractionStore
     @ObservedObject private var composerStore: ComposerStore
     @ObservedObject private var modelConfigurationStore: ModelConfigurationStore
@@ -1777,19 +1837,19 @@ struct ChatView: View {
     let presentationRequest: Int
 
     @MainActor
-    init(viewModel: AppViewModel, sessionID: String, presentationRequest: Int = 0) {
-        self.viewModel = viewModel
-        _connectionStore = ObservedObject(wrappedValue: viewModel.connectionStore)
-        _projectStore = ObservedObject(wrappedValue: viewModel.projectStore)
-        _directoryStore = ObservedObject(wrappedValue: viewModel.directoryStore)
-        _sessionListStore = ObservedObject(wrappedValue: viewModel.sessionListStore)
-        _chatStore = ObservedObject(wrappedValue: viewModel.chatStore)
-        _sessionInteractionStore = ObservedObject(wrappedValue: viewModel.sessionInteractionStore)
-        _composerStore = ObservedObject(wrappedValue: viewModel.composerStore)
-        _modelConfigurationStore = ObservedObject(wrappedValue: viewModel.modelConfigurationStore)
-        _mcpStore = ObservedObject(wrappedValue: viewModel.mcpStore)
-        _funAndGamesStore = ObservedObject(wrappedValue: viewModel.funAndGamesStore)
-        _chatPresentationStore = ObservedObject(wrappedValue: viewModel.chatPresentationStore)
+    init(chatFacade: ChatFacade, sessionID: String, presentationRequest: Int = 0) {
+        _connectionStore = ObservedObject(wrappedValue: chatFacade.connectionStore)
+        _projectStore = ObservedObject(wrappedValue: chatFacade.projectStore)
+        _directoryStore = ObservedObject(wrappedValue: chatFacade.directoryStore(forSessionID: sessionID))
+        _sessionListStore = ObservedObject(wrappedValue: chatFacade.sessionListStore)
+        _chatStore = ObservedObject(wrappedValue: chatFacade.chatStore)
+        self.chatFacade = chatFacade
+        _sessionInteractionStore = ObservedObject(wrappedValue: chatFacade.sessionInteractionStore)
+        _composerStore = ObservedObject(wrappedValue: chatFacade.composerStore)
+        _modelConfigurationStore = ObservedObject(wrappedValue: chatFacade.modelConfigurationStore)
+        _mcpStore = ObservedObject(wrappedValue: chatFacade.mcpStore)
+        _funAndGamesStore = ObservedObject(wrappedValue: chatFacade.funAndGamesStore)
+        _chatPresentationStore = ObservedObject(wrappedValue: chatFacade.chatPresentationStore)
         self.sessionID = sessionID
         self.presentationRequest = presentationRequest
     }
@@ -1802,7 +1862,8 @@ struct ChatView: View {
     @State private var selectedActivityDetail: ActivityDetail?
     @State private var showingTodoInspector = false
     @State private var showingContextMetrics = false
-    @State private var visibleMessageCount = 50
+    @State private var visibleRoundCount = 3
+    @State private var additionalLeadingMessageCount = 0
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
     @State private var taskStore = ChatViewTaskStore()
@@ -1824,6 +1885,7 @@ struct ChatView: View {
     @State private var animatingOutgoingMessageID: String?
     @State private var outgoingEntryAnimationStartedMessageIDs: Set<String> = []
     @State private var expandedReasoningPartIDs: Set<String> = []
+    @State private var expandedEarlierActivityMessageIDs: Set<String> = []
     @State private var hasCompletedInitialHydrationSnap = false
     @State private var isScrollGeometryAtBottom = true
     @State private var isRefreshingChatData = false
@@ -1845,20 +1907,17 @@ struct ChatView: View {
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
-    private let messageWindowSize = 50
+    private let roundWindowSize = 3
+    private let fallbackMessageWindowSize = 3
+    private let olderMessageWindowSize = 12
     private let bottomRefreshThreshold: CGFloat = 72
     private let bottomRefreshIndicatorHeight: CGFloat = 34
     private let outgoingRequestDelayMS = 720
     private let thinkingRevealHoldMS = 140
     private let eagerRefreshMinimumInterval: TimeInterval = 4
 
-    private var composerOverlaySnapshot: AppViewModel.ChatComposerOverlaySnapshot {
-        AppViewModel.ChatComposerOverlaySnapshot(
-            todos: sessionInteractionStore.todos,
-            attachments: composerStore.draftAttachments,
-            permissions: sessionInteractionStore.permissions(forSessionID: sessionID),
-            questions: sessionInteractionStore.questions(forSessionID: sessionID)
-        )
+    private var composerOverlaySnapshot: ChatFacade.ChatComposerOverlaySnapshot {
+        chatFacade.composerOverlaySnapshot(forSessionID: sessionID)
     }
 
     private var todoIDs: String {
@@ -1911,16 +1970,8 @@ struct ChatView: View {
         true
     }
 
-    private var chatHeaderSnapshot: AppViewModel.ChatSessionHeaderSnapshot {
-        let parent = parentSession(for: liveSession)
-        return AppViewModel.ChatSessionHeaderSnapshot(
-            session: liveSession,
-            isChildSession: liveSession.parentID != nil,
-            parentSession: parent,
-            parentTitle: parent?.displayTitle(fallback: "Session") ?? "Session",
-            childTitle: childSessionTitle(for: liveSession),
-            shimmersNavigationTitle: liveSession.isDefaultGeneratedTitle && latestTaskDescription(for: liveSession) == nil
-        )
+    private var chatHeaderSnapshot: ChatFacade.ChatSessionHeaderSnapshot {
+        chatFacade.headerSnapshot(for: liveSession)
     }
 
     private var isFindPlaceSession: Bool {
@@ -1928,27 +1979,7 @@ struct ChatView: View {
     }
 
     private var currentProjectPreferenceScopeKey: String {
-        if connectionStore.backendMode == .appleIntelligence {
-            return [
-                "apple-intelligence",
-                viewModel.activeAppleIntelligenceWorkspaceID ?? "global",
-            ].joined(separator: "|")
-        }
-
-        let directory: String?
-        if let selectedDirectory = projectStore.selectedDirectory, !selectedDirectory.isEmpty {
-            directory = selectedDirectory
-        } else if let currentProject = projectStore.currentProject, currentProject.id != "global" {
-            directory = currentProject.worktree
-        } else {
-            directory = nil
-        }
-
-        return [
-            "server",
-            viewModel.config.recentServerID,
-            directory ?? "global",
-        ].joined(separator: "|")
+        chatFacade.preferenceScopeKey()
     }
 
     private func session(matching sessionID: String) -> OpenCodeSession? {
@@ -1957,89 +1988,6 @@ struct ChatView: View {
             visibleSessions: directoryStore.sessions,
             selectedSession: directoryStore.selectedSession
         )
-    }
-
-    private func parentSession(for session: OpenCodeSession) -> OpenCodeSession? {
-        guard let parentID = session.parentID else { return nil }
-        return self.session(matching: parentID)
-    }
-
-    private func childSessions(for sessionID: String) -> [OpenCodeSession] {
-        sessionListStore.childSessions(for: sessionID, visibleSessions: directoryStore.sessions)
-    }
-
-    private func taskAgentDisplayName(from raw: String?) -> String? {
-        guard let raw, !raw.isEmpty else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.first else { return nil }
-        return String(first).uppercased() + trimmed.dropFirst()
-    }
-
-    private func resolveTaskSessionID(from part: OpenCodePart, currentSessionID: String) -> String? {
-        if let sessionID = part.state?.metadata?.sessionId, !sessionID.isEmpty {
-            return sessionID
-        }
-
-        let description = part.state?.input?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let agentName = taskAgentDisplayName(from: part.state?.input?.subagentType)?.lowercased()
-
-        return childSessions(for: currentSessionID)
-            .filter { child in
-                guard let title = child.title?.lowercased() else { return description == nil && agentName == nil }
-                let descriptionMatches = description.map { title.hasPrefix($0.lowercased()) } ?? true
-                let agentMatches = agentName.map { title.contains("@\($0)") || title.contains($0) } ?? true
-                return descriptionMatches && agentMatches
-            }
-            .sorted {
-                let lhs = $0.title ?? ""
-                let rhs = $1.title ?? ""
-                return lhs < rhs
-            }
-            .first?
-            .id
-    }
-
-    private func latestTaskDescription(for session: OpenCodeSession) -> String? {
-        guard let parentID = session.parentID else { return nil }
-
-        let parentMessages = chatStore.toolMessageDetails.values
-            .filter { $0.info.sessionID == parentID }
-            .sorted { $0.info.id < $1.info.id }
-
-        for message in parentMessages.reversed() {
-            for part in message.parts.reversed() where part.tool == "task" {
-                if resolveTaskSessionID(from: part, currentSessionID: parentID) == session.id,
-                   let description = part.state?.input?.description?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !description.isEmpty {
-                    return description
-                }
-            }
-        }
-
-        return nil
-    }
-
-    private func childSessionTitle(for session: OpenCodeSession) -> String {
-        if let description = latestTaskDescription(for: session), !description.isEmpty {
-            return description
-        }
-
-        if session.title?.isEmpty == false {
-            return session.displayTitle(fallback: "New Session").replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
-        }
-
-        return "New Session"
-    }
-
-    private func commands(canFork: Bool) -> [OpenCodeCommand] {
-        var result = directoryStore.commands
-        if directoryStore.selectedSession != nil, !result.contains(where: { $0.name == "compact" }) {
-            result.append(AppViewModel.compactClientCommand)
-        }
-        if directoryStore.selectedSession != nil, canFork, !result.contains(where: { $0.name == "fork" }) {
-            result.append(AppViewModel.forkClientCommand)
-        }
-        return result
     }
 
     private func findPlaceGame(for sessionID: String) -> FindPlaceGameSession? {
@@ -2088,7 +2036,7 @@ struct ChatView: View {
                 bottomRefreshRenderSnapshot: bottomRefreshRenderSnapshot,
                 isRefreshingChatData: isRefreshingChatData,
                 isSessionBusy: isSessionBusy,
-                contentInvalidationToken: expandedReasoningPartIDs.sorted().joined(separator: "|"),
+                contentInvalidationToken: transcriptContentInvalidationToken,
                 makeDisplaySnapshot: { timedChatDisplaySnapshot },
                 makeRows: { transcriptRows(for: $0) },
                 makeAnimatedRowIDs: { animatedTranscriptRowIDs(for: $0) },
@@ -2114,23 +2062,23 @@ struct ChatView: View {
                     }
                 },
                 onAppear: { _ in
-                    viewModel.activeChatSessionID = sessionID
+                    chatFacade.setActiveChatSessionID(sessionID)
                     hasCompletedInitialHydrationSnap = !chatStore.messages.isEmpty
                     updateDelayedLoadingIndicator()
                     scheduleInitialBottomReadjustments()
                 },
                 onHeightChange: { _ in },
                 onSlowSnapshot: { message in
-                    viewModel.appendDebugLog(message)
+                    chatFacade.appendDebugLog(message)
                 },
                 rowContent: { row in
                     transcriptRowContent(for: row)
                 }
             )
             .onChange(of: chatStore.messages.count) { _, count in
-                visibleMessageCount = min(count, max(visibleMessageCount, messageWindowSize))
                 if count == 0 {
-                    visibleMessageCount = messageWindowSize
+                    visibleRoundCount = roundWindowSize
+                    additionalLeadingMessageCount = 0
                 }
 
                 if count > 0, !hasCompletedInitialHydrationSnap {
@@ -2163,7 +2111,7 @@ struct ChatView: View {
         .navigationTitle("")
         .opencodeInlineNavigationTitle()
         .onAppear {
-            viewModel.activeChatSessionID = sessionID
+            chatFacade.setActiveChatSessionID(sessionID)
             syncComposerDraftFromViewModel()
             refreshCachedContextMetrics()
             refreshCachedForkableMessages()
@@ -2184,7 +2132,7 @@ struct ChatView: View {
 #endif
         .onDisappear {
             persistComposerDraftNow()
-            viewModel.setComposerStreamingFocus(false)
+            chatFacade.setComposerStreamingFocus(false)
             taskStore.delayedLoadingIndicatorTask?.cancel()
             taskStore.composerDraftPersistenceTask?.cancel()
             pendingOutgoingSendTask?.cancel()
@@ -2193,19 +2141,17 @@ struct ChatView: View {
             eagerRefreshTask?.cancel()
             keyboardMeasuredHeight = 0
             showsDelayedLoadingIndicator = false
-            if viewModel.activeChatSessionID == sessionID {
-                viewModel.activeChatSessionID = nil
-            }
+            chatFacade.clearActiveChatSessionIfMatching(sessionID)
         }
         .toolbar { chatToolbar }
 #if DEBUG
         .sheet(isPresented: $chatPresentationStore.isShowingDebugProbe) {
-            ChatDebugProbeSheet(viewModel: viewModel, copiedDebugLog: $copiedDebugLog)
+            ChatDebugProbeSheet(chatFacade: chatFacade, copiedDebugLog: $copiedDebugLog)
         }
 #endif
         .sheet(item: $selectedActivityDetail) { detail in
             NavigationStack {
-                ActivityDetailView(viewModel: viewModel, detail: detail)
+                ActivityDetailView(chatFacade: chatFacade, detail: detail)
             }
         }
         .sheet(item: $selectedMessageDebugPayload) { payload in
@@ -2221,7 +2167,7 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showingTodoInspector) {
             NavigationStack {
-                TodoInspectorView(viewModel: viewModel)
+                TodoInspectorView(chatFacade: chatFacade)
             }
         }
         .sheet(isPresented: $showingContextMetrics) {
@@ -2241,8 +2187,8 @@ struct ChatView: View {
                     userInstructions: $chatPresentationStore.appleIntelligenceUserInstructions,
                     systemInstructions: $chatPresentationStore.appleIntelligenceSystemInstructions,
                     selectedTab: $selectedInstructionTab,
-                    defaultUserInstructions: viewModel.defaultAppleIntelligenceUserInstructions,
-                    defaultSystemInstructions: viewModel.defaultAppleIntelligenceSystemInstructions,
+                    defaultUserInstructions: chatFacade.defaultAppleIntelligenceUserInstructions,
+                    defaultSystemInstructions: chatFacade.defaultAppleIntelligenceSystemInstructions,
                     onDone: {
                         chatPresentationStore.isShowingAppleIntelligenceInstructionsSheet = false
                     }
@@ -2251,7 +2197,7 @@ struct ChatView: View {
         }
         .sheet(isPresented: $chatPresentationStore.isShowingForkSessionSheet) {
             NavigationStack {
-                ForkSessionSheet(viewModel: viewModel, sessionID: sessionID)
+                ForkSessionSheet(chatFacade: chatFacade)
             }
             .presentationDetents([.medium, .large])
         }
@@ -2331,13 +2277,13 @@ struct ChatView: View {
         taskStore.composerDraftPersistenceTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(750))
             guard !Task.isCancelled else { return }
-            viewModel.saveMessageDraft(text, agentMentions: composerDraftStore.agentMentions, forSessionID: sessionID, updateActiveDraft: false)
+            chatFacade.saveMessageDraft(text, agentMentions: composerDraftStore.agentMentions, forSessionID: sessionID, updateActiveDraft: false)
         }
     }
 
     private func persistComposerDraftNow(removesEmpty: Bool = true) {
         taskStore.composerDraftPersistenceTask?.cancel()
-        viewModel.saveMessageDraft(composerDraftStore.text, agentMentions: composerDraftStore.agentMentions, forSessionID: sessionID, removesEmpty: removesEmpty)
+        chatFacade.saveMessageDraft(composerDraftStore.text, agentMentions: composerDraftStore.agentMentions, forSessionID: sessionID, removesEmpty: removesEmpty)
     }
 
     private func clearComposerDraft() {
@@ -2348,8 +2294,8 @@ struct ChatView: View {
         if !composerDraftStore.agentMentions.isEmpty {
             composerDraftStore.agentMentions = []
         }
-        viewModel.saveMessageDraft("", agentMentions: [], forSessionID: sessionID)
-        viewModel.composerResetToken = UUID()
+        chatFacade.saveMessageDraft("", agentMentions: [], forSessionID: sessionID)
+        chatFacade.resetComposer()
     }
 
     private func restoreComposerDraft(_ text: String) {
@@ -2358,8 +2304,8 @@ struct ChatView: View {
             composerDraftStore.text = text
         }
         composerDraftStore.agentMentions = []
-        viewModel.saveMessageDraft(text, agentMentions: [], forSessionID: sessionID)
-        viewModel.composerResetToken = UUID()
+        chatFacade.saveMessageDraft(text, agentMentions: [], forSessionID: sessionID)
+        chatFacade.resetComposer()
     }
 
     @ViewBuilder
@@ -2380,7 +2326,7 @@ struct ChatView: View {
                         selectedAttachmentPreview = attachment
                     },
                     onRemoveAttachment: { attachment in
-                        viewModel.removeDraftAttachment(attachment)
+                        chatFacade.removeDraftAttachment(attachment)
                     }
                 )
                 .padding(.horizontal, 16)
@@ -2391,10 +2337,10 @@ struct ChatView: View {
                 PermissionActionStack(
                     permissions: overlaySnapshot.permissions,
                     onDismiss: { permission in
-                        viewModel.dismissPermission(permission)
+                        chatFacade.dismissPermission(permission)
                     },
                     onRespond: { permission, response in
-                        Task { await viewModel.respondToPermission(permission, response: response) }
+                        Task { await chatFacade.respondToPermission(permission, response: response) }
                     }
                 )
                 .padding(.horizontal, 16)
@@ -2405,10 +2351,10 @@ struct ChatView: View {
                     answers: $questionAnswers,
                     customAnswers: $questionCustomAnswers,
                     onDismiss: { request in
-                        Task { await viewModel.dismissQuestion(request) }
+                        Task { await chatFacade.dismissQuestion(request) }
                     },
                     onSubmit: { request, answers in
-                        Task { await viewModel.respondToQuestion(request, answers: answers) }
+                        Task { await chatFacade.respondToQuestion(request, answers: answers) }
                     }
                 )
                 .padding(.vertical, 8)
@@ -2426,8 +2372,8 @@ struct ChatView: View {
     }
 
     private func composerOverlayModeSnapshot(
-        overlaySnapshot: AppViewModel.ChatComposerOverlaySnapshot,
-        headerSnapshot: AppViewModel.ChatSessionHeaderSnapshot
+        overlaySnapshot: ChatFacade.ChatComposerOverlaySnapshot,
+        headerSnapshot: ChatFacade.ChatSessionHeaderSnapshot
     ) -> ComposerOverlayModeSnapshot {
         if !overlaySnapshot.permissions.isEmpty {
             return ComposerOverlayModeSnapshot(mode: .permissions)
@@ -2443,7 +2389,11 @@ struct ChatView: View {
 
     @ViewBuilder
     private func activeMessageComposer(isBusy: Bool) -> some View {
-        let composerSnapshot = chatComposerSnapshot(for: liveSession, isBusy: isBusy)
+        let composerSnapshot = chatFacade.composerSnapshot(
+            for: liveSession,
+            isBusy: isBusy,
+            forkableMessages: forkableMessages
+        )
         let commands = composerSnapshot.commands
         let mentionableAgents = modelConfigurationStore.mentionableAgents
         let commandScopeKey = currentProjectPreferenceScopeKey
@@ -2487,13 +2437,13 @@ struct ChatView: View {
                 if !isFocused {
                     clearInactiveKeyboardMeasurement()
                 }
-                viewModel.setComposerStreamingFocus(isFocused)
+                chatFacade.setComposerStreamingFocus(isFocused)
             },
             onTextChange: { text in
                 scheduleComposerDraftPersistence(text)
             },
             onAgentMentionsChange: { mentions in
-                viewModel.setDraftAgentMentions(mentions, forSessionID: sessionID)
+                chatFacade.setDraftAgentMentions(mentions, forSessionID: sessionID)
             },
             onHeightChange: { height in
                 handleComposerHeightChange(height)
@@ -2505,21 +2455,21 @@ struct ChatView: View {
                 stopComposerAction()
             },
             onSelectCommand: { command in
-                viewModel.flushBufferedTranscript(reason: "command action")
-                if viewModel.isForkClientCommand(command) {
+                chatFacade.flushBufferedTranscript(reason: "command action")
+                if chatFacade.isForkClientCommand(command) {
                     clearComposerDraft()
-                    viewModel.presentForkSessionSheet()
+                    chatFacade.presentForkSessionSheet()
                     return
                 }
-                if viewModel.shouldMeterPrompts(for: sessionID) {
-                    guard viewModel.reserveUserPromptIfAllowed() else { return }
+                if chatFacade.shouldMeterPrompts(for: sessionID) {
+                    guard chatFacade.reserveUserPromptIfAllowed() else { return }
                 }
                 clearComposerDraft()
                 Task {
-                    if viewModel.isCompactClientCommand(command) {
-                        await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
+                    if chatFacade.isCompactClientCommand(command) {
+                        await chatFacade.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
                     } else {
-                        await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
+                        await chatFacade.sendCommand(command, sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
                     }
                 }
             },
@@ -2534,23 +2484,23 @@ struct ChatView: View {
                 }
             },
             onCompact: {
-                viewModel.flushBufferedTranscript(reason: "compact menu action")
-                if viewModel.shouldMeterPrompts(for: sessionID) {
-                    guard viewModel.reserveUserPromptIfAllowed() else { return }
+                chatFacade.flushBufferedTranscript(reason: "compact menu action")
+                if chatFacade.shouldMeterPrompts(for: sessionID) {
+                    guard chatFacade.reserveUserPromptIfAllowed() else { return }
                 }
-                Task { await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
+                Task { await chatFacade.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
             },
             onForkMessage: { messageID in
-                Task { await viewModel.forkSelectedSession(from: messageID) }
+                Task { await chatFacade.forkSelectedSession(from: messageID) }
             },
             onLoadMCP: {
-                Task { await viewModel.loadMCPStatusIfNeeded() }
+                Task { await chatFacade.loadMCPStatusIfNeeded() }
             },
             onToggleMCP: { name in
-                Task { await viewModel.toggleMCPServer(name: name) }
+                Task { await chatFacade.toggleMCPServer(name: name) }
             },
             onAddAttachments: { attachments in
-                viewModel.addDraftAttachments(attachments)
+                chatFacade.addDraftAttachments(attachments)
             },
             glassNamespace: composerGlassNamespace
         )
@@ -2561,44 +2511,6 @@ struct ChatView: View {
             .padding(.top, 8)
             .padding(.bottom, isComposerInputFocused ? 8 : 0)
             .background(.clear)
-    }
-
-    private func chatComposerSnapshot(for session: OpenCodeSession, isBusy: Bool) -> AppViewModel.ChatComposerSnapshot {
-        let forkableMessages = self.forkableMessages
-        let canFork = !forkableMessages.isEmpty
-        let commands = commands(canFork: canFork)
-        let forkSignature = forkableMessages
-            .map { "\($0.id):\($0.text):\($0.created ?? 0)" }
-            .joined(separator: "|")
-        let mcpSnapshot = AppViewModel.MCPSnapshot(
-            servers: mcpStore.servers,
-            connectedServerCount: mcpStore.connectedServerCount,
-            isLoading: mcpStore.isLoading,
-            togglingServerNames: mcpStore.togglingServerNames,
-            errorMessage: mcpStore.errorMessage
-        )
-        let mcpSignature = mcpSnapshot.servers
-            .map { "\($0.name):\($0.status.status):\($0.status.error ?? "")" }
-            .joined(separator: "|") + "|loading=\(mcpSnapshot.isLoading)|toggling=\(mcpSnapshot.togglingServerNames.sorted().joined(separator: ","))|error=\(mcpSnapshot.errorMessage ?? "")"
-        let actionSignature = [
-            session.id,
-            session.directory ?? "",
-            session.workspaceID ?? "",
-            session.projectID ?? "",
-            session.parentID ?? ""
-        ].joined(separator: "|")
-
-        return AppViewModel.ChatComposerSnapshot(
-            commands: commands,
-            attachmentCount: composerStore.draftAttachments.count,
-            isBusy: isBusy,
-            canFork: canFork,
-            forkableMessages: forkableMessages,
-            forkSignature: forkSignature,
-            mcp: mcpSnapshot,
-            mcpSignature: mcpSignature,
-            actionSignature: actionSignature
-        )
     }
 
     private var forkableMessages: [OpenCodeForkableMessage] {
@@ -2614,7 +2526,7 @@ struct ChatView: View {
 
         for message in chatStore.messages {
             guard (message.info.role ?? "").lowercased() == "user" else { continue }
-            let promptText = viewModel.sessionCoordinator.forkPromptDraft(from: message).text
+            let promptText = chatFacade.forkPromptText(from: message)
             let trimmedText = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedText.isEmpty else { continue }
 
@@ -2630,7 +2542,7 @@ struct ChatView: View {
         return result.reversed()
     }
 
-    private func childSessionComposerNotice(headerSnapshot: AppViewModel.ChatSessionHeaderSnapshot) -> some View {
+    private func childSessionComposerNotice(headerSnapshot: ChatFacade.ChatSessionHeaderSnapshot) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.headline)
@@ -2649,7 +2561,7 @@ struct ChatView: View {
 
             Button("Back") {
                 guard let parentSession = headerSnapshot.parentSession else { return }
-                Task { await viewModel.selectSession(parentSession) }
+                Task { await chatFacade.selectSession(parentSession) }
             }
             .buttonStyle(.bordered)
             .tint(.purple)
@@ -2857,7 +2769,7 @@ struct ChatView: View {
                 bottomPullDistance = 0
             }
         }
-        await viewModel.refreshChatData(for: sessionID)
+        await chatFacade.refreshChatData(for: sessionID)
     }
 
     private func requestBottomReadjustmentIfPinned() {
@@ -2922,7 +2834,7 @@ struct ChatView: View {
     private func scheduleEagerChatRefresh(reason: String) {
         guard !isScreenshotScene else { return }
         guard connectionStore.isConnected else { return }
-        guard viewModel.activeChatSessionID == sessionID || directoryStore.selectedSession?.id == sessionID else { return }
+        guard chatFacade.activeChatSessionID == sessionID || directoryStore.selectedSession?.id == sessionID else { return }
         guard shouldRunEagerChatRefresh else { return }
 
         eagerRefreshTask?.cancel()
@@ -2930,11 +2842,11 @@ struct ChatView: View {
             await Task.yield()
             guard !Task.isCancelled else { return }
             guard connectionStore.isConnected else { return }
-            guard viewModel.activeChatSessionID == sessionID || directoryStore.selectedSession?.id == sessionID else { return }
+            guard chatFacade.activeChatSessionID == sessionID || directoryStore.selectedSession?.id == sessionID else { return }
 
             lastEagerRefreshAt = Date()
-            viewModel.appendDebugLog("eager chat refresh session=\(sessionID) reason=\(reason)")
-            await viewModel.refreshChatData(for: sessionID)
+            chatFacade.appendDebugLog("eager chat refresh session=\(sessionID) reason=\(reason)")
+            await chatFacade.refreshChatData(for: sessionID)
             requestBottomReadjustmentIfPinned()
         }
     }
@@ -3014,9 +2926,11 @@ struct ChatView: View {
 
     private var timedChatDisplaySnapshot: TimedChatDisplaySnapshot {
         let window = OpenCodeChatTranscriptWindowing.window(
-            from: allChatMessages,
-            requestedCount: visibleMessageCount,
-            batchSize: messageWindowSize
+            totalCount: chatSourceMessageCount,
+            requestedCount: transcriptRequestedMessageCount,
+            batchSize: olderMessageWindowSize,
+            loadSuffix: transcriptSuffix,
+            containsMessageID: transcriptContainsMessage
         ) { messages in
             !displayedChatItems(for: messages).isEmpty || shouldShowThinking(in: messages)
         }
@@ -3026,6 +2940,7 @@ struct ChatView: View {
         let snapshot = ChatDisplaySnapshot(
             messages: messages,
             hiddenMessageCount: window.hiddenMessageCount,
+            hiddenRoundCount: max(0, transcriptUserRoundCount - messages.userMessageCount),
             items: items,
             showsThinking: showsThinking
         )
@@ -3038,15 +2953,48 @@ struct ChatView: View {
     }
 
     private var visibleChatMessages: [OpenCodeMessageEnvelope] {
-        Array(allChatMessages.suffix(visibleMessageCount))
+        transcriptSuffix(transcriptRequestedMessageCount)
     }
 
-    private var allChatMessages: [OpenCodeMessageEnvelope] {
+    private var transcriptRequestedMessageCount: Int {
+        let baseCount: Int
         if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
-            return directoryStore.syncStore.state.messageEnvelopes(forSessionID: sessionID)
+            baseCount = directoryStore.syncStore.messageCountIncludingLatestUserRounds(
+                visibleRoundCount,
+                fallbackMessageCount: fallbackMessageWindowSize,
+                forSessionID: sessionID
+            )
+        } else {
+            baseCount = OpenCodeChatTranscriptWindowing.messageCountIncludingLatestUserRounds(
+                visibleRoundCount,
+                fallbackMessageCount: fallbackMessageWindowSize,
+                in: chatStore.messages.map(\.info)
+            )
+        }
+        return min(chatSourceMessageCount, baseCount + additionalLeadingMessageCount)
+    }
+
+    private var transcriptUserRoundCount: Int {
+        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
+            return directoryStore.syncStore.userMessageCount(forSessionID: sessionID)
+        }
+        return chatStore.messages.userMessageCount
+    }
+
+    private func transcriptSuffix(_ count: Int) -> [OpenCodeMessageEnvelope] {
+        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
+            return directoryStore.syncStore.messageEnvelopes(forSessionID: sessionID, suffix: count)
         }
 
-        return chatStore.messages
+        return Array(chatStore.messages.suffix(count))
+    }
+
+    private func transcriptContainsMessage(_ messageID: String) -> Bool {
+        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
+            return directoryStore.syncStore.containsMessage(id: messageID, forSessionID: sessionID)
+        }
+
+        return chatStore.messages.contains { $0.id == messageID }
     }
 
     private var reasoningPartKeySignature: String {
@@ -3219,8 +3167,11 @@ struct ChatView: View {
                 .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
         case let .olderMessages(count):
             Button {
-                let renderedMessageCount = timedChatDisplaySnapshot.snapshot.messages.count
-                visibleMessageCount = min(chatSourceMessageCount, max(visibleMessageCount, renderedMessageCount) + messageWindowSize)
+                if timedChatDisplaySnapshot.snapshot.hiddenRoundCount > 0 {
+                    visibleRoundCount += roundWindowSize
+                } else {
+                    additionalLeadingMessageCount += olderMessageWindowSize
+                }
             } label: {
                 Text("View older messages (\(count))")
                     .font(.subheadline.weight(.medium))
@@ -3268,14 +3219,15 @@ struct ChatView: View {
                 EquatableMessageBubbleHost(
                     snapshot: bubble,
                     resolveTaskSessionID: { part, currentSessionID in
-                        viewModel.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
+                        chatFacade.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
                     },
                     onSelectPart: { part in selectedActivityDetail = ActivityDetail(message: bubble.message, part: part) },
-                    onOpenTaskSession: { taskSessionID in Task { await viewModel.openSession(sessionID: taskSessionID) } },
-                    onForkMessage: { forkMessage in Task { await viewModel.forkSelectedSession(from: forkMessage.id) } },
+                    onOpenTaskSession: { taskSessionID in Task { await chatFacade.openSession(sessionID: taskSessionID) } },
+                    onForkMessage: { forkMessage in Task { await chatFacade.forkSelectedSession(from: forkMessage.id) } },
                     onInspectDebugMessage: { debugMessage in selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage) },
                     onEntryAnimationStarted: { messageID in outgoingEntryAnimationStartedMessageIDs.insert(messageID) },
-                    onToggleReasoningPart: toggleReasoningPart
+                    onToggleReasoningPart: toggleReasoningPart,
+                    onShowEarlierActivity: { expandedEarlierActivityMessageIDs.insert(bubble.message.id) }
                 )
                 .equatable()
                 .padding(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -3358,20 +3310,22 @@ struct ChatView: View {
         return EquatableMessageBubbleHost(
             snapshot: snapshot.bubble,
             resolveTaskSessionID: { part, currentSessionID in
-                viewModel.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
+                chatFacade.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
             }
         ) { part in
             selectedActivityDetail = ActivityDetail(message: message, part: part)
         } onOpenTaskSession: { taskSessionID in
-            Task { await viewModel.openSession(sessionID: taskSessionID) }
+            Task { await chatFacade.openSession(sessionID: taskSessionID) }
         } onForkMessage: { forkMessage in
-            Task { await viewModel.forkSelectedSession(from: forkMessage.id) }
+            Task { await chatFacade.forkSelectedSession(from: forkMessage.id) }
         } onInspectDebugMessage: { debugMessage in
             selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage)
         } onEntryAnimationStarted: { messageID in
             outgoingEntryAnimationStartedMessageIDs.insert(messageID)
         } onToggleReasoningPart: { partID in
             toggleReasoningPart(partID)
+        } onShowEarlierActivity: {
+            expandedEarlierActivityMessageIDs.insert(message.id)
         }
         .equatable()
         .transition(.identity)
@@ -3397,6 +3351,7 @@ struct ChatView: View {
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
             animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
             expandedReasoningPartIDs: expandedReasoningPartIDs,
+            showsAllActivity: expandedEarlierActivityMessageIDs.contains(message.id),
             streamingReservePadding: isStreaming ? 44 : 0
         )
     }
@@ -3577,28 +3532,28 @@ struct ChatView: View {
         let hasAttachments = !draftAttachments.isEmpty
 
         guard !draftText.isEmpty || hasAttachments else { return }
-        viewModel.flushBufferedTranscript(reason: "send action")
+        chatFacade.flushBufferedTranscript(reason: "send action")
 
         if !hasAttachments,
-           (viewModel.shouldOpenForkSheet(forSlashInput: draftText) || viewModel.slashCommandInput(from: draftText).map({ viewModel.isForkClientCommand($0.command) }) == true) {
+           (chatFacade.shouldOpenForkSheet(forSlashInput: draftText) || chatFacade.slashCommandInput(from: draftText).map({ chatFacade.isForkClientCommand($0.command) }) == true) {
             clearComposerDraft()
-            viewModel.presentForkSessionSheet()
+            chatFacade.presentForkSessionSheet()
             return
         }
 
-        if viewModel.shouldMeterPrompts(for: sessionID) {
-            guard viewModel.reserveUserPromptIfAllowed() else { return }
+        if chatFacade.shouldMeterPrompts(for: sessionID) {
+            guard chatFacade.reserveUserPromptIfAllowed() else { return }
         }
 
         if !hasAttachments,
-           viewModel.slashCommandInput(from: draftText).map({ viewModel.isCompactClientCommand($0.command) }) == true {
+           chatFacade.slashCommandInput(from: draftText).map({ chatFacade.isCompactClientCommand($0.command) }) == true {
             clearComposerDraft()
-            Task { await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
+            Task { await chatFacade.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
             return
         }
 
         OpenCodeHaptics.impact(.strong)
-        viewModel.markChatBreadcrumb("send tapped", sessionID: sessionID)
+        chatFacade.markChatBreadcrumb("send tapped", sessionID: sessionID)
 
         let messageID = OpenCodeIdentifier.message()
         let partID = OpenCodeIdentifier.part()
@@ -3615,18 +3570,18 @@ struct ChatView: View {
         isThinkingRowRevealAllowed = false
         preparingOutgoingMessageID = messageID
         let optimisticPrompt = OpenCodeAgentMention.trimmingTextAndMentions(text: rawDraftText, mentions: draftAgentMentions)
-        _ = viewModel.insertOptimisticUserMessage(optimisticPrompt.text, agentMentions: optimisticPrompt.mentions, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
+        _ = chatFacade.insertOptimisticUserMessage(optimisticPrompt.text, agentMentions: optimisticPrompt.mentions, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
         pendingOutgoingSend = pendingSend
         scheduleOutgoingEntryAnimation(messageID: messageID)
         clearComposerDraft()
-        viewModel.clearDraftAttachments()
+        chatFacade.clearDraftAttachments()
         requestBottomReadjustment()
 
         pendingOutgoingSendTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(outgoingRequestDelayMS))
             guard !Task.isCancelled, pendingOutgoingSend?.messageID == pendingSend.messageID else { return }
 
-            await viewModel.sendMessage(
+            await chatFacade.sendMessage(
                 pendingSend.text,
                 agentMentions: pendingSend.agentMentions,
                 attachments: pendingSend.attachments,
@@ -3670,14 +3625,14 @@ struct ChatView: View {
     }
 
     private func stopComposerAction() {
-        viewModel.flushBufferedTranscript(reason: "stop action")
+        chatFacade.flushBufferedTranscript(reason: "stop action")
 
         if let pendingSend = pendingOutgoingSend {
             pendingOutgoingSendTask?.cancel()
             pendingOutgoingSendTask = nil
             pendingOutgoingSend = nil
             if let messageID = pendingSend.messageID {
-                viewModel.removeOptimisticUserMessage(messageID: messageID, sessionID: sessionID)
+                chatFacade.removeOptimisticUserMessage(messageID: messageID, sessionID: sessionID)
             }
             outgoingEntryResetTask?.cancel()
             isThinkingRowRevealAllowed = true
@@ -3687,11 +3642,11 @@ struct ChatView: View {
                 outgoingEntryAnimationStartedMessageIDs.remove(messageID)
             }
             restoreComposerDraft(pendingSend.text)
-            viewModel.addDraftAttachments(pendingSend.attachments)
+            chatFacade.addDraftAttachments(pendingSend.attachments)
             return
         }
 
-        Task { await viewModel.stopCurrentSession() }
+        Task { await chatFacade.stopCurrentSession() }
     }
 
     private func shouldShowThinking(in messages: [OpenCodeMessageEnvelope]) -> Bool {
@@ -3730,7 +3685,7 @@ struct ChatView: View {
         if connectionStore.backendMode == .appleIntelligence {
             ToolbarItem(placement: .opencodeLeading) {
                 Button("Home") {
-                    viewModel.leaveAppleIntelligenceSession()
+                    chatFacade.leaveAppleIntelligenceSession()
                 }
             }
 
@@ -3754,11 +3709,12 @@ struct ChatView: View {
             }
         } else {
             let headerSnapshot = chatHeaderSnapshot
+            let toolbarSnapshot = chatFacade.toolbarSnapshot(for: liveSession)
             if headerSnapshot.isChildSession {
                 ToolbarItem(placement: .opencodeLeading) {
                     if let parentSession = headerSnapshot.parentSession {
                         Button("Back") {
-                            Task { await viewModel.selectSession(parentSession) }
+                            Task { await chatFacade.selectSession(parentSession) }
                         }
                     }
                 }
@@ -3769,7 +3725,7 @@ struct ChatView: View {
                     .frame(maxWidth: 300, alignment: .leading)
             }
 
-            if viewModel.isChatToolbarConfigurationLoading(for: liveSession) {
+            if toolbarSnapshot.isLoading {
                 ToolbarItem(placement: .opencodeTrailing) {
                     ProgressView()
                         .progressViewStyle(.circular)
@@ -3791,9 +3747,14 @@ struct ChatView: View {
                 }
                 #endif
 
-                if !isFunAndGamesSession(liveSession.id) {
+                if toolbarSnapshot.showsAgentMenu {
                     ToolbarItem(placement: .opencodeTrailing) {
-                        AgentToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
+                        AgentToolbarMenu(
+                            title: toolbarSnapshot.agentTitle,
+                            agents: toolbarSnapshot.selectableAgents,
+                            glassNamespace: toolbarGlassNamespace,
+                            onSelectAgent: { chatFacade.selectAgent(named: $0, for: liveSession) }
+                        )
                     }
                 }
 
@@ -3811,7 +3772,15 @@ struct ChatView: View {
                 }
 
                 ToolbarItem(placement: .opencodeTrailing) {
-                    ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
+                    ModelToolbarMenu(
+                        modelTitle: toolbarSnapshot.modelTitle,
+                        providerGroups: toolbarSnapshot.providerGroups,
+                        reasoningVariants: toolbarSnapshot.reasoningVariants,
+                        reasoningTitle: toolbarSnapshot.reasoningTitle,
+                        glassNamespace: toolbarGlassNamespace,
+                        onSelectModel: { chatFacade.selectModel($0, for: liveSession) },
+                        onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
+                    )
                 }
             }
         }
@@ -3846,6 +3815,12 @@ struct ChatView: View {
         }
     }
 
+    private var transcriptContentInvalidationToken: String {
+        let reasoning = expandedReasoningPartIDs.sorted().joined(separator: "|")
+        let activity = expandedEarlierActivityMessageIDs.sorted().joined(separator: "|")
+        return "reasoning:\(reasoning)#activity:\(activity)"
+    }
+
     private func pruneExpandedReasoningParts() {
         guard !expandedReasoningPartIDs.isEmpty else { return }
         let activeIDs = Set(visibleChatMessages.flatMap(reasoningPartKeys(for:)))
@@ -3877,7 +3852,7 @@ struct ChatView: View {
 }
 
 private struct ChatNavigationTitle: View {
-    let snapshot: AppViewModel.ChatSessionHeaderSnapshot
+    let snapshot: ChatFacade.ChatSessionHeaderSnapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: snapshot.isChildSession ? 1 : 0) {

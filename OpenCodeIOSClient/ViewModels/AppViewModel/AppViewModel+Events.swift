@@ -212,12 +212,22 @@ extension AppViewModel {
             appendDebugLog(eventIdentitySummary(for: managed.envelope))
         }
 
+        var reducedProjects = projects
+        var reducedCurrentProject = currentProject
         if let globalAction = eventSyncCoordinator.applyGlobalEvent(
             managed,
-            projects: &projects,
-            currentProject: &currentProject
+            projects: &reducedProjects,
+            currentProject: &reducedCurrentProject
         ) {
+            if reducedProjects != projects {
+                projects = reducedProjects
+            }
+            if reducedCurrentProject != currentProject {
+                currentProject = reducedCurrentProject
+            }
             switch globalAction {
+            case .applied:
+                break
             case .refreshProjectsAndSessions:
                 Task { [weak self] in
                     try? await self?.refreshProjects()
@@ -231,10 +241,18 @@ extension AppViewModel {
             return
         }
 
-        guard shouldApplyDirectoryEvent(from: managed) else {
+        let targetStores = directorySyncFacade.targetStores(
+            for: managed,
+            selectedSessionID: selectedSession?.id,
+            selectedSessionDirectory: selectedSession?.directory,
+            effectiveSelectedDirectory: effectiveSelectedDirectory,
+            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs
+        )
+        guard !targetStores.isEmpty else {
             appendDebugLog("drop \(managed.envelope.type): scope mismatch \(managed.directory) selected=\(debugDirectoryLabel(effectiveSelectedDirectory)) stream=\(debugDirectoryLabel(streamDirectory)) session=\(debugSessionLabel(selectedSession))")
             return
         }
+        let updatesActiveStore = targetStores.contains { $0 === directoryStore }
 
         if eventAffectsActiveSession(managed) {
             lastStreamEventAt = .now
@@ -249,17 +267,20 @@ extension AppViewModel {
             )
         }
 
-        if enqueueSelectedTranscriptEventIfNeeded(managed) {
+        if updatesActiveStore, enqueueSelectedTranscriptEventIfNeeded(managed) {
             return
         }
 
-        if shouldFlushPendingTranscriptEvents(before: managed) {
+        if updatesActiveStore, shouldFlushPendingTranscriptEvents(before: managed) {
             flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)")
         }
 
         if case let .sessionError(sessionID, message) = managed.typed {
             if let sessionID {
-                sessionStatuses[sessionID] = "idle"
+                for store in targetStores {
+                    store.sessionStatuses[sessionID] = "idle"
+                    store.syncState.sessionStatusesBySessionID[sessionID] = "idle"
+                }
             }
             if sessionID == nil || sessionID == selectedSession?.id {
                 errorMessage = message ?? "Session error"
@@ -278,25 +299,41 @@ extension AppViewModel {
             appendDebugLog("fun games inferred session=\(eventSessionID ?? "nil")")
         }
 
-        updateCachedMessagesForLiveActivityIfNeeded(payload: payload, sessionID: eventSessionID, selectedSessionID: currentSelectedSession?.id)
-
-        let application = eventSyncCoordinator.applyDirectoryEvent(managed, to: directoryEventState())
-        applyDirectoryEventState(
-            application.state,
-            updatesSelectedMessages: payload.type != "message.part.delta" || eventAffectsActiveSession(managed)
+        let applications = directorySyncFacade.apply(
+            managed,
+            activeState: directoryEventState(),
+            selectedSessionID: selectedSession?.id,
+            selectedSessionDirectory: selectedSession?.directory,
+            effectiveSelectedDirectory: effectiveSelectedDirectory,
+            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs,
+            scopedSessions: { [sessionListStore] sessions, directory in
+                sessionListStore.sessions(sessions, scopedTo: directory)
+            }
         )
-        if managed.envelope.type == "message.part.updated" {
+        if let activeApplication = applications.first(where: { $0.store === directoryStore }) {
+            if activeApplication.changedStore {
+                objectWillChange.send()
+            }
+            applyDirectoryEventState(
+                activeApplication.application.state,
+                to: activeApplication.store,
+                appliesToStore: false,
+                updatesSelectedMessages: payload.type != "message.part.delta" || eventAffectsActiveSession(managed)
+            )
+        }
+        if updatesActiveStore, managed.envelope.type == "message.part.updated" {
             flushPendingTranscriptEvents(reason: "after \(managed.envelope.type)")
         }
-        let result = application.result
+        let result = applications.first(where: { $0.store === directoryStore })?.application.result
+            ?? applications.last?.application.result
+            ?? .ignored("no target store")
 
         switch result {
         case let .message(reason):
-            if let currentSelectedSession, shouldRefreshSessionPreview(for: currentSelectedSession.id, eventType: payload.type) {
+            if updatesActiveStore, let currentSelectedSession, shouldRefreshSessionPreview(for: currentSelectedSession.id, eventType: payload.type) {
                 refreshSessionPreview(for: currentSelectedSession.id, messages: messages)
             }
-            scheduleLiveActivityPreviewRefreshIfNeeded(for: managedEventSessionID(for: managed))
-            if let currentSelectedSession,
+            if updatesActiveStore, let currentSelectedSession,
                payload.type == "message.updated",
                payload.properties.info?.role == "user",
                payload.properties.info?.sessionID == currentSelectedSession.id {
@@ -327,21 +364,11 @@ extension AppViewModel {
             appendDebugLog("session idle")
             markChatBreadcrumb("session idle", sessionID: eventSessionID)
             stopStreamingDiagnostics()
-            if activeLiveActivitySessionIDs.contains(eventSessionID ?? "") {
-                scheduleLiveActivityPreviewRefreshIfNeeded(for: eventSessionID)
-            }
-            if let currentSelectedSession {
+            if updatesActiveStore, eventSessionID == currentSelectedSession?.id, let currentSelectedSession {
                 refreshSessionPreview(for: currentSelectedSession.id, messages: messages)
-            }
-            if let currentSelectedSession {
                 scheduleReload(for: currentSelectedSession)
             }
         case let .ignored(reason):
-            if isLiveActivityMessageEvent(payload.type),
-               activeLiveActivitySessionIDs.contains(eventSessionID ?? "") {
-                appendDebugLog("live activity refresh on ignored \(payload.type) session=\(eventSessionID ?? "nil")")
-                scheduleLiveActivityPreviewRefreshIfNeeded(for: eventSessionID)
-            }
             appendDebugLog("drop \(payload.type): \(reason)")
         }
 
@@ -349,29 +376,22 @@ extension AppViewModel {
         case let .sessionDeleted(session):
             removePinnedSessionIDFromAllScopes(session.id)
             removeSessionPreview(for: session.id)
-            if activeLiveActivitySessionIDs.contains(session.id) {
-                Task { [weak self] in
-                    await self?.stopLiveActivity(for: session.id, immediate: true)
-                }
-            }
         case let .vcsBranchUpdated(branch):
             projectFilesStore.applyBranchUpdate(branch)
-            refreshVCSFromEvent()
+            projectFilesFacade.refreshFromEvent()
         case let .fileWatcherUpdated(file):
             guard !file.hasPrefix(".git/") else { break }
-            refreshVCSFromEvent()
+            projectFilesFacade.refreshFromEvent()
         default:
             break
         }
 
-        refreshLiveActivityIfNeeded(
-            for: eventSessionID,
-            immediate: eventSyncCoordinator.shouldRefreshLiveActivityImmediately(after: result, event: managed.typed) ||
-                (isLiveActivityMessageEvent(payload.type) && activeLiveActivitySessionIDs.contains(eventSessionID ?? ""))
+        liveActivityFacade.consumeReducerEvent(
+            managed.typed,
+            result: result,
+            sessionID: eventSessionID,
+            eventType: payload.type
         )
-        if eventSyncCoordinator.shouldPublishWidgetSnapshots(after: result) {
-            scheduleWidgetSnapshotPublication()
-        }
     }
 
     private func handleWorktreeLifecycleEvent(_ managed: OpenCodeManagedEvent) -> Bool {
@@ -532,9 +552,7 @@ extension AppViewModel {
         applyDirectoryEventState(application.state, updatesSelectedMessages: true)
         let publishElapsedMS = publishStart.elapsedMilliseconds
 
-        for sessionID in Set(events.compactMap(\.sessionID)) {
-            refreshLiveActivityIfNeeded(for: sessionID, immediate: true)
-        }
+        liveActivityFacade.reducerDidCommit(sessionIDs: Set(events.compactMap(\.sessionID)))
 
         logStreamDeltaFlush(
             reason: reason,
@@ -547,8 +565,16 @@ extension AppViewModel {
         )
     }
 
+    func prepareForDirectoryStoreActivation() {
+        flushPendingTranscriptEvents(reason: "directory switch")
+        streamDeltaFlushTask?.cancel()
+        streamDeltaFlushTask = nil
+        streamDeltaFlushGeneration &+= 1
+        pendingTranscriptEvents = []
+    }
+
     private func directoryEventState() -> EventSyncCoordinator.DirectoryEventState {
-        return EventSyncCoordinator.DirectoryEventState(
+        EventSyncCoordinator.DirectoryEventState(
             sessions: allSessions,
             selectedSession: selectedSession,
             sessionStatuses: sessionStatuses,
@@ -562,12 +588,20 @@ extension AppViewModel {
 
     private func applyDirectoryEventState(
         _ state: EventSyncCoordinator.DirectoryEventState,
+        to targetStore: DirectoryStore? = nil,
+        appliesToStore: Bool = true,
         updatesSelectedMessages: Bool = true
     ) {
-        let scopedSessions = sessionListStore.sessions(state.sessions, scopedTo: effectiveSelectedDirectory)
-        if directoryStore.applyReducedEventState(state, scopedSessions: scopedSessions) {
+        let targetStore = targetStore ?? directoryStore
+        let targetDirectory = directoryStoreRegistry.key(for: targetStore)
+            .flatMap(DirectoryStoreRegistry.directory(forKey:))
+        let scopedSessions = sessionListStore.sessions(state.sessions, scopedTo: targetDirectory)
+        if appliesToStore,
+           targetStore.applyReducedEventState(state, scopedSessions: scopedSessions),
+           targetStore === directoryStore {
             objectWillChange.send()
         }
+        guard targetStore === directoryStore else { return }
         if sessionListStore.reconcileWorkspaceSessions(with: state.sessions) {
             objectWillChange.send()
         }
@@ -580,7 +614,7 @@ extension AppViewModel {
                 projectedMessages = state.messages
             }
             if projectedMessages != messages {
-                messages = projectedMessages
+                chatStore.replaceActiveMessagesWithCanonical(projectedMessages)
             }
         }
         if sessionInteractionStore.applyVisibleInteractions(
@@ -635,20 +669,6 @@ extension AppViewModel {
 
     nonisolated private static func isLiveActivityMessageEventType(_ type: String) -> Bool {
         EventSyncCoordinator.isLiveActivityMessageEventType(type)
-    }
-
-    private func updateCachedMessagesForLiveActivityIfNeeded(payload: OpenCodeEventEnvelope, sessionID: String?, selectedSessionID: String?) {
-        guard let cachedMessages = chatStore.updateCachedMessagesForLiveActivityIfNeeded(
-            payload: payload,
-            sessionID: sessionID,
-            selectedSessionID: selectedSessionID,
-            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs,
-            isLiveActivityMessageEvent: isLiveActivityMessageEvent(payload.type)
-        ) else { return }
-        guard let sessionID else { return }
-        if sessionStatuses[sessionID] != "busy" {
-            refreshSessionPreview(for: sessionID, messages: cachedMessages)
-        }
     }
 
     private func shouldApplyDirectoryEvent(from managed: OpenCodeManagedEvent) -> Bool {

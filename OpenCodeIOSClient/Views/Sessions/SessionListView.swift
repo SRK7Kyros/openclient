@@ -1,125 +1,21 @@
 import SwiftUI
 
 struct SessionListView: View {
-    @ObservedObject var viewModel: AppViewModel
-    @StateObject private var renderStore = SessionListRenderStore()
+    @ObservedObject var facade: SessionListFacade
     let onSessionChosen: () -> Void
 
     var body: some View {
-        let snapshot = viewModel.sessionListSnapshot
-
         SessionListContent(
-            viewModel: viewModel,
-            renderStore: renderStore,
+            facade: facade,
+            snapshot: facade.snapshot,
             onSessionChosen: onSessionChosen
         )
-        .onAppear {
-            renderStore.update(snapshot)
-        }
-        .onChange(of: snapshot) { _, snapshot in
-            withAnimation(opencodeSelectionAnimation) {
-                renderStore.update(snapshot)
-            }
-        }
-        .sheet(isPresented: $viewModel.isShowingCreateSessionSheet) {
-            CreateSessionSheet(viewModel: viewModel)
-        }
-    }
-}
-
-extension AppViewModel {
-    fileprivate var sessionListSnapshot: SessionListDisplaySnapshot {
-        let sessions = sessions
-        let pinnedIDs = pinnedSessionIDs
-        var sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
-        for session in workspaceSessionsByDirectory.values.flatMap(\.rootSessions) where !isActionSession(session) {
-            sessionsByID[session.id] = session
-        }
-        let pinnedSessions = pinnedIDs.compactMap { sessionsByID[$0] }
-        let pinnedIDSet = Set(pinnedIDs)
-        let unpinnedSessions = sessions.filter { !pinnedIDSet.contains($0.id) }
-        let showsWorkspaces = isProjectWorkspacesEnabled && hasGitProject
-        let pinnedRows = pinnedSessions.map { session in
-            sessionListRowSnapshot(for: session, showsPinnedBadge: true, workspaceOverline: showsWorkspaces ? workspaceDisplayName(for: session.directory) : nil)
-        }
-        let unpinnedRows = unpinnedSessions.map { sessionListRowSnapshot(for: $0) }
-        let workspaceSections = sessionListWorkspaceSections(excluding: pinnedIDSet)
-
-        return SessionListDisplaySnapshot(
-            isLoadingEmpty: isLoadingSessions && sessions.isEmpty,
-            isEmpty: sessions.isEmpty,
-            selectedSessionID: selectedSession?.id,
-            pinnedRows: pinnedRows,
-            unpinnedRows: unpinnedRows,
-            showsWorkspaces: showsWorkspaces,
-            workspaceSections: workspaceSections,
-            errorMessage: isScreenshotScene ? nil : errorMessage,
-            hasProUnlock: hasProUnlock,
-            currentProjectActions: currentProjectActions.map { action in
-                ProjectActionSnapshot(
-                    action: action,
-                    command: actionCommand(for: action),
-                    phase: actionRunPhase(for: action)
-                )
-            }
-        )
-    }
-
-    private func sessionListWorkspaceSections(excluding pinnedIDSet: Set<String>) -> [WorkspaceSessionDisplaySection] {
-        workspaceDirectories().map { directory in
-            let state = workspaceSessionsByDirectory[directory] ?? OpenCodeWorkspaceSessionState()
-            let sessions = state.rootSessions.filter { !pinnedIDSet.contains($0.id) && !isActionSession($0) }
-            return WorkspaceSessionDisplaySection(
-                directory: directory,
-                title: workspaceDisplayName(for: directory) ?? URL(fileURLWithPath: directory).lastPathComponent,
-                isMain: currentProject.map { workspaceKey($0.worktree) == workspaceKey(directory) } ?? false,
-                rows: sessions.map { sessionListRowSnapshot(for: $0) },
-                isLoading: state.isLoading,
-                hasMore: state.hasMore,
-                operation: sessionListStore.workspaceOperation(for: directory)
-            )
-        }
-    }
-
-    private func sessionListRowSnapshot(
-        for session: OpenCodeSession,
-        showsPinnedBadge: Bool = false,
-        workspaceOverline: String? = nil,
-        style: SessionRow.Style = .regular
-    ) -> SessionRowSnapshot {
-        SessionRowSnapshot(
-            session: session,
-            isSelected: selectedSession?.id == session.id,
-            showsPinnedBadge: showsPinnedBadge,
-            workspaceOverline: workspaceOverline,
-            style: style,
-            preview: sessionPreviews[session.id],
-            isBusy: sessionStatuses[session.id] == "busy",
-            hasLiveActivity: isLiveActivityActive(for: session),
-            hasDraft: hasMessageDraft(for: session),
-            hasPermissionRequest: hasPermissionRequest(for: session),
-            displayTitle: session.displayTitle(),
-            shimmersTitle: session.isDefaultGeneratedTitle
-        )
-    }
-
-    private var isScreenshotScene: Bool {
-        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
-    }
-}
-
-private final class SessionListRenderStore: ObservableObject {
-    @Published private(set) var snapshot = SessionListDisplaySnapshot.empty
-
-    func update(_ snapshot: SessionListDisplaySnapshot) {
-        guard self.snapshot != snapshot else { return }
-        self.snapshot = snapshot
     }
 }
 
 private struct SessionListContent: View {
-    let viewModel: AppViewModel
-    @ObservedObject var renderStore: SessionListRenderStore
+    let facade: SessionListFacade
+    let snapshot: SessionListFacade.Snapshot
     @Namespace private var sessionRowNamespace
     @State private var renamingSession: OpenCodeSession?
     @State private var renameTitle = ""
@@ -128,11 +24,9 @@ private struct SessionListContent: View {
     let onSessionChosen: () -> Void
 
     var body: some View {
-        let snapshot = renderStore.snapshot
-
         List {
             if !snapshot.hasProUnlock {
-                ProjectUsageCTA(viewModel: viewModel)
+                ProjectUsageCTA(facade: facade)
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -140,14 +34,14 @@ private struct SessionListContent: View {
 
             if snapshot.hasProUnlock {
                 if !snapshot.currentProjectActions.isEmpty {
-                    ProjectActionStrip(viewModel: viewModel, actions: snapshot.currentProjectActions)
+                    ProjectActionStrip(facade: facade, actions: snapshot.currentProjectActions)
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 8, trailing: 0))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
             } else {
                 LockedProjectActionStrip {
-                    viewModel.presentPaywall(reason: .actions)
+                    facade.presentPaywall(reason: .actions)
                 }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
                 .listRowBackground(Color.clear)
@@ -229,7 +123,7 @@ private struct SessionListContent: View {
         .background(OpenCodePlatformColor.groupedBackground)
         .opencodeInteractiveKeyboardDismiss()
         .refreshable {
-            await viewModel.refreshSessionList()
+            await facade.refresh()
         }
         .transaction { transaction in
             if snapshot.hasBusySession {
@@ -247,7 +141,7 @@ private struct SessionListContent: View {
                 let title = renameTitle
                 renamingSession = nil
                 renameTitle = ""
-                Task { await viewModel.renameSession(session, title: title) }
+                Task { await facade.rename(session, title: title) }
             }
             .disabled(renameTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } message: {
@@ -265,20 +159,12 @@ private struct SessionListContent: View {
             Button("Create Workspace") {
                 let name = createWorkspaceName
                 createWorkspaceName = ""
-                Task { await viewModel.createWorkspace(name: name) }
+                Task { await facade.createWorkspace(name: name) }
             }
         } message: {
             Text("OpenCode will create a separate git worktree for this project.")
         }
-        .task(id: snapshot.workspaceTaskID) {
-            guard !isScreenshotScene else { return }
-            await viewModel.loadWorkspaceSessionsIfNeeded()
-        }
         .animation(opencodeSelectionAnimation, value: snapshot.selectedSessionID)
-    }
-
-    private var isScreenshotScene: Bool {
-        ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil
     }
 
     private var renameAlertBinding: Binding<Bool> {
@@ -293,7 +179,7 @@ private struct SessionListContent: View {
         )
     }
 
-    private func workspaceSection(_ section: WorkspaceSessionDisplaySection) -> some View {
+    private func workspaceSection(_ section: SessionListFacade.WorkspaceSection) -> some View {
         Section {
             if section.isLoading && section.rows.isEmpty {
                 ForEach(0 ..< 2, id: \.self) { _ in
@@ -327,7 +213,7 @@ private struct SessionListContent: View {
 
             if section.hasMore {
                 Button {
-                    Task { await viewModel.loadMoreWorkspaceSessions(directory: section.directory) }
+                    Task { await facade.loadMoreWorkspaceSessions(directory: section.directory) }
                 } label: {
                     HStack {
                         Spacer(minLength: 0)
@@ -349,20 +235,20 @@ private struct SessionListContent: View {
             WorkspaceSectionHeader(
                 section: section,
                 onNewSession: {
-                    viewModel.presentNewSession(inWorkspace: section.directory)
+                    facade.presentNewSession(inWorkspace: section.directory)
                 },
                 onCreateWorkspace: {
                     createWorkspaceName = ""
                     isShowingCreateWorkspaceAlert = true
                 },
                 onRefresh: {
-                    Task { await viewModel.refreshWorkspaceSessions(directory: section.directory) }
+                    Task { await facade.refreshWorkspaceSessions(directory: section.directory) }
                 },
                 onResetConfirmed: { directory in
-                    Task { await viewModel.resetWorktree(directory: directory) }
+                    Task { await facade.resetWorktree(directory: directory) }
                 },
                 onDeleteConfirmed: { directory in
-                    Task { await viewModel.deleteWorktree(directory: directory) }
+                    Task { await facade.deleteWorktree(directory: directory) }
                 }
             )
             .id(section.directory)
@@ -371,46 +257,42 @@ private struct SessionListContent: View {
 
     private func movePinnedSessions(from offsets: IndexSet, to destination: Int) {
         withAnimation(opencodeSelectionAnimation) {
-            viewModel.movePinnedSessions(fromOffsets: offsets, toOffset: destination)
+            facade.movePinnedSessions(from: offsets, to: destination)
         }
     }
 
     private func sessionRow(
-        for row: SessionRowSnapshot
+        for row: SessionListFacade.RowSnapshot
     ) -> some View {
-        return SessionRow(
-            session: row.session,
-            isSelected: row.isSelected,
-            showsPinnedBadge: row.showsPinnedBadge,
-            workspaceOverline: row.workspaceOverline,
-            style: row.style,
-            preview: row.preview,
-            isBusy: row.isBusy,
-            hasLiveActivity: row.hasLiveActivity,
-            hasDraft: row.hasDraft,
-            hasPermissionRequest: row.hasPermissionRequest,
-            displayTitle: row.displayTitle,
-            shimmersTitle: row.shimmersTitle
-        )
-        .equatable()
-        .matchedGeometryEffect(id: row.session.id, in: sessionRowNamespace)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            let previousSessionID = viewModel.beginSessionNavigation(row.session)
+        Button {
+            let ticket = facade.beginSelection(row.session)
             withAnimation(opencodeSelectionAnimation) {
                 onSessionChosen()
             }
             Task { @MainActor in
-                await Task.yield()
-                guard viewModel.selectedSession?.id == row.session.id else { return }
-                viewModel.prepareSessionSelection(
-                    row.session,
-                    preservingDraftForSessionID: previousSessionID,
-                    animatesChanges: false
-                )
-                await viewModel.selectSession(row.session)
+                await facade.completeSelection(ticket)
             }
+        } label: {
+            SessionRow(
+                session: row.session,
+                isSelected: row.isSelected,
+                showsPinnedBadge: row.showsPinnedBadge,
+                workspaceOverline: row.workspaceOverline,
+                style: row.style,
+                preview: row.preview,
+                isBusy: row.isBusy,
+                hasLiveActivity: row.hasLiveActivity,
+                hasDraft: row.hasDraft,
+                hasPermissionRequest: row.hasPermissionRequest,
+                displayTitle: row.displayTitle,
+                shimmersTitle: row.shimmersTitle
+            )
+            .equatable()
         }
+        .buttonStyle(SessionRowButtonStyle())
+        .matchedGeometryEffect(id: row.session.id, in: sessionRowNamespace)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("session.row.\(row.session.id)")
         .contextMenu {
             pinButton(for: row.session)
             deleteButton(for: row.session)
@@ -429,10 +311,10 @@ private struct SessionListContent: View {
 
     @ViewBuilder
     private func pinButton(for session: OpenCodeSession) -> some View {
-        if viewModel.isSessionPinned(session) {
+        if facade.isPinned(session) {
             Button {
                 withAnimation(opencodeSelectionAnimation) {
-                    viewModel.unpinSession(session)
+                    facade.unpin(session)
                 }
             } label: {
                 Label("Unpin", systemImage: "pin.slash")
@@ -441,7 +323,7 @@ private struct SessionListContent: View {
         } else {
             Button {
                 withAnimation(opencodeSelectionAnimation) {
-                    viewModel.pinSession(session)
+                    facade.pin(session)
                 }
             } label: {
                 Label("Pin", systemImage: "pin")
@@ -452,7 +334,7 @@ private struct SessionListContent: View {
 
     private func deleteButton(for session: OpenCodeSession) -> some View {
         Button(role: .destructive) {
-            Task { await viewModel.deleteSession(session) }
+            Task { await facade.delete(session) }
         } label: {
             Label("Delete", systemImage: "trash")
         }
@@ -470,20 +352,29 @@ private struct SessionListContent: View {
 
     private func liveActivityButton(for session: OpenCodeSession) -> some View {
         Button {
-            Task { await viewModel.toggleLiveActivity(for: session) }
+            Task { await facade.toggleLiveActivity(for: session) }
         } label: {
             Label(
-                viewModel.isLiveActivityActive(for: session) ? "Stop Live" : "Live",
-                systemImage: viewModel.isLiveActivityActive(for: session) ? "waveform.slash" : "waveform"
+                facade.isLiveActivityActive(for: session) ? "Stop Live" : "Live",
+                systemImage: facade.isLiveActivityActive(for: session) ? "waveform.slash" : "waveform"
             )
         }
         .tint(.indigo)
     }
 }
 
+private struct SessionRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
 private struct ProjectActionStrip: View {
-    let viewModel: AppViewModel
-    let actions: [ProjectActionSnapshot]
+    let facade: SessionListFacade
+    let actions: [SessionListFacade.ProjectActionSnapshot]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -503,7 +394,7 @@ private struct ProjectActionStrip: View {
                             command: item.command,
                             phase: item.phase
                         ) {
-                            Task { await viewModel.runAction(item.action) }
+                            Task { await facade.runAction(item.action) }
                         }
                     }
                 }
@@ -512,14 +403,6 @@ private struct ProjectActionStrip: View {
             .scrollClipDisabled()
         }
     }
-}
-
-private struct ProjectActionSnapshot: Identifiable, Equatable {
-    let action: OpenCodeAction
-    let command: OpenCodeCommand?
-    let phase: OpenCodeActionRunPhase?
-
-    var id: UUID { action.id }
 }
 
 private struct ProjectActionChip: View {
@@ -631,7 +514,7 @@ private struct LockedProjectActionStrip: View {
 }
 
 private struct ProjectUsageCTA: View {
-    let viewModel: AppViewModel
+    let facade: SessionListFacade
 
     var body: some View {
         HStack(spacing: 12) {
@@ -655,7 +538,7 @@ private struct ProjectUsageCTA: View {
             Spacer(minLength: 6)
 
             Button("Upgrade") {
-                viewModel.presentPaywall(reason: .manual)
+                facade.presentPaywall(reason: .manual)
             }
             .font(.caption.weight(.bold))
             .buttonStyle(.borderedProminent)
@@ -667,83 +550,9 @@ private struct ProjectUsageCTA: View {
     }
 
     private var usageSummary: String {
-        let prompts = viewModel.remainingFreePromptsToday
-        let sessions = viewModel.remainingFreeSessions
+        let prompts = facade.remainingFreePromptsToday
+        let sessions = facade.remainingFreeSessions
         return "\(prompts) \(prompts == 1 ? "message" : "messages") today, \(sessions) \(sessions == 1 ? "session" : "sessions") left"
-    }
-}
-
-private struct SessionListDisplaySnapshot: Equatable {
-    static let empty = SessionListDisplaySnapshot(
-        isLoadingEmpty: false,
-        isEmpty: true,
-        selectedSessionID: nil,
-        pinnedRows: [],
-        unpinnedRows: [],
-        showsWorkspaces: false,
-        workspaceSections: [],
-        errorMessage: nil,
-        hasProUnlock: true,
-        currentProjectActions: []
-    )
-
-    let isLoadingEmpty: Bool
-    let isEmpty: Bool
-    let selectedSessionID: String?
-    let pinnedRows: [SessionRowSnapshot]
-    let unpinnedRows: [SessionRowSnapshot]
-    let showsWorkspaces: Bool
-    let workspaceSections: [WorkspaceSessionDisplaySection]
-    let errorMessage: String?
-    let hasProUnlock: Bool
-    let currentProjectActions: [ProjectActionSnapshot]
-
-    var hasBusySession: Bool {
-        pinnedRows.contains(where: \.isBusy)
-            || unpinnedRows.contains(where: \.isBusy)
-            || workspaceSections.contains { $0.rows.contains(where: \.isBusy) }
-    }
-
-    var workspaceTaskID: String {
-        showsWorkspaces ? workspaceSections.map(\.directory).joined(separator: "|") : "off"
-    }
-
-}
-
-private struct SessionRowSnapshot: Identifiable, Equatable {
-    let session: OpenCodeSession
-    let isSelected: Bool
-    let showsPinnedBadge: Bool
-    let workspaceOverline: String?
-    let style: SessionRow.Style
-    var preview: SessionPreview?
-    var isBusy = false
-    var hasLiveActivity = false
-    var hasDraft = false
-    var hasPermissionRequest = false
-    var displayTitle: String
-    var shimmersTitle: Bool
-
-    var id: String { session.id }
-}
-
-private struct WorkspaceSessionDisplaySection: Identifiable, Equatable {
-    let directory: String
-    let title: String
-    let isMain: Bool
-    let rows: [SessionRowSnapshot]
-    let isLoading: Bool
-    let hasMore: Bool
-    let operation: OpenCodeWorkspaceOperation?
-
-    var id: String { directory }
-
-    var isBusy: Bool {
-        isLoading || operation?.isBusy == true
-    }
-
-    var isWorkspaceOperationBusy: Bool {
-        operation?.isBusy == true
     }
 }
 
@@ -799,7 +608,7 @@ private struct SessionRowSkeleton: View {
 private struct WorkspaceSectionHeader: View {
     @State private var actionConfirmation: WorkspaceActionConfirmation?
 
-    let section: WorkspaceSessionDisplaySection
+    let section: SessionListFacade.WorkspaceSection
     let onNewSession: () -> Void
     let onCreateWorkspace: () -> Void
     let onRefresh: () -> Void

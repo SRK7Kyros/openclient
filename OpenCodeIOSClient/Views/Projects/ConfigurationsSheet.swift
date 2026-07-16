@@ -2,7 +2,7 @@ import SafariServices
 import SwiftUI
 
 struct ConfigurationsSheet: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
@@ -155,7 +155,7 @@ private struct ProviderConfigurationRow: View {
         case authMethods
     }
 
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let provider: OpenCodeProvider
     var subtitleMode: SubtitleMode = .source
 
@@ -335,7 +335,7 @@ private struct ProviderLogoBrand {
 }
 
 private struct ProviderModelVisibilityView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let providerID: String
     @State private var query = ""
     @State private var modelItems: [ModelConfigurationModelEntry] = []
@@ -433,7 +433,7 @@ private struct ProviderModelVisibilityView: View {
 }
 
 private struct AddProviderView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     @State private var query = ""
 
     var body: some View {
@@ -479,7 +479,7 @@ private struct AddProviderView: View {
 }
 
 private struct ProviderConnectView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let provider: OpenCodeProvider
     let returnToRoot: () -> Void
 
@@ -516,7 +516,7 @@ private struct ProviderConnectView: View {
 }
 
 private struct ProviderConnectMethodView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let provider: OpenCodeProvider
     let method: OpenCodeProviderAuthMethod
     let methodIndex: Int
@@ -532,7 +532,7 @@ private struct ProviderConnectMethodView: View {
 }
 
 private struct ProviderOAuthConnectView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let provider: OpenCodeProvider
     let method: OpenCodeProviderAuthMethod
     let methodIndex: Int
@@ -915,7 +915,7 @@ private struct ProviderOAuthSafariView: UIViewControllerRepresentable {
 }
 
 private struct ProviderAPIKeyConnectView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     let provider: OpenCodeProvider
     let returnToRoot: () -> Void
     @State private var apiKey = ""
@@ -1002,7 +1002,7 @@ private struct ProviderAPIKeyConnectView: View {
 
 private struct CustomProviderView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
     @State private var draft = OpenCodeCustomProviderDraft()
     @State private var isSaving = false
 
@@ -1112,7 +1112,7 @@ private struct CustomProviderView: View {
 }
 
 private struct AgentDefaultSelectionView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
 
     var body: some View {
         List {
@@ -1142,7 +1142,7 @@ private struct AgentDefaultSelectionView: View {
 }
 
 private struct ModelDefaultSelectionView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
 
     var body: some View {
         List {
@@ -1175,7 +1175,7 @@ private struct ModelDefaultSelectionView: View {
 }
 
 private struct ReasoningDefaultSelectionView: View {
-    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var viewModel: ConfigurationsFacade
 
     var body: some View {
         List {

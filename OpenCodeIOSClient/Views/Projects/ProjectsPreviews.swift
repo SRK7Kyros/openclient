@@ -3,7 +3,7 @@ import SwiftUI
 #if DEBUG
 #Preview("Project List") {
     NavigationStack {
-        ProjectListView(viewModel: AppViewModel.preview()) {}
+        ProjectListPreview(viewModel: AppViewModel.preview())
     }
 }
 
@@ -17,5 +17,23 @@ import SwiftUI
         )
     }
     .listStyle(.plain)
+}
+
+private struct ProjectListPreview: View {
+    @StateObject private var viewModel: AppViewModel
+
+    init(viewModel: AppViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    var body: some View {
+        ProjectListView(
+            facade: viewModel.projectFacade,
+            connection: viewModel.connectionFacade,
+            configurations: viewModel.configurationsFacade,
+            games: viewModel.funAndGamesFacade,
+            onProjectChosen: {}
+        )
+    }
 }
 #endif
