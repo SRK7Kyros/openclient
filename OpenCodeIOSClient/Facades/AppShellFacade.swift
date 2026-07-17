@@ -317,12 +317,8 @@ final class AppShellFacade: ObservableObject {
         case .sessions:
             presentNewChatForCurrentContext()
         case .git:
-            let filesMode = projectFiles.snapshot.filesMode
             Task { [projectFiles] in
-                await projectFiles.reloadGitViewData(force: true)
-                if filesMode == .tree {
-                    await projectFiles.reloadFileTree(force: true)
-                }
+                await projectFiles.refresh()
             }
         case .mcp:
             Task { [mcp] in

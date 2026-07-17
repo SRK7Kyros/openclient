@@ -253,6 +253,13 @@ final class ProjectFilesFacade: ObservableObject {
         await reloadGitViewData(force: false)
     }
 
+    func refresh() async {
+        await reloadGitViewData(force: true)
+        if store.mode == .tree {
+            await reloadFileTree(force: true)
+        }
+    }
+
     func reloadGitViewData(force: Bool) async {
         guard hasGitProject, let directory = effectiveDirectory, let client = clientProvider() else { return }
         withAnimation(opencodeSelectionAnimation) {
@@ -271,9 +278,7 @@ final class ProjectFilesFacade: ObservableObject {
             let loadedStatus = try await status
             store.applyLoadedVCSStatus(loadedStatus, relativePath: relativeGitPath)
 
-            if loadedStatus.isEmpty, let cachedDiff = store.vcsDiffsByMode[store.selectedVCSMode] {
-                store.applyLoadedVCSStatusFromDiffIfNeeded(cachedDiff, relativePath: relativeGitPath)
-            } else if loadedStatus.isEmpty || store.vcsDiffsByMode[store.selectedVCSMode] != nil {
+            if force || loadedStatus.isEmpty || store.vcsDiffsByMode[store.selectedVCSMode] != nil {
                 let loadedDiff = try await client.getVCSDiff(mode: store.selectedVCSMode, directory: directory)
                 store.applyLoadedVCSDiff(loadedDiff, mode: store.selectedVCSMode, relativePath: relativeGitPath)
             }
@@ -307,7 +312,8 @@ final class ProjectFilesFacade: ObservableObject {
     }
 
     func handleFileWatcherUpdate(_ file: String) {
-        guard file.contains("/.git/") || file.hasSuffix("/.git") else { return }
+        guard !file.isEmpty else { return }
+        // Working-tree edits and Git metadata changes can both alter VCS status.
         refreshFromEvent()
     }
 

@@ -380,8 +380,7 @@ extension AppViewModel {
             projectFilesStore.applyBranchUpdate(branch)
             projectFilesFacade.refreshFromEvent()
         case let .fileWatcherUpdated(file):
-            guard !file.hasPrefix(".git/") else { break }
-            projectFilesFacade.refreshFromEvent()
+            projectFilesFacade.handleFileWatcherUpdate(file)
         default:
             break
         }

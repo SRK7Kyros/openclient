@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 import XCTest
 #if canImport(UIKit)
 import UIKit
@@ -108,6 +109,74 @@ final class FeatureFacadeTests: XCTestCase {
         XCTAssertNil(facade.selectedWorkspaceDirectory)
         XCTAssertNil(store.vcsInfo)
         XCTAssertTrue(store.vcsFileStatuses.isEmpty)
+    }
+
+    func testProjectFilesManualAndWatcherRefreshReplaceCachedDiffWhenRepositoryBecomesClean() async throws {
+        let path = "Sources/App.swift"
+        let store = ProjectFilesStore(
+            vcsInfo: OpenCodeVCSInfo(branch: "main", defaultBranch: "main"),
+            vcsFileStatuses: [
+                OpenCodeVCSFileStatus(path: path, added: 3, removed: 1, status: "modified"),
+            ],
+            vcsDiffsByMode: [
+                .git: [OpenCodeVCSFileDiff(file: path, patch: "@@", additions: 3, deletions: 1, status: "modified")],
+            ],
+            selectedVCSFile: path,
+            selectedFilePath: path
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ProjectFilesMockURLProtocol.self]
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: URLSession(configuration: configuration)
+        )
+        let facade = makeProjectFilesFacade(store: store, client: client)
+        ProjectFilesMockURLProtocol.requestHandler = { request in
+            let body: String
+            switch request.url?.path {
+            case "/vcs":
+                body = #"{"branch":"main","default_branch":"main"}"#
+            case "/file/status", "/vcs/diff":
+                body = "[]"
+            default:
+                throw URLError(.badURL)
+            }
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        defer { ProjectFilesMockURLProtocol.requestHandler = nil }
+
+        await facade.refresh()
+
+        XCTAssertTrue(store.vcsFileStatuses.isEmpty)
+        XCTAssertEqual(store.vcsDiffsByMode[.git], [])
+
+        store.vcsFileStatuses = [
+            OpenCodeVCSFileStatus(path: path, added: 3, removed: 1, status: "modified"),
+        ]
+        store.vcsDiffsByMode[.git] = [
+            OpenCodeVCSFileDiff(file: path, patch: "@@", additions: 3, deletions: 1, status: "modified"),
+        ]
+        let cacheCleared = expectation(description: "Fresh empty diff replaces the cached diff")
+        let observation = store.$vcsDiffsByMode.dropFirst().sink { diffs in
+            if diffs[.git] == [] {
+                cacheCleared.fulfill()
+            }
+        }
+
+        facade.handleFileWatcherUpdate(".git/index")
+        await fulfillment(of: [cacheCleared], timeout: 2)
+
+        XCTAssertTrue(store.vcsFileStatuses.isEmpty)
+        XCTAssertEqual(store.vcsDiffsByMode[.git], [])
+        withExtendedLifetime(observation) {}
     }
 
     func testProjectFacadeBuildsListAndSettingsSnapshots() {
@@ -403,10 +472,13 @@ final class FeatureFacadeTests: XCTestCase {
         await widgetSnapshotPublisher.publishNow()
     }
 
-    private func makeProjectFilesFacade(store: ProjectFilesStore) -> ProjectFilesFacade {
+    private func makeProjectFilesFacade(
+        store: ProjectFilesStore,
+        client: OpenCodeAPIClient = OpenCodeAPIClient(config: OpenCodeServerConfig())
+    ) -> ProjectFilesFacade {
         ProjectFilesFacade(
             store: store,
-            clientProvider: { OpenCodeAPIClient(config: OpenCodeServerConfig()) },
+            clientProvider: { client },
             hasGitProjectProvider: { true },
             effectiveSelectedDirectoryProvider: { "/tmp/project" },
             currentProjectProvider: {
@@ -429,4 +501,34 @@ final class FeatureFacadeTests: XCTestCase {
     ) -> OpenCodeFileNode {
         OpenCodeFileNode(name: name, path: path, absolute: absolute, type: type, ignored: false)
     }
+}
+
+private final class ProjectFilesMockURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let handler = Self.requestHandler else {
+            XCTFail("Missing request handler")
+            return
+        }
+
+        do {
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }

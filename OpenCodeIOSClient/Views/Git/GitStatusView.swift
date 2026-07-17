@@ -28,7 +28,8 @@ struct GitStatusView: View {
                 }
             },
             onLoadGitData: { await facade.loadGitViewDataIfNeeded() },
-            onLoadFileTree: { await facade.loadFileTreeIfNeeded() }
+            onLoadFileTree: { await facade.loadFileTreeIfNeeded() },
+            onRefresh: { await facade.refresh() }
         )
     }
 }
@@ -47,6 +48,7 @@ private struct GitStatusContent: View {
     let onSelectProjectFile: (OpenCodeFileNode) -> Void
     let onLoadGitData: () async -> Void
     let onLoadFileTree: () async -> Void
+    let onRefresh: () async -> Void
 
     private var statusIDs: String {
         snapshot.fileStatuses.map(\.id).joined(separator: "|")
@@ -141,6 +143,9 @@ private struct GitStatusContent: View {
             }
         }
         .listStyle(.plain)
+        .refreshable {
+            await onRefresh()
+        }
         .task {
             await onLoadGitData()
         }
