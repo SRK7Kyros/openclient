@@ -319,6 +319,42 @@ final class ChatFacadeTests: XCTestCase {
         XCTAssertTrue(snapshot.showsAccessoryArea)
     }
 
+    func testComposerOverlaySnapshotBubblesChildSessionInteractionsToParent() {
+        let viewModel = makeViewModel()
+        let parent = makeSession(id: "session-parent")
+        let child = OpenCodeSession(
+            id: "session-child",
+            title: "Child",
+            workspaceID: nil,
+            directory: parent.directory,
+            projectID: parent.projectID,
+            parentID: parent.id
+        )
+        let permission = OpenCodePermission(
+            id: "permission-child",
+            sessionID: child.id,
+            permission: "bash",
+            patterns: ["git status"],
+            always: nil,
+            metadata: nil,
+            tool: nil
+        )
+        let question = OpenCodeQuestionRequest(
+            id: "question-child",
+            sessionID: child.id,
+            questions: [],
+            tool: nil
+        )
+        viewModel.directoryStore.sessions = [parent, child]
+        viewModel.sessionInteractionStore.permissions = [permission]
+        viewModel.sessionInteractionStore.questions = [question]
+
+        let snapshot = viewModel.chatFacade.composerOverlaySnapshot(forSessionID: parent.id)
+
+        XCTAssertEqual(snapshot.permissions, [permission])
+        XCTAssertEqual(snapshot.questions, [question])
+    }
+
     func testComposerSnapshotContainsPreparedComposerState() {
         let viewModel = makeViewModel()
         let session = makeSession(id: "session-composer")

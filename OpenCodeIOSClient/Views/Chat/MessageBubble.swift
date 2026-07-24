@@ -30,6 +30,17 @@ enum MessageBubbleActivityBudget {
     }
 }
 
+enum MessageBubbleUserPartPolicy {
+    static func shouldDisplay(_ part: OpenCodePart, at index: Int, in parts: [OpenCodePart]) -> Bool {
+        if part.type == "agent" { return false }
+        guard part.type == "text" else { return true }
+
+        return index == parts.firstIndex { candidate in
+            candidate.type == "text" && candidate.synthetic != true
+        }
+    }
+}
+
 struct MessageBubble: View {
     let message: OpenCodeMessageEnvelope
     let detailedMessage: OpenCodeMessageEnvelope?
@@ -640,7 +651,8 @@ struct MessageBubble: View {
             id: part.id,
             type: part.type,
             toolName: toolName(for: part),
-            hasRenderableText: renderableText(for: part) != nil
+            hasRenderableText: renderableText(for: part) != nil,
+            synthetic: part.synthetic
         )
     }
 
@@ -657,6 +669,9 @@ struct MessageBubble: View {
         }
 
         for (index, part) in parts.enumerated() {
+            if isUser, !MessageBubbleUserPartPolicy.shouldDisplay(part, at: index, in: parts) {
+                continue
+            }
             guard shouldIncludePartInDisplayPlan(part) else { continue }
 
             if shouldGroupInContext(part) {
@@ -719,7 +734,7 @@ struct MessageBubble: View {
         let running = isRunning(part)
 
         switch tool {
-        case "", "step-start", "step-finish", "reasoning", "text":
+        case "", "agent", "step-start", "step-finish", "reasoning", "text":
             return nil
         case "todowrite":
             return ActivityStyle(
@@ -1088,6 +1103,7 @@ private struct MessageBubbleDisplayEntryCacheKey: Equatable {
         let type: String
         let toolName: String
         let hasRenderableText: Bool
+        let synthetic: Bool?
     }
 
     let messageID: String

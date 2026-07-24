@@ -201,11 +201,18 @@ final class ChatFacade: ObservableObject {
     }
 
     func composerOverlaySnapshot(forSessionID sessionID: String) -> ChatComposerOverlaySnapshot {
-        ChatComposerOverlaySnapshot(
+        let directoryStore = directoryStore(forSessionID: sessionID)
+        return ChatComposerOverlaySnapshot(
             todos: sessionInteractionStore.todos,
             attachments: composerStore.draftAttachments,
-            permissions: sessionInteractionStore.permissions(forSessionID: sessionID),
-            questions: sessionInteractionStore.questions(forSessionID: sessionID)
+            permissions: sessionInteractionStore.permissions(
+                forSessionTreeRootID: sessionID,
+                sessions: directoryStore.sessions
+            ),
+            questions: sessionInteractionStore.questions(
+                forSessionTreeRootID: sessionID,
+                sessions: directoryStore.sessions
+            )
         )
     }
 

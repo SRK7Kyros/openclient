@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Combine
 #if canImport(RealityKit) && canImport(UIKit)
 import RealityKit
 #endif
@@ -878,6 +879,7 @@ private extension OpenCodePart {
         segments.append(callID ?? "")
         segments.append(text?.utf16.count.description ?? "0")
         segments.append(samplesText ? (text?.chatRenderSampleHash.description ?? "0") : "0")
+        segments.append(synthetic.map(String.init) ?? "")
         segments.append(reason ?? "")
         segments.append(filename ?? "")
         segments.append(mime ?? "")
@@ -1070,8 +1072,15 @@ private final class ChatTranscriptScrollController {
 
     @MainActor
     @discardableResult
-    static func scrollToBottom(in collectionView: UICollectionView, animated: Bool, interruptsCurrentScroll: Bool) -> Bool {
-        collectionView.layoutIfNeeded()
+    static func scrollToBottom(
+        in collectionView: UICollectionView,
+        animated: Bool,
+        interruptsCurrentScroll: Bool,
+        performsLayout: Bool = true
+    ) -> Bool {
+        if performsLayout {
+            collectionView.layoutIfNeeded()
+        }
         guard collectionView.bounds.height > 0 else { return false }
 
         let targetY = bottomTargetY(in: collectionView)
@@ -1096,7 +1105,12 @@ private final class ChatTranscriptScrollController {
                 guard !Task.isCancelled, let collectionView = self?.collectionView else { return }
                 collectionView.layoutIfNeeded()
                 guard Self.distanceFromBottom(in: collectionView) > 3 else { return }
-                Self.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: false)
+                Self.scrollToBottom(
+                    in: collectionView,
+                    animated: animated,
+                    interruptsCurrentScroll: false,
+                    performsLayout: false
+                )
             }
         }
     }
@@ -1417,6 +1431,7 @@ private struct FallbackMedalView: View {
 private final class ChatViewTaskStore {
     var delayedLoadingIndicatorTask: Task<Void, Never>?
     var composerDraftPersistenceTask: Task<Void, Never>?
+    var contextMetricsTask: Task<Void, Never>?
 }
 
 private struct MessageComposerSnapshot: Equatable {
@@ -1916,6 +1931,16 @@ struct ChatView: View {
     private let thinkingRevealHoldMS = 140
     private let eagerRefreshMinimumInterval: TimeInterval = 4
 
+    private static let emptyContextMetrics = OpenCodeSessionContextMetrics(
+        totalCost: 0,
+        messageCount: 0,
+        userMessageCount: 0,
+        assistantMessageCount: 0,
+        context: nil,
+        breakdown: [],
+        systemPrompt: nil
+    )
+
     private var composerOverlaySnapshot: ChatFacade.ChatComposerOverlaySnapshot {
         chatFacade.composerOverlaySnapshot(forSessionID: sessionID)
     }
@@ -1956,14 +1981,7 @@ struct ChatView: View {
     }
 
     private var contextMetrics: OpenCodeSessionContextMetrics {
-        if isSessionBusy, let cachedContextMetrics {
-            return cachedContextMetrics
-        }
-
-        return OpenCodeSessionContextMetricsBuilder.metrics(
-            messages: chatStore.messages,
-            providers: modelConfigurationStore.availableProviders
-        )
+        cachedContextMetrics ?? Self.emptyContextMetrics
     }
 
     private var shouldAnimateStreamingText: Bool {
@@ -2135,6 +2153,7 @@ struct ChatView: View {
             chatFacade.setComposerStreamingFocus(false)
             taskStore.delayedLoadingIndicatorTask?.cancel()
             taskStore.composerDraftPersistenceTask?.cancel()
+            taskStore.contextMetricsTask?.cancel()
             pendingOutgoingSendTask?.cancel()
             outgoingEntryResetTask?.cancel()
             initialBottomScrollTask?.cancel()
@@ -2226,9 +2245,22 @@ struct ChatView: View {
             copiedTranscript = false
             pruneExpandedReasoningParts()
             if !isSessionBusy {
-                refreshCachedContextMetrics()
                 refreshCachedForkableMessages()
             }
+        }
+        .onReceive(chatStore.$messages.dropFirst()) { messages in
+            guard !isSessionBusy else { return }
+            refreshCachedContextMetrics(
+                messages: messages,
+                providers: modelConfigurationStore.availableProviders
+            )
+        }
+        .onReceive(modelConfigurationStore.$availableProviders.dropFirst()) { providers in
+            guard !isSessionBusy else { return }
+            refreshCachedContextMetrics(
+                messages: chatStore.messages,
+                providers: providers
+            )
         }
         .onChange(of: reasoningPartKeySignature) { _, _ in
             pruneExpandedReasoningParts()
@@ -2251,10 +2283,24 @@ struct ChatView: View {
     }
 
     private func refreshCachedContextMetrics() {
-        cachedContextMetrics = OpenCodeSessionContextMetricsBuilder.metrics(
+        refreshCachedContextMetrics(
             messages: chatStore.messages,
             providers: modelConfigurationStore.availableProviders
         )
+    }
+
+    private func refreshCachedContextMetrics(
+        messages: [OpenCodeMessageEnvelope],
+        providers: [OpenCodeProvider]
+    ) {
+        taskStore.contextMetricsTask?.cancel()
+        taskStore.contextMetricsTask = Task { @MainActor in
+            let metrics = await Task.detached(priority: .utility) {
+                OpenCodeSessionContextMetricsBuilder.metrics(messages: messages, providers: providers)
+            }.value
+            guard !Task.isCancelled else { return }
+            cachedContextMetrics = metrics
+        }
     }
 
     private func refreshCachedForkableMessages() {
@@ -4773,7 +4819,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
                         guard let self, let collectionView, self.isAtBottom.wrappedValue else { return }
                         collectionView.layoutIfNeeded()
                         self.scrollToBottomItem(in: collectionView, animated: false)
-                        self.scrollToBottom(in: collectionView, animated: false)
+                        self.scrollToBottom(in: collectionView, animated: false, performsLayout: false)
                     }
                 }
                 return
@@ -4798,12 +4844,12 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
                 }
                 collectionView.layoutIfNeeded()
             }
-            scrollToBottom(in: collectionView, animated: !isStreaming)
+            scrollToBottom(in: collectionView, animated: !isStreaming, performsLayout: false)
             guard !isStreaming else { return }
             DispatchQueue.main.async { [weak self, weak collectionView] in
                 guard let self, let collectionView, self.isAtBottom.wrappedValue else { return }
                 collectionView.layoutIfNeeded()
-                self.scrollToBottom(in: collectionView, animated: !self.isStreaming)
+                self.scrollToBottom(in: collectionView, animated: !self.isStreaming, performsLayout: false)
             }
         }
 
@@ -4831,6 +4877,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
             markBottomScrollTokenHandled(token, animated: animated)
             scrollToBottom(in: collectionView, animated: animated)
+            guard animated else { return }
+
             DispatchQueue.main.async { [weak self, weak collectionView] in
                 guard let self, let collectionView else { return }
                 guard !self.shouldDeferBottomScroll(animated: animated, in: collectionView) else { return }
@@ -4922,9 +4970,18 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             applyRows(pendingRows, in: collectionView)
         }
 
-        private func scrollToBottom(in collectionView: UICollectionView, animated: Bool) {
+        private func scrollToBottom(
+            in collectionView: UICollectionView,
+            animated: Bool,
+            performsLayout: Bool = true
+        ) {
             guard !rows.isEmpty else { return }
-            guard ChatTranscriptScrollController.scrollToBottom(in: collectionView, animated: animated, interruptsCurrentScroll: animated) else { return }
+            guard ChatTranscriptScrollController.scrollToBottom(
+                in: collectionView,
+                animated: animated,
+                interruptsCurrentScroll: animated,
+                performsLayout: performsLayout
+            ) else { return }
             isAtBottom.wrappedValue = true
         }
 

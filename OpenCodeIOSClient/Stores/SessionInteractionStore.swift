@@ -40,10 +40,22 @@ final class SessionInteractionStore: ObservableObject {
         questions = bootstrap.questions
     }
 
-    func applySelectedSession(sessionID: String, syncState: OpenCodeDirectorySyncState) {
+    func applySelectedSession(
+        sessionID: String,
+        sessions: [OpenCodeSession],
+        syncState: OpenCodeDirectorySyncState
+    ) {
         todos = syncState.todosBySessionID[sessionID] ?? []
-        permissions = syncState.permissionsBySessionID[sessionID] ?? []
-        questions = syncState.questionsBySessionID[sessionID] ?? []
+        permissions = Self.permissions(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            permissionsBySessionID: syncState.permissionsBySessionID
+        )
+        questions = Self.questions(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            questionsBySessionID: syncState.questionsBySessionID
+        )
     }
 
     func applyTodos(_ nextTodos: [OpenCodeTodo], forSessionID sessionID: String, selectedSessionID: String?) {
@@ -81,16 +93,24 @@ final class SessionInteractionStore: ObservableObject {
         return changed
     }
 
-    func permissions(forSessionID sessionID: String) -> [OpenCodePermission] {
-        permissions.filter { $0.sessionID == sessionID }
+    func permissions(forSessionTreeRootID sessionID: String, sessions: [OpenCodeSession]) -> [OpenCodePermission] {
+        Self.requests(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            requestsBySessionID: Dictionary(grouping: permissions, by: \.sessionID)
+        )
     }
 
-    func questions(forSessionID sessionID: String) -> [OpenCodeQuestionRequest] {
-        questions.filter { $0.sessionID == sessionID }
+    func questions(forSessionTreeRootID sessionID: String, sessions: [OpenCodeSession]) -> [OpenCodeQuestionRequest] {
+        Self.requests(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            requestsBySessionID: Dictionary(grouping: questions, by: \.sessionID)
+        )
     }
 
-    func hasPermissionRequest(forSessionID sessionID: String) -> Bool {
-        permissions.contains { $0.sessionID == sessionID }
+    func hasPermissionRequest(forSessionTreeRootID sessionID: String, sessions: [OpenCodeSession]) -> Bool {
+        !permissions(forSessionTreeRootID: sessionID, sessions: sessions).isEmpty
     }
 
     func removePermission(id: String) {
@@ -99,5 +119,52 @@ final class SessionInteractionStore: ObservableObject {
 
     func removeQuestion(id: String) {
         questions.removeAll { $0.id == id }
+    }
+
+    static func permissions(
+        forSessionTreeRootID sessionID: String,
+        sessions: [OpenCodeSession],
+        permissionsBySessionID: [String: [OpenCodePermission]]
+    ) -> [OpenCodePermission] {
+        requests(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            requestsBySessionID: permissionsBySessionID
+        )
+    }
+
+    static func questions(
+        forSessionTreeRootID sessionID: String,
+        sessions: [OpenCodeSession],
+        questionsBySessionID: [String: [OpenCodeQuestionRequest]]
+    ) -> [OpenCodeQuestionRequest] {
+        requests(
+            forSessionTreeRootID: sessionID,
+            sessions: sessions,
+            requestsBySessionID: questionsBySessionID
+        )
+    }
+
+    private static func requests<Request>(
+        forSessionTreeRootID sessionID: String,
+        sessions: [OpenCodeSession],
+        requestsBySessionID: [String: [Request]]
+    ) -> [Request] {
+        let childrenByParentID = Dictionary(grouping: sessions.compactMap { session -> (String, String)? in
+            session.parentID.map { ($0, session.id) }
+        }, by: \.0)
+        var seen = Set([sessionID])
+        var sessionIDs = [sessionID]
+        var index = 0
+
+        while index < sessionIDs.count {
+            let currentID = sessionIDs[index]
+            index += 1
+            for child in childrenByParentID[currentID] ?? [] where seen.insert(child.1).inserted {
+                sessionIDs.append(child.1)
+            }
+        }
+
+        return sessionIDs.flatMap { requestsBySessionID[$0] ?? [] }
     }
 }

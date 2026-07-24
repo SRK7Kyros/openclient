@@ -22,7 +22,7 @@ final class SessionInteractionStoreTests: XCTestCase {
             questions: [otherQuestion]
         )
 
-        store.applySelectedSession(sessionID: selectedID, syncState: syncState)
+        store.applySelectedSession(sessionID: selectedID, sessions: [], syncState: syncState)
 
         XCTAssertEqual(store.todos, [selectedTodo])
         XCTAssertEqual(store.permissions, [selectedPermission])
@@ -36,7 +36,7 @@ final class SessionInteractionStoreTests: XCTestCase {
             questions: [questionRequest(id: "q_stale", sessionID: "ses_stale")]
         )
 
-        store.applySelectedSession(sessionID: "ses_missing", syncState: OpenCodeDirectorySyncState())
+        store.applySelectedSession(sessionID: "ses_missing", sessions: [], syncState: OpenCodeDirectorySyncState())
 
         XCTAssertTrue(store.todos.isEmpty)
         XCTAssertTrue(store.permissions.isEmpty)
@@ -68,6 +68,46 @@ final class SessionInteractionStoreTests: XCTestCase {
 
         XCTAssertEqual(store.permissions, [permission])
         XCTAssertEqual(store.questions, [question])
+    }
+
+    func testApplySelectedSessionProjectsNestedChildPermissionsAndQuestions() {
+        let root = session(id: "ses_root")
+        let child = session(id: "ses_child", parentID: root.id)
+        let grandchild = session(id: "ses_grandchild", parentID: child.id)
+        let unrelated = session(id: "ses_other")
+        let rootPermission = permission(id: "perm_root", sessionID: root.id)
+        let grandchildPermission = permission(id: "perm_grandchild", sessionID: grandchild.id)
+        let unrelatedPermission = permission(id: "perm_other", sessionID: unrelated.id)
+        let childQuestion = questionRequest(id: "q_child", sessionID: child.id)
+        let unrelatedQuestion = questionRequest(id: "q_other", sessionID: unrelated.id)
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.permissionsBySessionID = [
+            root.id: [rootPermission],
+            grandchild.id: [grandchildPermission],
+            unrelated.id: [unrelatedPermission],
+        ]
+        syncState.questionsBySessionID = [
+            child.id: [childQuestion],
+            unrelated.id: [unrelatedQuestion],
+        ]
+        let store = SessionInteractionStore()
+
+        store.applySelectedSession(
+            sessionID: root.id,
+            sessions: [root, child, grandchild, unrelated],
+            syncState: syncState
+        )
+
+        XCTAssertEqual(store.permissions, [rootPermission, grandchildPermission])
+        XCTAssertEqual(store.questions, [childQuestion])
+        XCTAssertTrue(store.hasPermissionRequest(
+            forSessionTreeRootID: root.id,
+            sessions: [root, child, grandchild, unrelated]
+        ))
+        XCTAssertFalse(store.hasPermissionRequest(
+            forSessionTreeRootID: unrelated.id,
+            sessions: [root, child, grandchild, unrelated]
+        ))
     }
 
     func testApplyVisibleInteractionsReportsAndAppliesChanges() {
@@ -108,6 +148,17 @@ final class SessionInteractionStoreTests: XCTestCase {
                 )
             ],
             tool: nil
+        )
+    }
+
+    private func session(id: String, parentID: String? = nil) -> OpenCodeSession {
+        OpenCodeSession(
+            id: id,
+            title: id,
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: parentID
         )
     }
 }

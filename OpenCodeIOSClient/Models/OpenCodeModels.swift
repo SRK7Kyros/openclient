@@ -1976,6 +1976,7 @@ struct OpenCodePart: Codable, Hashable, Sendable {
     let callID: String?
     let state: OpenCodeToolState?
     var text: String?
+    let synthetic: Bool?
     let auto: Bool?
     let overflow: Bool?
     let tailStartID: String?
@@ -1995,6 +1996,7 @@ struct OpenCodePart: Codable, Hashable, Sendable {
         case callID
         case state
         case text
+        case synthetic
         case auto
         case overflow
         case tailStartID = "tail_start_id"
@@ -2015,6 +2017,7 @@ struct OpenCodePart: Codable, Hashable, Sendable {
         callID: String?,
         state: OpenCodeToolState?,
         text: String?,
+        synthetic: Bool? = nil,
         auto: Bool? = nil,
         overflow: Bool? = nil,
         tailStartID: String? = nil
@@ -2033,6 +2036,7 @@ struct OpenCodePart: Codable, Hashable, Sendable {
         self.callID = callID
         self.state = state
         self.text = text
+        self.synthetic = synthetic
         self.auto = auto
         self.overflow = overflow
         self.tailStartID = tailStartID
@@ -2056,6 +2060,7 @@ struct OpenCodePart: Codable, Hashable, Sendable {
             callID: callID,
             state: state,
             text: isToolLikeTextPart ? nil : text,
+            synthetic: synthetic,
             auto: auto,
             overflow: overflow,
             tailStartID: tailStartID

@@ -1,5 +1,8 @@
 import XCTest
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import OpenClient
 
 final class OpenCodeStreamingTests: XCTestCase {
@@ -982,6 +985,74 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(metrics.context?.modelLabel, "GPT-4.1")
         XCTAssertFalse(metrics.breakdown.isEmpty)
     }
+
+#if canImport(UIKit)
+    @MainActor
+    func testComposerMentionHighlightingIsIdempotentAndPreservesSelection() {
+        let textView = makeComposerTextView()
+        let text = "Hi 👋 @explore"
+        let mentionRange = (text as NSString).range(of: "@explore")
+        let mention = OpenCodeAgentMention(
+            name: "explore",
+            content: "@explore",
+            start: mentionRange.location,
+            end: NSMaxRange(mentionRange)
+        )
+        textView.text = text
+        textView.selectedRange = NSRange(location: mentionRange.location, length: 0)
+
+        XCTAssertTrue(textView.applyMentionHighlighting(agentMentions: [mention]))
+        XCTAssertEqual(textView.selectedRange, NSRange(location: mentionRange.location, length: 0))
+        XCTAssertFalse(textView.applyMentionHighlighting(agentMentions: [mention]))
+
+        let attributes = textView.attributedText.attributes(at: mentionRange.location, effectiveRange: nil)
+        XCTAssertTrue((attributes[.foregroundColor] as? UIColor)?.isEqual(UIColor.systemIndigo) == true)
+        XCTAssertTrue((attributes[.font] as? UIFont)?.fontDescriptor.symbolicTraits.contains(.traitBold) == true)
+    }
+
+    @MainActor
+    func testComposerPlainTextHighlightingDoesNotRewriteAttributedText() {
+        let textView = makeComposerTextView()
+        textView.text = "ordinary draft"
+
+        XCTAssertFalse(textView.applyMentionHighlighting(agentMentions: []))
+        XCTAssertEqual(textView.attributedText.string, "ordinary draft")
+
+        textView.text = textView.text + "!"
+        XCTAssertFalse(textView.applyMentionHighlighting(agentMentions: []))
+        XCTAssertEqual(textView.attributedText.string, "ordinary draft!")
+    }
+
+    @MainActor
+    func testComposerFittedHeightCapsAtMaximumLinesAndUpdatesScrolling() {
+        let textView = makeComposerTextView()
+        textView.applyText(Array(repeating: "line", count: 8).joined(separator: "\n"), agentMentions: [])
+
+        let height = textView.fittedHeight(width: 240, maxLines: 6)
+        let maximumHeight = ceil(
+            textView.font!.lineHeight * 6
+                + textView.textContainerInset.top
+                + textView.textContainerInset.bottom
+        )
+
+        XCTAssertEqual(height, maximumHeight, accuracy: 0.5)
+        XCTAssertTrue(textView.isScrollEnabled)
+
+        textView.applyText("one line", agentMentions: [])
+        _ = textView.fittedHeight(width: 240, maxLines: 6)
+        XCTAssertFalse(textView.isScrollEnabled)
+    }
+
+    @MainActor
+    private func makeComposerTextView() -> ComposerPlaceholderTextView {
+        let textView = ComposerPlaceholderTextView()
+        textView.font = UIFont.preferredFont(forTextStyle: .body)
+        textView.textColor = .label
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textContainerInset = UIEdgeInsets(top: 11, left: 14, bottom: 11, right: 14)
+        return textView
+    }
+#endif
 
     func testManagedEventDecodeReportsDroppedQuestionPayloads() {
         let result = OpenCodeEventManager.decodeManagedEvent(

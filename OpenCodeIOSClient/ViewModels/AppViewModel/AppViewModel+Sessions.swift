@@ -115,7 +115,11 @@ extension AppViewModel {
             )
             selectedMessages = cachedMessages
             chatStore.beginSelectingSession(sessionID: session.id, cachedMessages: cachedMessages)
-            sessionInteractionStore.applySelectedSession(sessionID: session.id, syncState: directoryStore.syncState)
+            sessionInteractionStore.applySelectedSession(
+                sessionID: session.id,
+                sessions: directoryStore.sessions,
+                syncState: directoryStore.syncState
+            )
             projectFilesStore.selectedVCSFile = nil
         }
         if animatesChanges {
@@ -214,6 +218,14 @@ extension AppViewModel {
                 }
             }
             streamDirectory = selection.streamDirectory
+        }
+
+        if let selectedSessionID = directoryStore.selectedSession?.id {
+            sessionInteractionStore.applySelectedSession(
+                sessionID: selectedSessionID,
+                sessions: directoryStore.sessions,
+                syncState: directoryStore.syncState
+            )
         }
 
         if selection.preservedWorkspaceSelection, let previousSelectedSession {
@@ -1623,34 +1635,46 @@ extension AppViewModel {
 
     var selectedSessionPermissions: [OpenCodePermission] {
         guard let selectedSession else { return [] }
-        return sessionInteractionStore.permissions(forSessionID: selectedSession.id)
+        return permissions(for: selectedSession.id)
     }
 
     func permissions(for sessionID: String) -> [OpenCodePermission] {
-        let visiblePermissions = sessionInteractionStore.permissions(forSessionID: sessionID)
+        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
+        let visiblePermissions = owner === directoryStore
+            ? sessionInteractionStore.permissions(forSessionTreeRootID: sessionID, sessions: owner.sessions)
+            : []
         if !visiblePermissions.isEmpty {
             return visiblePermissions
         }
-        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
-        return owner.syncState.permissionsBySessionID[sessionID] ?? []
+        return SessionInteractionStore.permissions(
+            forSessionTreeRootID: sessionID,
+            sessions: owner.sessions,
+            permissionsBySessionID: owner.syncState.permissionsBySessionID
+        )
     }
 
     var selectedSessionQuestions: [OpenCodeQuestionRequest] {
         guard let selectedSession else { return [] }
-        return sessionInteractionStore.questions(forSessionID: selectedSession.id)
+        return questions(for: selectedSession.id)
     }
 
     func questions(for sessionID: String) -> [OpenCodeQuestionRequest] {
-        let visibleQuestions = sessionInteractionStore.questions(forSessionID: sessionID)
+        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
+        let visibleQuestions = owner === directoryStore
+            ? sessionInteractionStore.questions(forSessionTreeRootID: sessionID, sessions: owner.sessions)
+            : []
         if !visibleQuestions.isEmpty {
             return visibleQuestions
         }
-        let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
-        return owner.syncState.questionsBySessionID[sessionID] ?? []
+        return SessionInteractionStore.questions(
+            forSessionTreeRootID: sessionID,
+            sessions: owner.sessions,
+            questionsBySessionID: owner.syncState.questionsBySessionID
+        )
     }
 
     func hasPermissionRequest(for session: OpenCodeSession) -> Bool {
-        sessionInteractionStore.hasPermissionRequest(forSessionID: session.id)
+        !permissions(for: session.id).isEmpty
     }
 
     func respondToPermission(_ permission: OpenCodePermission, response: String) async {

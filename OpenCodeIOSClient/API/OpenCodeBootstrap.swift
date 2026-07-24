@@ -27,13 +27,13 @@ enum OpenCodeBootstrap {
     }
 
     static func bootstrapDirectory(client: OpenCodeAPIClient, directory: String?) async throws -> OpenCodeDirectoryBootstrap {
-        async let sessions = client.listSessions(directory: directory, roots: directory == nil ? nil : true)
+        async let sessions = client.listSessions(directory: directory)
         async let commands = client.listCommands(directory: directory)
         async let permissions = client.listPermissions(directory: directory)
         async let questions = client.listQuestions(directory: directory)
 
         return OpenCodeDirectoryBootstrap(
-            sessions: try await sessions.filter { $0.isRootSession },
+            sessions: try await sessions,
             commands: try await commands,
             permissions: try await permissions,
             questions: try await questions

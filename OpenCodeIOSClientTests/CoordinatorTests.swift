@@ -1731,14 +1731,16 @@ final class CoordinatorTests: XCTestCase {
 
             switch path {
             case "/session":
-                if URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems?.contains(URLQueryItem(name: "roots", value: "true")) == true {
-                    return try jsonResponse(for: request, body: """
-                    [
-                      {"id":"ses_root","title":"Root","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":null},
-                      {"id":"ses_child","title":"Child","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":"ses_root"}
-                    ]
-                    """)
-                }
+                XCTAssertFalse(URLComponents(
+                    url: try XCTUnwrap(request.url),
+                    resolvingAgainstBaseURL: false
+                )?.queryItems?.contains(URLQueryItem(name: "roots", value: "true")) == true)
+                return try jsonResponse(for: request, body: """
+                [
+                  {"id":"ses_root","title":"Root","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":null},
+                  {"id":"ses_child","title":"Child","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":"ses_root"}
+                ]
+                """)
             case "/command", "/permission", "/question":
                 return try jsonResponse(for: request, body: "[]")
             case "/session/status":
@@ -1752,7 +1754,7 @@ final class CoordinatorTests: XCTestCase {
 
         let result = try await coordinator.reloadDirectory(client: client, directory: "/tmp/project")
 
-        XCTAssertEqual(result.bootstrap.sessions.map(\.id), ["ses_root"])
+        XCTAssertEqual(result.bootstrap.sessions.map(\.id), ["ses_root", "ses_child"])
         XCTAssertEqual(result.bootstrap.commands, [])
         XCTAssertEqual(result.bootstrap.permissions, [])
         XCTAssertEqual(result.bootstrap.questions, [])

@@ -70,6 +70,18 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertTrue(projection.retainedIndices.isSuperset(of: [17, 18, 19]))
     }
 
+    func testUserPartPolicyDisplaysOnlyFirstNonSyntheticTextPart() throws {
+        let original = OpenCodePart(id: "part_original", messageID: "msg_1", sessionID: "ses_1", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "@general inspect Downloads")
+        let agent = OpenCodePart(id: "part_agent", messageID: "msg_1", sessionID: "ses_1", type: "agent", mime: nil, filename: nil, name: "general", url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: nil)
+        let synthetic = try JSONDecoder().decode(OpenCodePart.self, from: Data(#"{"id":"part_synthetic","messageID":"msg_1","sessionID":"ses_1","type":"text","text":"Use the above message and context to generate a prompt","synthetic":true}"#.utf8))
+        let parts = [original, agent, synthetic]
+
+        XCTAssertTrue(MessageBubbleUserPartPolicy.shouldDisplay(original, at: 0, in: parts))
+        XCTAssertFalse(MessageBubbleUserPartPolicy.shouldDisplay(agent, at: 1, in: parts))
+        XCTAssertFalse(MessageBubbleUserPartPolicy.shouldDisplay(synthetic, at: 2, in: parts))
+        XCTAssertEqual(synthetic.synthetic, true)
+    }
+
     func testTranscriptWindowLoadsOnlyRequestedSuffixForLongSession() {
         let messages = (0..<1_500).map { index in
             message(

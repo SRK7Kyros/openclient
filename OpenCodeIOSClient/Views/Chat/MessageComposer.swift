@@ -2053,28 +2053,30 @@ private struct ComposerTextView: UIViewRepresentable {
         context.coordinator.parent = self
         var needsLayoutUpdate = false
 
-        if textView.text != text {
-            textView.applyText(text, agentMentions: agentMentions)
-            textView.updatePlaceholderVisibility()
-            needsLayoutUpdate = true
-        } else {
-            textView.applyMentionHighlighting(agentMentions: agentMentions)
-        }
-
-        if textView.placeholder != placeholder {
-            textView.placeholder = placeholder
-            needsLayoutUpdate = true
-        }
-
         let bodyFont = UIFont.preferredFont(forTextStyle: .body)
         if textView.font != bodyFont {
             textView.font = bodyFont
             textView.updatePlaceholderFont()
+            textView.invalidateFittingCache()
             needsLayoutUpdate = true
         }
 
         if textView.maximumLineCount != maxLines {
             textView.maximumLineCount = maxLines
+            textView.invalidateFittingCache()
+            needsLayoutUpdate = true
+        }
+
+        if textView.text != text {
+            textView.applyText(text, agentMentions: agentMentions)
+            textView.updatePlaceholderVisibility()
+            needsLayoutUpdate = true
+        } else if textView.applyMentionHighlighting(agentMentions: agentMentions) {
+            needsLayoutUpdate = true
+        }
+
+        if textView.placeholder != placeholder {
+            textView.placeholder = placeholder
             needsLayoutUpdate = true
         }
 
@@ -2085,7 +2087,6 @@ private struct ComposerTextView: UIViewRepresentable {
 
         guard needsLayoutUpdate else { return }
 
-        textView.updateScrolling(maxLines: maxLines)
         textView.invalidateIntrinsicContentSize()
         textView.setNeedsLayout()
     }
@@ -2137,16 +2138,28 @@ private struct ComposerTextView: UIViewRepresentable {
             }
 
             guard let textView = textView as? ComposerPlaceholderTextView else { return }
-            textView.applyMentionHighlighting(agentMentions: parent.agentMentions)
+            textView.invalidateFittingCache()
+            _ = textView.applyMentionHighlighting(agentMentions: parent.agentMentions)
             textView.updatePlaceholderVisibility()
-            textView.updateScrolling(maxLines: parent.maxLines)
             textView.invalidateIntrinsicContentSize()
         }
     }
 }
 
-private final class ComposerPlaceholderTextView: UITextView {
+final class ComposerPlaceholderTextView: UITextView {
+    private struct FittingCache {
+        let width: CGFloat
+        let maxLines: Int
+        let font: UIFont
+        let height: CGFloat
+        let isScrollEnabled: Bool
+    }
+
     private let placeholderLabel = UILabel()
+    private var fittingCache: FittingCache?
+    private var highlightedText: String?
+    private var highlightedMentions: [OpenCodeAgentMention] = []
+    private var highlightedFont: UIFont?
     var maximumLineCount = ComposerTextViewMetrics.maxLines
     var canSubmit = false
     var onPasteImages: (([UIImage]) -> Bool)?
@@ -2187,33 +2200,77 @@ private final class ComposerPlaceholderTextView: UITextView {
     }
 
     func fittedHeight(width: CGFloat, maxLines: Int) -> CGFloat {
+        let currentFont = font ?? UIFont.preferredFont(forTextStyle: .body)
+        if let fittingCache,
+           abs(fittingCache.width - width) <= 0.5,
+           fittingCache.maxLines == maxLines,
+           fittingCache.font.isEqual(currentFont) {
+            if isScrollEnabled != fittingCache.isScrollEnabled {
+                isScrollEnabled = fittingCache.isScrollEnabled
+            }
+            return fittingCache.height
+        }
+
         let target = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
         let measuredHeight = sizeThatFits(target).height
-        let lineHeight = (font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
+        let lineHeight = currentFont.lineHeight
         let minHeight = ceil(lineHeight + textContainerInset.top + textContainerInset.bottom)
         let maxHeight = ceil(lineHeight * CGFloat(max(1, maxLines)) + textContainerInset.top + textContainerInset.bottom)
-        return min(max(measuredHeight, minHeight), maxHeight)
+        let height = min(max(measuredHeight, minHeight), maxHeight)
+        let shouldScroll = measuredHeight > maxHeight + 0.5
+
+        fittingCache = FittingCache(
+            width: width,
+            maxLines: maxLines,
+            font: currentFont,
+            height: height,
+            isScrollEnabled: shouldScroll
+        )
+        if isScrollEnabled != shouldScroll {
+            isScrollEnabled = shouldScroll
+        }
+        return height
     }
 
-    func updateScrolling(maxLines: Int) {
-        let width = bounds.width > 0 ? bounds.width : UIScreen.main.bounds.width - 110
-        let target = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
-        let measuredHeight = sizeThatFits(target).height
-        let lineHeight = (font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
-        let maxHeight = ceil(lineHeight * CGFloat(max(1, maxLines)) + textContainerInset.top + textContainerInset.bottom)
-        isScrollEnabled = measuredHeight > maxHeight + 0.5
+    func invalidateFittingCache() {
+        fittingCache = nil
     }
 
     func applyText(_ text: String, agentMentions: [OpenCodeAgentMention]) {
         self.text = text
-        applyMentionHighlighting(agentMentions: agentMentions)
+        invalidateFittingCache()
+        _ = applyMentionHighlighting(agentMentions: agentMentions)
     }
 
-    func applyMentionHighlighting(agentMentions: [OpenCodeAgentMention]) {
-        guard markedTextRange == nil else { return }
+    @discardableResult
+    func applyMentionHighlighting(agentMentions: [OpenCodeAgentMention]) -> Bool {
+        guard markedTextRange == nil else {
+            highlightedText = nil
+            highlightedMentions = []
+            highlightedFont = nil
+            return false
+        }
+
         let previousSelectedRange = selectedRange
         let currentText = text ?? ""
         let font = font ?? UIFont.preferredFont(forTextStyle: .body)
+        let reconciledMentions = OpenCodeAgentMention.reconciled(agentMentions, in: currentText)
+        let fontMatches = highlightedFont?.isEqual(font) == true
+
+        guard highlightedText != currentText || highlightedMentions != reconciledMentions || !fontMatches else {
+            return false
+        }
+
+        if agentMentions.isEmpty, highlightedMentions.isEmpty, highlightedFont == nil || fontMatches {
+            highlightedText = currentText
+            highlightedFont = font
+            typingAttributes = [
+                .font: font,
+                .foregroundColor: UIColor.label,
+            ]
+            return false
+        }
+
         let attributed = NSMutableAttributedString(
             string: currentText,
             attributes: [
@@ -2222,27 +2279,34 @@ private final class ComposerPlaceholderTextView: UITextView {
             ]
         )
 
-        for mention in OpenCodeAgentMention.reconciled(agentMentions, in: currentText) {
+        for mention in reconciledMentions {
             guard let range = currentText.rangeFromUTF16Offsets(start: mention.start, end: mention.end) else { continue }
             let nsRange = NSRange(range, in: currentText)
             attributed.addAttributes(
                 [
                     .foregroundColor: UIColor.systemIndigo,
                     .backgroundColor: UIColor.systemIndigo.withAlphaComponent(0.14),
-                    .font: UIFont.preferredFont(forTextStyle: .body).bold(),
+                    .font: font.bold(),
                 ],
                 range: nsRange
             )
         }
 
-        if attributedText.string != currentText || !attributedText.isEqual(to: attributed) {
+        highlightedText = currentText
+        highlightedMentions = reconciledMentions
+        highlightedFont = font
+
+        let didChange = attributedText.string != currentText || !attributedText.isEqual(to: attributed)
+        if didChange {
             attributedText = attributed
+            selectedRange = previousSelectedRange
+            invalidateFittingCache()
         }
-        self.selectedRange = previousSelectedRange
         typingAttributes = [
             .font: font,
             .foregroundColor: UIColor.label,
         ]
+        return didChange
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {

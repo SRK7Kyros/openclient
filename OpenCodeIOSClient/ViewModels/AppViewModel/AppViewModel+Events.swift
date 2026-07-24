@@ -616,10 +616,25 @@ extension AppViewModel {
                 chatStore.replaceActiveMessagesWithCanonical(projectedMessages)
             }
         }
+        let selectedSessionID = state.selectedSession?.id
+        let visiblePermissions = selectedSessionID.map {
+            SessionInteractionStore.permissions(
+                forSessionTreeRootID: $0,
+                sessions: state.sessions,
+                permissionsBySessionID: state.syncState.permissionsBySessionID
+            )
+        } ?? []
+        let visibleQuestions = selectedSessionID.map {
+            SessionInteractionStore.questions(
+                forSessionTreeRootID: $0,
+                sessions: state.sessions,
+                questionsBySessionID: state.syncState.questionsBySessionID
+            )
+        } ?? []
         if sessionInteractionStore.applyVisibleInteractions(
             todos: state.todos,
-            permissions: state.permissions,
-            questions: state.questions
+            permissions: visiblePermissions,
+            questions: visibleQuestions
         ) {
             objectWillChange.send()
         }

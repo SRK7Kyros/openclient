@@ -470,8 +470,11 @@ final class AppViewModelTests: XCTestCase {
             questions: [selectedQuestion]
         )
 
-        XCTAssertEqual(store.permissions(forSessionID: "ses_selected").map(\.id), ["perm_1"])
-        XCTAssertTrue(store.hasPermissionRequest(forSessionID: "ses_selected"))
+        XCTAssertEqual(
+            store.permissions(forSessionTreeRootID: "ses_selected", sessions: []).map(\.id),
+            ["perm_1"]
+        )
+        XCTAssertTrue(store.hasPermissionRequest(forSessionTreeRootID: "ses_selected", sessions: []))
 
         store.removePermission(id: "perm_1")
         store.removeQuestion(id: "q_1")
@@ -1210,6 +1213,74 @@ final class AppViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(viewModel.permissions(for: permission.sessionID).map(\.id), [permission.id])
+    }
+
+    func testChildSessionPermissionAndQuestionEventsBubbleToSelectedParent() {
+        let viewModel = AppViewModel()
+        let parent = makeSession(id: "ses_parent")
+        let child = OpenCodeSession(
+            id: "ses_child",
+            title: "Child",
+            workspaceID: nil,
+            directory: parent.directory,
+            projectID: parent.projectID,
+            parentID: parent.id
+        )
+        let permission = OpenCodePermission(
+            id: "perm_child",
+            sessionID: child.id,
+            permission: "bash",
+            patterns: ["xcodebuild test"],
+            always: nil,
+            metadata: nil,
+            tool: nil
+        )
+        let question = OpenCodeQuestionRequest(
+            id: "q_child",
+            sessionID: child.id,
+            questions: [
+                OpenCodeQuestion(
+                    question: "Continue?",
+                    header: "Confirm",
+                    options: [OpenCodeQuestionOption(label: "Yes", description: "Continue")]
+                ),
+            ],
+            tool: nil
+        )
+        viewModel.isConnected = true
+        viewModel.selectedDirectory = parent.directory
+        viewModel.directoryStore.sessions = [parent, child]
+        viewModel.selectedSession = parent
+
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: parent.directory ?? "global",
+            envelope: OpenCodeEventEnvelope(
+                type: "permission.asked",
+                properties: OpenCodeEventProperties(
+                    sessionID: child.id,
+                    id: permission.id,
+                    permission: permission.permission,
+                    patterns: permission.patterns
+                )
+            ),
+            typed: .permissionAsked(permission)
+        ))
+        viewModel.handleManagedEvent(OpenCodeManagedEvent(
+            directory: parent.directory ?? "global",
+            envelope: OpenCodeEventEnvelope(
+                type: "question.asked",
+                properties: OpenCodeEventProperties(
+                    sessionID: child.id,
+                    id: question.id,
+                    questions: question.questions
+                )
+            ),
+            typed: .questionAsked(question)
+        ))
+
+        let overlay = viewModel.chatFacade.composerOverlaySnapshot(forSessionID: parent.id)
+        XCTAssertEqual(overlay.permissions, [permission])
+        XCTAssertEqual(overlay.questions, [question])
     }
 
     func testSelectedTranscriptDeltaRemainsCoalescedWhenChatIsOffscreen() {
