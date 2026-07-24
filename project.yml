@@ -14,7 +14,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: 6.0
-    CURRENT_PROJECT_VERSION: 3
+    CURRENT_PROJECT_VERSION: 4
     MARKETING_VERSION: 1.0.12
   configs:
     Debug:
@@ -39,6 +39,7 @@ packages:
 targets:
   OpenCodeIOSClient:
     type: application
+    productName: OpenClient
     platform: iOS
     supportedDestinations: [iOS]
     deploymentTarget: "17.0"

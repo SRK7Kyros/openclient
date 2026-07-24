@@ -33,7 +33,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FE46DB5F396A39389531C069"
-             BuildableName = "OpenClient.app"
+            BuildableName = "OpenClient.app"
             BlueprintName = "OpenCodeIOSClient"
             ReferencedContainer = "container:OpenCodeIOSClient.xcodeproj">
          </BuildableReference>
@@ -80,7 +80,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FE46DB5F396A39389531C069"
-             BuildableName = "OpenClient.app"
+            BuildableName = "OpenClient.app"
             BlueprintName = "OpenCodeIOSClient"
             ReferencedContainer = "container:OpenCodeIOSClient.xcodeproj">
          </BuildableReference>
@@ -99,7 +99,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FE46DB5F396A39389531C069"
-             BuildableName = "OpenClient.app"
+            BuildableName = "OpenClient.app"
             BlueprintName = "OpenCodeIOSClient"
             ReferencedContainer = "container:OpenCodeIOSClient.xcodeproj">
          </BuildableReference>
