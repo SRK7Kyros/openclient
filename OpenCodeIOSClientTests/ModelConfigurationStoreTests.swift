@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import OpenClient
 
@@ -88,6 +89,45 @@ final class ModelConfigurationStoreTests: XCTestCase {
         XCTAssertEqual(visibleModels.count, ModelConfigurationStore.visibleModelLimitPerProvider)
         XCTAssertEqual(visibleModels.first?.id, "model-000")
         XCTAssertEqual(visibleModels.last?.id, "model-079")
+    }
+
+    func testPluginStorePreservesResolvedConfigOrder() throws {
+        let config = try JSONDecoder().decode(
+            OpenCodeResolvedConfig.self,
+            from: Data(#"{"plugin":["zeta",["alpha",{"enabled":true}]]}"#.utf8)
+        )
+        let store = PluginStore()
+
+        store.beginLoading(scope: "server|/tmp/project")
+        store.apply(config, scope: "server|/tmp/project")
+        store.finishLoading(scope: "server|/tmp/project")
+
+        XCTAssertEqual(store.plugins.map(\.specifier), ["zeta", "alpha"])
+        XCTAssertTrue(store.isReady)
+        XCTAssertFalse(store.isLoading)
+        XCTAssertNil(store.errorMessage)
+    }
+
+    func testProviderScopeSkipsAlreadyLoadedCatalog() {
+        let store = ModelConfigurationStore(allProviders: [provider(id: "openai", name: "OpenAI")])
+
+        XCTAssertTrue(store.shouldLoadProviders(for: "server|/tmp/project"))
+
+        store.markProvidersLoaded(for: "server|/tmp/project")
+
+        XCTAssertFalse(store.shouldLoadProviders(for: "server|/tmp/project"))
+        XCTAssertTrue(store.shouldLoadProviders(for: "server|/tmp/other"))
+    }
+
+    func testSanitizingValidDefaultsDoesNotPublishAChange() {
+        let store = ModelConfigurationStore()
+        var publicationCount = 0
+        let observation = store.objectWillChange.sink { publicationCount += 1 }
+
+        store.sanitizeNewSessionDefaults()
+
+        XCTAssertEqual(publicationCount, 0)
+        withExtendedLifetime(observation) {}
     }
 
     private func provider(id: String, name: String, releaseDate: String? = nil, source: String? = nil) -> OpenCodeProvider {

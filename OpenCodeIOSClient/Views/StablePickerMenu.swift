@@ -53,6 +53,7 @@ struct StablePickerMenu<Label: View>: View {
                     accessibilityIdentifier: accessibilityIdentifier,
                     onSelect: onSelect
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         #else
         Menu {

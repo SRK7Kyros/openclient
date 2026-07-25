@@ -1508,6 +1508,39 @@ struct OpenCodeGlobalConfigPatch: Encodable, Sendable {
     }
 }
 
+struct OpenCodeResolvedConfig: Decodable, Hashable, Sendable {
+    let plugins: [OpenCodeConfiguredPlugin]
+
+    enum CodingKeys: String, CodingKey {
+        case plugins = "plugin"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        plugins = try container.decodeIfPresent([OpenCodeConfiguredPlugin].self, forKey: .plugins) ?? []
+    }
+}
+
+struct OpenCodeConfiguredPlugin: Decodable, Hashable, Identifiable, Sendable {
+    let specifier: String
+
+    var id: String { specifier }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let specifier = try? container.decode(String.self) {
+            self.specifier = specifier
+            return
+        }
+
+        var tuple = try decoder.unkeyedContainer()
+        specifier = try tuple.decode(String.self)
+        if !tuple.isAtEnd {
+            _ = try tuple.decode(OpenCodeJSONValue.self)
+        }
+    }
+}
+
 struct OpenCodeMCPStatus: Codable, Hashable, Sendable {
     let status: String
     let error: String?

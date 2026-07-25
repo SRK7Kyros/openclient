@@ -6,6 +6,8 @@ struct ConfigurationsSheet: View {
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
+        let connectedProviders = viewModel.sortedConnectedProviders
+
         NavigationStack(path: $navigationPath) {
             Form {
                 Section {
@@ -34,16 +36,20 @@ struct ConfigurationsSheet: View {
                 }
 
                 Section("Providers") {
-                    if viewModel.isLoadingProviders && viewModel.sortedConnectedProviders.isEmpty {
+                    if viewModel.isLoadingProviders && connectedProviders.isEmpty {
                         ProgressView("Loading providers")
-                    } else if viewModel.sortedConnectedProviders.isEmpty {
+                    } else if connectedProviders.isEmpty {
                         Text("No connected providers.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(viewModel.sortedConnectedProviders) { provider in
+                        ForEach(connectedProviders) { provider in
                             NavigationLink(value: ConfigurationRoute.providerVisibility(provider.id)) {
-                                ProviderConfigurationRow(viewModel: viewModel, provider: provider)
+                                ProviderConfigurationRow(
+                                    providerID: provider.id,
+                                    providerName: provider.name,
+                                    subtitle: "\(viewModel.providerSourceTitle(provider)) • \(provider.models.count) models"
+                                )
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
@@ -60,6 +66,13 @@ struct ConfigurationsSheet: View {
                         Label("Add Provider", systemImage: "plus.circle.fill")
                     }
                     .accessibilityIdentifier("configurations.addProvider")
+                }
+
+                Section("Server") {
+                    NavigationLink(value: ConfigurationRoute.plugins) {
+                        Label("Plugins", systemImage: "puzzlepiece.extension")
+                    }
+                    .accessibilityIdentifier("configurations.plugins")
                 }
 
                 Section("Fun & Games") {
@@ -96,10 +109,12 @@ struct ConfigurationsSheet: View {
                 }
             }
             .task {
-                await viewModel.loadProvidersForConfiguration()
+                await viewModel.loadProvidersForConfigurationIfNeeded()
             }
             .navigationDestination(for: ConfigurationRoute.self) { route in
                 switch route {
+                case .plugins:
+                    PluginsConfigurationView(viewModel: viewModel, store: viewModel.pluginStore)
                 case .addProvider:
                     AddProviderView(viewModel: viewModel)
                 case .customProvider:
@@ -142,6 +157,7 @@ struct ConfigurationsSheet: View {
 }
 
 private enum ConfigurationRoute: Hashable {
+    case plugins
     case addProvider
     case customProvider
     case providerConnect(String)
@@ -149,22 +165,79 @@ private enum ConfigurationRoute: Hashable {
     case providerVisibility(String)
 }
 
-private struct ProviderConfigurationRow: View {
-    enum SubtitleMode {
-        case source
-        case authMethods
-    }
+private struct PluginsConfigurationView: View {
+    let viewModel: ConfigurationsFacade
+    @ObservedObject var store: PluginStore
 
-    @ObservedObject var viewModel: ConfigurationsFacade
-    let provider: OpenCodeProvider
-    var subtitleMode: SubtitleMode = .source
+    var body: some View {
+        Group {
+            if store.isLoading && store.plugins.isEmpty {
+                ProgressView("Loading plugins")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.errorMessage != nil, store.plugins.isEmpty {
+                ContentUnavailableView {
+                    Label("Plugins Unavailable", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text("OpenClient couldn't load the configured plugins.")
+                } actions: {
+                    Button("Try Again") {
+                        Task { await viewModel.loadPluginsForConfiguration() }
+                    }
+                }
+            } else if store.plugins.isEmpty {
+                ContentUnavailableView(
+                    "No Plugins",
+                    systemImage: "puzzlepiece.extension",
+                    description: Text("Plugins configured in `opencode.json`")
+                )
+            } else {
+                List {
+                    Section("\(store.plugins.count) Plugins") {
+                        ForEach(store.plugins) { plugin in
+                            ConfiguredPluginRow(specifier: plugin.specifier)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Plugins")
+        .opencodeInlineNavigationTitle()
+        .task {
+            await viewModel.loadPluginsForConfiguration()
+        }
+    }
+}
+
+private struct ConfiguredPluginRow: View {
+    let specifier: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(.green)
+                .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+
+            Text(specifier)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(specifier), configured")
+    }
+}
+
+private struct ProviderConfigurationRow: View {
+    let providerID: String
+    let providerName: String
+    let subtitle: String
 
     var body: some View {
         HStack(spacing: 12) {
-            ProviderLogo(providerID: provider.id)
+            ProviderLogo(providerID: providerID)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(provider.name)
+                Text(providerName)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -172,24 +245,6 @@ private struct ProviderConfigurationRow: View {
         }
     }
 
-    private var subtitle: String {
-        switch subtitleMode {
-        case .source:
-            return "\(viewModel.providerSourceTitle(provider)) • \(viewModel.models(for: provider).count) models"
-        case .authMethods:
-            return "\(authMethodSummary) • \(viewModel.models(for: provider).count) models"
-        }
-    }
-
-    private var authMethodSummary: String {
-        let labels = viewModel.authMethods(for: provider).map { method in
-            if method.type == "api" { return "API Key" }
-            if method.type == "oauth" { return method.label.isEmpty ? "OAuth" : method.label }
-            return method.label.isEmpty ? method.type.capitalized : method.label
-        }
-        let unique = Array(NSOrderedSet(array: labels)) as? [String] ?? labels
-        return unique.joined(separator: ", ")
-    }
 }
 
 private struct ProviderLogo: View {
@@ -447,7 +502,7 @@ private struct AddProviderView: View {
             Section("Popular") {
                 ForEach(filtered(viewModel.popularAddableProviders)) { provider in
                     NavigationLink(value: ConfigurationRoute.providerConnect(provider.id)) {
-                        ProviderConfigurationRow(viewModel: viewModel, provider: provider, subtitleMode: .authMethods)
+                        ProviderConfigurationRow(providerID: provider.id, providerName: provider.name, subtitle: providerSubtitle(provider))
                     }
                 }
             }
@@ -457,7 +512,7 @@ private struct AddProviderView: View {
                 Section("Other") {
                     ForEach(other) { provider in
                         NavigationLink(value: ConfigurationRoute.providerConnect(provider.id)) {
-                            ProviderConfigurationRow(viewModel: viewModel, provider: provider, subtitleMode: .authMethods)
+                            ProviderConfigurationRow(providerID: provider.id, providerName: provider.name, subtitle: providerSubtitle(provider))
                         }
                     }
                 }
@@ -475,6 +530,16 @@ private struct AddProviderView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return providers }
         return providers.filter { $0.name.localizedCaseInsensitiveContains(trimmed) || $0.id.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    private func providerSubtitle(_ provider: OpenCodeProvider) -> String {
+        let labels = viewModel.authMethods(for: provider).map { method in
+            if method.type == "api" { return "API Key" }
+            if method.type == "oauth" { return method.label.isEmpty ? "OAuth" : method.label }
+            return method.label.isEmpty ? method.type.capitalized : method.label
+        }
+        let unique = Array(NSOrderedSet(array: labels)) as? [String] ?? labels
+        return "\(unique.joined(separator: ", ")) • \(provider.models.count) models"
     }
 }
 

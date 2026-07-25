@@ -28,6 +28,7 @@ final class ModelConfigurationStore: ObservableObject {
     @Published var newSessionDefaults: NewSessionDefaults
     private var latestModelReferencesCache: Set<OpenCodeModelReference>?
     private var visibleModelsCache: [String: [OpenCodeModel]] = [:]
+    private var loadedProviderScope: String?
 
     init(
         availableAgents: [OpenCodeAgent] = [],
@@ -77,6 +78,7 @@ final class ModelConfigurationStore: ObservableObject {
         selectedModelsBySessionID = [:]
         selectedVariantsBySessionID = [:]
         newSessionDefaults = NewSessionDefaults()
+        loadedProviderScope = nil
     }
 
     var selectableAgents: [OpenCodeAgent] {
@@ -142,6 +144,14 @@ final class ModelConfigurationStore: ObservableObject {
 
     func applyProviderAuthMethods(_ methods: [String: [OpenCodeProviderAuthMethod]]) {
         providerAuthMethodsByProviderID = methods
+    }
+
+    func shouldLoadProviders(for scope: String) -> Bool {
+        loadedProviderScope != scope || allProviders.isEmpty
+    }
+
+    func markProvidersLoaded(for scope: String) {
+        loadedProviderScope = scope
     }
 
     func clearComposerOptions() {
@@ -344,15 +354,19 @@ final class ModelConfigurationStore: ObservableObject {
     func selectVariant(_ variant: String?, forSessionID sessionID: String) { selectedVariantsBySessionID[sessionID] = variant }
 
     func sanitizeNewSessionDefaults() {
-        if let name = newSessionDefaults.agentName, !selectableAgents.contains(where: { $0.name == name }) { newSessionDefaults.agentName = nil }
+        var sanitized = newSessionDefaults
+        if let name = sanitized.agentName, !selectableAgents.contains(where: { $0.name == name }) { sanitized.agentName = nil }
         if let reference = newSessionDefaultModelReference() {
-            newSessionDefaults.providerID = reference.providerID
-            newSessionDefaults.modelID = reference.modelID
+            sanitized.providerID = reference.providerID
+            sanitized.modelID = reference.modelID
         } else {
-            newSessionDefaults.providerID = nil
-            newSessionDefaults.modelID = nil
+            sanitized.providerID = nil
+            sanitized.modelID = nil
         }
-        if let variant = newSessionDefaults.reasoningVariant, !configurationReasoningVariants.contains(variant) { newSessionDefaults.reasoningVariant = nil }
+        if let variant = sanitized.reasoningVariant, !configurationReasoningVariants.contains(variant) { sanitized.reasoningVariant = nil }
+        if sanitized != newSessionDefaults {
+            newSessionDefaults = sanitized
+        }
     }
 
     func sanitizeComposerSelections(validSessionIDs: Set<String>) {
@@ -470,6 +484,65 @@ final class ModelConfigurationStore: ObservableObject {
     private func persistModelVisibilityPreferences() {
         guard let data = try? JSONEncoder().encode(Array(modelVisibilityPreferences.values)) else { return }
         UserDefaults.standard.set(data, forKey: Self.visibilityDefaultsKey)
+    }
+}
+
+@MainActor
+final class PluginStore: ObservableObject {
+    @Published private(set) var plugins: [OpenCodeConfiguredPlugin]
+    @Published private(set) var isLoading: Bool
+    @Published private(set) var isReady: Bool
+    @Published private(set) var errorMessage: String?
+
+    private var activeScope: String?
+
+    init(
+        plugins: [OpenCodeConfiguredPlugin] = [],
+        isLoading: Bool = false,
+        isReady: Bool = false,
+        errorMessage: String? = nil
+    ) {
+        self.plugins = plugins
+        self.isLoading = isLoading
+        self.isReady = isReady
+        self.errorMessage = errorMessage
+    }
+
+    func beginLoading(scope: String) {
+        if activeScope != scope {
+            plugins = []
+            isReady = false
+        }
+        activeScope = scope
+        isLoading = true
+        errorMessage = nil
+    }
+
+    func apply(_ config: OpenCodeResolvedConfig, scope: String) {
+        guard activeScope == scope else { return }
+        plugins = config.plugins
+        isReady = true
+        errorMessage = nil
+    }
+
+    func apply(error: Error, scope: String) {
+        guard activeScope == scope else { return }
+        plugins = []
+        isReady = true
+        errorMessage = error.localizedDescription
+    }
+
+    func finishLoading(scope: String) {
+        guard activeScope == scope else { return }
+        isLoading = false
+    }
+
+    func reset() {
+        plugins = []
+        isLoading = false
+        isReady = false
+        errorMessage = nil
+        activeScope = nil
     }
 }
 

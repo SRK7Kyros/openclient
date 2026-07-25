@@ -301,13 +301,16 @@ extension AppViewModel {
     }
 
     func loadComposerOptions() async {
+        let directory = effectiveSelectedDirectory
+        let providerScope = providerConfigurationScope(directory: directory)
         do {
-            async let agents = client.listAgents(directory: effectiveSelectedDirectory)
-            async let providerState = client.providerState(directory: effectiveSelectedDirectory)
+            async let agents = client.listAgents(directory: directory)
+            async let providerState = client.providerState(directory: directory)
             let loadedProviderState = try await providerState
             objectWillChange.send()
             modelConfigurationStore.availableAgents = try await agents
             modelConfigurationStore.applyProviderState(loadedProviderState)
+            modelConfigurationStore.markProvidersLoaded(for: providerScope)
             loadNewSessionDefaults()
             loadFunAndGamesPreferences()
             loadProjectListPreferences()

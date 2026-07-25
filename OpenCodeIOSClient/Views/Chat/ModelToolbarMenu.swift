@@ -31,7 +31,7 @@ struct ModelToolbarMenu: View {
                         .font(.caption)
                 }
             }
-            .padding(.horizontal, 6)
+            .padding(.trailing, 12)
             .frame(minWidth: 72, alignment: .trailing)
             .opencodeToolbarGlassID("model-toolbar", in: glassNamespace)
         }

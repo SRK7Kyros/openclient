@@ -79,10 +79,21 @@ extension AppViewModel {
         modelConfigurationStore.setProviderVisibility(provider, isVisible: isVisible)
     }
 
-    func loadProvidersForConfiguration() async {
+    func providerConfigurationScope(directory: String?) -> String {
+        "\(config.recentServerID)|\(directory ?? "global")"
+    }
+
+    func loadProvidersForConfiguration(ifNeeded: Bool = false) async {
+        let directory = effectiveSelectedDirectory
+        let scope = providerConfigurationScope(directory: directory)
+        if ifNeeded, !modelConfigurationStore.shouldLoadProviders(for: scope) {
+            return
+        }
+
         if ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil, !modelConfigurationStore.allProviders.isEmpty {
             modelConfigurationStore.isLoadingProviders = false
             modelConfigurationStore.providerErrorMessage = nil
+            modelConfigurationStore.markProvidersLoaded(for: scope)
             return
         }
 
@@ -90,8 +101,8 @@ extension AppViewModel {
         modelConfigurationStore.isLoadingProviders = true
         modelConfigurationStore.providerErrorMessage = nil
         do {
-            async let providerState = client.providerState(directory: effectiveSelectedDirectory)
-            async let authMethods = client.providerAuthMethods(directory: effectiveSelectedDirectory)
+            async let providerState = client.providerState(directory: directory)
+            async let authMethods = client.providerAuthMethods(directory: directory)
             let loadedState = try await providerState
             let loadedAuthMethods = try await authMethods
             if try await repairAccidentallyDisabledAuthProviders(providerState: loadedState, authMethods: loadedAuthMethods) {
@@ -101,6 +112,7 @@ extension AppViewModel {
             objectWillChange.send()
             modelConfigurationStore.applyProviderState(loadedState)
             modelConfigurationStore.applyProviderAuthMethods(loadedAuthMethods)
+            modelConfigurationStore.markProvidersLoaded(for: scope)
             modelConfigurationStore.isLoadingProviders = false
             sanitizeComposerSelections()
             scheduleWidgetSnapshotPublication(includeModelOptions: true)

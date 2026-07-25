@@ -23,6 +23,8 @@ struct AgentToolbarMenu: View {
         ) {
             Text(title.capitalized)
                 .font(.caption)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 44, minHeight: 44)
                 .opencodeToolbarGlassID("agent-toolbar", in: glassNamespace)
         }
         .transaction { transaction in

@@ -332,6 +332,47 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testResolvedConfigLoadsDirectoryPluginsInServerOrder() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/config")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
+            expectation.fulfill()
+
+            let data = #"{"plugin":["opencode-example@1.2.3",["file:///tmp/project/.opencode/plugins/local.ts",{"option":true}]]}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let config = try await client.resolvedConfig(directory: "/tmp/project")
+
+        XCTAssertEqual(config.plugins.map(\.specifier), [
+            "opencode-example@1.2.3",
+            "file:///tmp/project/.opencode/plugins/local.ts",
+        ])
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testResolvedConfigDefaultsMissingPluginListToEmpty() throws {
+        let config = try JSONDecoder().decode(OpenCodeResolvedConfig.self, from: Data(#"{"model":"openai/gpt-5"}"#.utf8))
+
+        XCTAssertEqual(config.plugins, [])
+    }
+
     func testSetProviderAPIKeyUsesAuthEndpoint() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral

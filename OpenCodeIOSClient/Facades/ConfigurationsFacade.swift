@@ -35,6 +35,7 @@ final class ConfigurationsFacade: ObservableObject {
     var errorMessage: String? { viewModel.errorMessage }
     var funAndGamesPreferences: FunAndGamesPreferences { viewModel.funAndGamesPreferences }
     var showsRecentSessionsInProjectList: Bool { viewModel.showsRecentSessionsInProjectList }
+    var pluginStore: PluginStore { viewModel.pluginStore }
 
     var isShowingConfigurationsSheet: Bool {
         get { viewModel.isShowingConfigurationsSheet }
@@ -44,6 +45,20 @@ final class ConfigurationsFacade: ObservableObject {
     func present() { viewModel.presentConfigurationsSheet() }
     func dismiss() { viewModel.isShowingConfigurationsSheet = false }
     func loadProvidersForConfiguration() async { await viewModel.loadProvidersForConfiguration() }
+    func loadProvidersForConfigurationIfNeeded() async { await viewModel.loadProvidersForConfiguration(ifNeeded: true) }
+    func loadPluginsForConfiguration() async {
+        let directory = viewModel.effectiveSelectedDirectory
+        let scope = "\(viewModel.config.recentServerID)|\(directory ?? "global")"
+        viewModel.pluginStore.beginLoading(scope: scope)
+        defer { viewModel.pluginStore.finishLoading(scope: scope) }
+
+        do {
+            let config = try await viewModel.client.resolvedConfig(directory: directory)
+            viewModel.pluginStore.apply(config, scope: scope)
+        } catch {
+            viewModel.pluginStore.apply(error: error, scope: scope)
+        }
+    }
     func disconnectProvider(_ provider: OpenCodeProvider) async { _ = await viewModel.disconnectProvider(provider) }
     func canDisconnectProvider(_ provider: OpenCodeProvider) -> Bool { viewModel.canDisconnectProvider(provider) }
     func providerSourceTitle(_ provider: OpenCodeProvider) -> String { viewModel.providerSourceTitle(provider) }

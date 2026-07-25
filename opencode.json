@@ -5,6 +5,9 @@
     "OPENCODE_WEB_UI_PARITY.md",
     "TEMP_MARKETING_DEMO_INSTRUCTIONS.md"
   ],
+  "plugin": [
+    "./OpenClientPlugin/src/index.ts"
+  ],
   "permission": {
     "external_directory": {
       "~/opencode/**": "allow"

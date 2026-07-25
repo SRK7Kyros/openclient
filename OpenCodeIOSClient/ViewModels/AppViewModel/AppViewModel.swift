@@ -43,6 +43,7 @@ final class AppViewModel: ObservableObject {
     let projectCoordinator = ProjectCoordinator()
     lazy var projectFacade = ProjectFacade(viewModel: self)
     lazy var newProjectChatFacade = NewProjectChatFacade(viewModel: self)
+    let pluginStore = PluginStore()
     lazy var configurationsFacade = ConfigurationsFacade(viewModel: self)
     lazy var funAndGamesFacade = FunAndGamesFacade(viewModel: self)
     lazy var appShellFacade = AppShellFacade(viewModel: self)

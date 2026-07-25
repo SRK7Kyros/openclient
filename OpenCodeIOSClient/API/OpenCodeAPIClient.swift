@@ -265,6 +265,15 @@ struct OpenCodeAPIClient: Sendable {
         try await send(path: "/global/config", method: "GET")
     }
 
+    func resolvedConfig(directory: String? = nil, workspaceID: String? = nil) async throws -> OpenCodeResolvedConfig {
+        try await send(
+            path: "/config",
+            method: "GET",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
     func disposeGlobal() async throws {
         try await sendNoContent(path: "/global/dispose", method: "POST")
     }
