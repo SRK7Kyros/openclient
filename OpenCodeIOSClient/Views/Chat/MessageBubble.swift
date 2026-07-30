@@ -41,6 +41,19 @@ enum MessageBubbleUserPartPolicy {
     }
 }
 
+enum MessageBubbleDisplayIdentity {
+    static func partID(index: Int, part: OpenCodePart) -> String {
+        if let id = part.id?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
+            return "part-\(id)"
+        }
+        return "part-\(index)-\(part.type)"
+    }
+
+    static func contextID(messageID: String, firstIndex: Int, firstPart: OpenCodePart) -> String {
+        "context-\(messageID)-\(partID(index: firstIndex, part: firstPart))"
+    }
+}
+
 struct MessageBubble: View {
     let message: OpenCodeMessageEnvelope
     let detailedMessage: OpenCodeMessageEnvelope?
@@ -51,6 +64,7 @@ struct MessageBubble: View {
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
     let expandedReasoningPartIDs: Set<String>
+    let expandedContextGroupIDs: Set<String>
     let showsAllActivity: Bool
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
@@ -59,9 +73,14 @@ struct MessageBubble: View {
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
     let onToggleReasoningPart: (String) -> Void
+    let onToggleContextGroup: (String) -> Void
     let onShowEarlierActivity: () -> Void
+    let onOpenVisualHTML: (OpenClientVisualHTMLPayload) -> Void
+    let imageContent: OpenClientImageContentCoordinator?
+    let imageLoadingStore: OpenClientImageLoadingStore
+    let videoStreams: OpenClientVideoStreamCoordinator?
+    let videoPlaybackStore: OpenClientVideoPlaybackStore
 
-    @State private var expandedContextGroupIDs: Set<String> = []
     @State private var entryAnimationStartDate: Date?
     @State private var hasRunEntryAnimation = false
     @State private var entryAnimationStartTask: Task<Void, Never>?
@@ -101,12 +120,15 @@ struct MessageBubble: View {
 
     private var displayEntries: [DisplayEntry] {
         let entries = fullDisplayEntries
+        let retainedHTMLPartIDs = retainedVisualHTMLPartIDs
         guard !isUser, !showsAllActivity, !isStreamingMessage else {
             return entries
         }
 
         let projection = MessageBubbleActivityBudget.project(
-            protectedEntries: entries.map(isProtectedFromActivityBudget),
+            protectedEntries: entries.map {
+                isProtectedFromActivityBudget($0, retainedVisualHTMLPartIDs: retainedHTMLPartIDs)
+            },
             limit: 12
         )
         guard projection.hiddenCount > 0 else { return entries }
@@ -150,6 +172,7 @@ struct MessageBubble: View {
             }
 
             messageContent
+                .frame(maxWidth: isUser ? nil : .infinity, alignment: isUser ? .trailing : .leading)
 
             if !isUser {
                 Spacer(minLength: 0)
@@ -182,14 +205,27 @@ struct MessageBubble: View {
     }
 
     private var messageContent: some View {
-        VStack(alignment: isUser ? .trailing : .leading, spacing: MessageBubbleSpacing.part) {
+        let retainedHTMLPartIDs = retainedVisualHTMLPartIDs
+        return VStack(alignment: isUser ? .trailing : .leading, spacing: MessageBubbleSpacing.part) {
             ForEach(displayEntries, id: \.id) { entry in
                 switch entry {
                 case let .part(indexed):
-                    revealWrappedPartView(indexed.part, index: indexed.index)
+                    revealWrappedPartView(
+                        indexed.part,
+                        index: indexed.index,
+                        retainedVisualHTMLPartIDs: retainedHTMLPartIDs
+                    )
+                        .modifier(ToolCallEntryModifier(
+                            isEnabled: shouldAnimateToolEntry(indexed.part),
+                            entryID: "\(effectiveMessage.id):\(entry.id)"
+                        ))
                         .transition(.identity)
                 case let .context(group):
                     revealWrappedContextGroupView(group)
+                        .modifier(ToolCallEntryModifier(
+                            isEnabled: isStreamingMessage && !isUser,
+                            entryID: "\(effectiveMessage.id):\(entry.id)"
+                        ))
                         .transition(.identity)
                 case let .earlierActivity(hiddenCount):
                     Button(action: onShowEarlierActivity) {
@@ -208,21 +244,7 @@ struct MessageBubble: View {
                     .transition(.identity)
             }
         }
-        .overlay(alignment: .bottom) {
-            if showsStreamingTurnGradient {
-                StreamingTurnBottomGradient(tint: streamingActivityTint)
-                    .allowsHitTesting(false)
-            }
-        }
         .contextMenu { messageContextMenu }
-    }
-
-    private var showsStreamingTurnGradient: Bool {
-        isStreamingMessage && !isUser
-    }
-
-    private var streamingActivityTint: Color {
-        OpenCodeActivityTint.color(forAgent: effectiveMessage.info.agent)
     }
 
     @ViewBuilder
@@ -348,8 +370,17 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func revealWrappedPartView(_ part: OpenCodePart, index: Int) -> some View {
-        partView(part, index: index, isActiveRevealPart: isActiveRevealPart(at: index, part: part))
+    private func revealWrappedPartView(
+        _ part: OpenCodePart,
+        index: Int,
+        retainedVisualHTMLPartIDs: Set<String>
+    ) -> some View {
+        partView(
+            part,
+            index: index,
+            isActiveRevealPart: isActiveRevealPart(at: index, part: part),
+            retainedVisualHTMLPartIDs: retainedVisualHTMLPartIDs
+        )
     }
 
     @ViewBuilder
@@ -358,16 +389,54 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func partView(_ part: OpenCodePart, index: Int, isActiveRevealPart: Bool) -> some View {
+    private func partView(
+        _ part: OpenCodePart,
+        index: Int,
+        isActiveRevealPart: Bool,
+        retainedVisualHTMLPartIDs: Set<String>
+    ) -> some View {
         if hidesReasoningBlocks, textStyle(for: part) == .reasoning {
             EmptyView()
         } else if let attachment = attachment(for: part) {
             AttachmentBubblePart(attachment: attachment, isUser: isUser)
+        } else if let imageActivity = OpenClientVisualImageActivity(
+            part: part,
+            sessionID: currentSessionID,
+            messageID: effectiveMessage.id
+        ) {
+            OpenClientVisualImageView(
+                activity: imageActivity,
+                loading: imageLoadingStore.controller(for: imageActivity),
+                coordinator: imageContent
+            )
+        } else if let videoActivity = OpenClientVisualVideoActivity(
+            part: part,
+            sessionID: currentSessionID,
+            messageID: effectiveMessage.id
+        ) {
+            OpenClientVisualVideoView(
+                activity: videoActivity,
+                playback: videoPlaybackStore.controller(for: videoActivity),
+                coordinator: videoStreams
+            )
+        } else if let mapActivity = OpenClientVisualMapActivity(part: part) {
+            OpenClientVisualMapView(activity: mapActivity)
+        } else if let chartActivity = OpenClientVisualChartActivity(part: part) {
+            OpenClientVisualChartView(activity: chartActivity)
+        } else if shouldRenderVisualHTML(
+            part: part,
+            index: index,
+            retainedVisualHTMLPartIDs: retainedVisualHTMLPartIDs
+        ), let htmlActivity = OpenClientVisualHTMLActivity(part: part) {
+            OpenClientVisualHTMLView(activity: htmlActivity, onOpen: onOpenVisualHTML)
         } else if let activity = activityStyle(for: part) {
             let content = Button {
                 handleActivityTap(for: part)
             } label: {
-                ActivityRow(style: activity)
+                ActivityRow(
+                    style: activity,
+                    reservesSubtitleSpace: toolName(for: part) == "todowrite"
+                )
             }
             .buttonStyle(.plain)
 
@@ -378,6 +447,7 @@ struct MessageBubble: View {
             }
         } else if let text = renderableText(for: part), shouldRenderText(for: part) {
             if textStyle(for: part) == .reasoning {
+                let entryID = reasoningPartID(part: part, index: index)
                 let content = ReasoningBlock(
                     text: text,
                     isExpanded: isReasoningExpanded(part: part, index: index),
@@ -385,6 +455,10 @@ struct MessageBubble: View {
                     isActiveRevealPart: isActiveRevealPart,
                     onToggle: { toggleReasoning(part: part, index: index) }
                 )
+                .modifier(ReasoningBlockEntryModifier(
+                    isEnabled: isStreamingMessage && !isUser,
+                    entryID: "reasoning:\(entryID)"
+                ))
 
                 if isUser {
                     bubbleWrapped(content)
@@ -392,12 +466,14 @@ struct MessageBubble: View {
                     content
                 }
             } else {
+                let isStreamingText = isStreamingTextPart(part, index: index)
                 let content = MarkdownMessageText(
                     text: text,
                     isUser: isUser,
                     style: textStyle(for: part),
-                    isStreaming: isStreamingTextPart(part, index: index),
-                    animatesStreamingText: animatesStreamingText
+                    isStreaming: isStreamingText,
+                    animatesStreamingText: animatesStreamingText,
+                    streamingAnimationID: "\(effectiveMessage.id):\(part.id ?? "part-\(index)")"
                 )
 
                 if isUser {
@@ -418,6 +494,16 @@ struct MessageBubble: View {
     private func shouldShowUnknownStreamingPartPlaceholder(_ part: OpenCodePart) -> Bool {
         guard isStreamingMessage, !isUser else { return false }
         return !knownSilentStreamingPartTypes.contains(part.type)
+    }
+
+    private func shouldAnimateToolEntry(_ part: OpenCodePart) -> Bool {
+        guard isStreamingMessage, !isUser else { return false }
+        return activityStyle(for: part) != nil
+            || OpenClientVisualMapActivity(part: part) != nil
+            || OpenClientVisualChartActivity(part: part) != nil
+            || OpenClientVisualHTMLActivity(part: part) != nil
+            || OpenClientVisualImageActivity(part: part) != nil
+            || OpenClientVisualVideoActivity(part: part) != nil
     }
 
     private var unknownStreamingPartStyle: ActivityStyle {
@@ -442,6 +528,7 @@ struct MessageBubble: View {
         }
 
         return index == latestRenderableStandardTextPartIndex
+            && index == latestVisiblePartIndex
     }
 
     private func isActiveRevealPart(at index: Int, part: OpenCodePart) -> Bool {
@@ -455,6 +542,16 @@ struct MessageBubble: View {
         }
     }
 
+    private var latestVisiblePartIndex: Int? {
+        effectiveMessage.parts.indices.last { index in
+            let part = effectiveMessage.parts[index]
+            if hidesReasoningBlocks, textStyle(for: part) == .reasoning {
+                return false
+            }
+            return shouldIncludePartInDisplayPlan(part)
+        }
+    }
+
     private func contextGroupView(_ group: ContextGroup, isActiveRevealPart: Bool) -> some View {
         let isExpanded = expandedContextGroupIDs.contains(group.id)
         let summary = contextSummary(for: group.parts)
@@ -465,7 +562,7 @@ struct MessageBubble: View {
         return VStack(alignment: .leading, spacing: MessageBubbleSpacing.part) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
-                    toggleContextGroup(group.id)
+                    onToggleContextGroup(group.id)
                 }
             } label: {
                 ContextToolGroupCard(
@@ -616,23 +713,30 @@ struct MessageBubble: View {
         onToggleReasoningPart(reasoningPartID(part: part, index: index))
     }
 
-    private func toggleContextGroup(_ id: String) {
-        if expandedContextGroupIDs.contains(id) {
-            expandedContextGroupIDs.remove(id)
-        } else {
-            expandedContextGroupIDs.insert(id)
-        }
-    }
-
     private func isReasoningRunning(_ part: OpenCodePart) -> Bool {
         isRunning(part) || isStreamingMessage
     }
 
-    private func isProtectedFromActivityBudget(_ entry: DisplayEntry) -> Bool {
+    private func isProtectedFromActivityBudget(
+        _ entry: DisplayEntry,
+        retainedVisualHTMLPartIDs: Set<String>
+    ) -> Bool {
         switch entry {
         case let .part(indexed):
             let part = indexed.part
             if attachment(for: part) != nil { return true }
+            if OpenClientVisualImageActivity(part: part) != nil { return true }
+            if OpenClientVisualVideoActivity(part: part) != nil { return true }
+            if OpenClientVisualMapActivity(part: part) != nil { return true }
+            if OpenClientVisualChartActivity(part: part) != nil { return true }
+            if isVisualHTMLPart(part),
+               shouldRenderVisualHTML(
+                   part: part,
+                   index: indexed.index,
+                   retainedVisualHTMLPartIDs: retainedVisualHTMLPartIDs
+               ) {
+                return isRunning(part)
+            }
             if activityStyle(for: part) != nil { return isRunning(part) }
             guard renderableText(for: part) != nil else {
                 return shouldShowUnknownStreamingPartPlaceholder(part)
@@ -663,8 +767,12 @@ struct MessageBubble: View {
         func flushContextParts() {
             guard !contextIndices.isEmpty else { return }
             let firstIndex = contextIndices[0]
-            let firstID = displayEntryPartID(index: firstIndex, part: parts[firstIndex])
-            result.append(.context(id: "context-\(effectiveMessage.id)-\(firstID)", indices: contextIndices))
+            let id = MessageBubbleDisplayIdentity.contextID(
+                messageID: effectiveMessage.id,
+                firstIndex: firstIndex,
+                firstPart: parts[firstIndex]
+            )
+            result.append(.context(id: id, indices: contextIndices))
             contextIndices.removeAll(keepingCapacity: true)
         }
 
@@ -711,7 +819,30 @@ struct MessageBubble: View {
     }
 
     private func displayEntryPartID(index: Int, part: OpenCodePart) -> String {
-        "part-\(index)-\(part.id ?? part.type)"
+        MessageBubbleDisplayIdentity.partID(index: index, part: part)
+    }
+
+    private var retainedVisualHTMLPartIDs: Set<String> {
+        let visualIDs: [String] = effectiveMessage.parts.enumerated().compactMap { item -> String? in
+            let (index, part) = item
+            guard isVisualHTMLPart(part) else { return nil }
+            return displayEntryPartID(index: index, part: part)
+        }
+        return Set(visualIDs.suffix(2))
+    }
+
+    private func isVisualHTMLPart(_ part: OpenCodePart) -> Bool {
+        part.type == "tool"
+            && part.tool == "openclient_execute_tool"
+            && part.state?.input?.toolID == OpenClientVisualHTMLContract.toolID
+    }
+
+    private func shouldRenderVisualHTML(
+        part: OpenCodePart,
+        index: Int,
+        retainedVisualHTMLPartIDs: Set<String>
+    ) -> Bool {
+        retainedVisualHTMLPartIDs.contains(displayEntryPartID(index: index, part: part))
     }
 
     private func shouldGroupInContext(_ part: OpenCodePart) -> Bool {
@@ -1029,7 +1160,7 @@ private struct IndexedPart: Identifiable {
     let part: OpenCodePart
 
     var id: String {
-        "part-\(index)-\(part.id ?? part.type)"
+        MessageBubbleDisplayIdentity.partID(index: index, part: part)
     }
 }
 
@@ -1149,90 +1280,133 @@ private enum DisplayEntry: Identifiable {
     }
 }
 
-private struct StreamingTurnBottomGradient: View {
-    let tint: Color
+private struct ToolCallEntryModifier: ViewModifier {
+    let isEnabled: Bool
+    let entryID: String
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible: Bool
+
+    @MainActor
+    init(isEnabled: Bool, entryID: String) {
+        self.isEnabled = isEnabled
+        self.entryID = entryID
+        _isVisible = State(initialValue: !isEnabled || ChatEntryAnimationRegistry.shared.hasSeen(entryID))
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible || !isEnabled ? 1 : 0)
+            .scaleEffect(isVisible || !isEnabled ? 1 : 0.96, anchor: .topLeading)
+            .offset(y: isVisible || !isEnabled ? 0 : 10)
+            .onAppear {
+                guard isEnabled else {
+                    isVisible = true
+                    return
+                }
+
+                let shouldAnimate = ChatEntryAnimationRegistry.shared.markSeen(entryID)
+                guard shouldAnimate, !reduceMotion else {
+                    isVisible = true
+                    return
+                }
+
+                withAnimation(.snappy(duration: 0.38, extraBounce: 0.12)) {
+                    isVisible = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, reduceMotion in
+                guard reduceMotion else { return }
+                isVisible = true
+            }
+    }
+}
+
+@MainActor
+private final class ChatEntryAnimationRegistry {
+    static let shared = ChatEntryAnimationRegistry()
+
+    private var seenIDs: Set<String> = []
+    private var insertionOrder: [String] = []
+
+    func hasSeen(_ id: String) -> Bool {
+        seenIDs.contains(id)
+    }
+
+    func markSeen(_ id: String) -> Bool {
+        guard seenIDs.insert(id).inserted else { return false }
+        insertionOrder.append(id)
+        if insertionOrder.count > 800 {
+            let expired = Array(insertionOrder.prefix(200))
+            seenIDs.subtract(expired)
+            insertionOrder.removeFirst(expired.count)
+        }
+        return true
+    }
+}
+
+private struct ReasoningBlockEntryModifier: ViewModifier {
+    let isEnabled: Bool
+    let entryID: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible: Bool
+
+    @MainActor
+    init(isEnabled: Bool, entryID: String) {
+        self.isEnabled = isEnabled
+        self.entryID = entryID
+        _isVisible = State(initialValue: !isEnabled || ChatEntryAnimationRegistry.shared.hasSeen(entryID))
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible || !isEnabled ? 1 : 0)
+            .scaleEffect(isVisible || !isEnabled ? 1 : 0.975, anchor: .topLeading)
+            .offset(y: isVisible || !isEnabled ? 0 : 8)
+            .onAppear {
+                guard isEnabled else {
+                    isVisible = true
+                    return
+                }
+
+                let shouldAnimate = ChatEntryAnimationRegistry.shared.markSeen(entryID)
+                guard shouldAnimate, !reduceMotion else {
+                    isVisible = true
+                    return
+                }
+
+                withAnimation(.snappy(duration: 0.34, extraBounce: 0.08)) {
+                    isVisible = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, reduceMotion in
+                guard reduceMotion else { return }
+                isVisible = true
+            }
+    }
+}
+
+struct StreamingTurnBottomGradient: View {
     private let height: CGFloat = 52
-    private let bottomBleed: CGFloat = 10
     private let visualWidth: CGFloat = 4096
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            LinearGradient(
-                stops: [
-                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0), location: 0),
-                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.78), location: 0.48),
-                    .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.98), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            StreamingTurnGradientHighlight(tint: tint)
-        }
-        .frame(height: height)
-        .frame(width: visualWidth)
-        .offset(y: bottomBleed)
-    }
-}
-
-private struct StreamingTurnGradientHighlight: View {
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-                let width = max(geometry.size.width, 1)
-                let height = max(geometry.size.height, 1)
-                let duration = shimmerDuration(forWidth: width)
-                let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: duration) / duration
-                let bandWidth = min(max(width * 0.36, 86), 220)
-                let travel = width + bandWidth * 2
-                let centerX = -bandWidth + CGFloat(phase) * travel
-
-                LinearGradient(
-                    stops: [
-                        .init(color: tint.opacity(0), location: 0),
-                        .init(color: tint.opacity(0.10), location: 0.28),
-                        .init(color: tint.opacity(0.24), location: 0.50),
-                        .init(color: tint.opacity(0.10), location: 0.72),
-                        .init(color: tint.opacity(0), location: 1)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: bandWidth, height: height)
-                .position(x: centerX, y: height / 2)
-                .blendMode(.plusLighter)
-                .mask(StreamingTurnGradientOpacityMask())
-            }
-        }
-        .compositingGroup()
-    }
-
-    private func shimmerDuration(forWidth width: CGFloat) -> TimeInterval {
-        let paced = max(1.2, min(3.2, Double(max(width, 360) * 2.0 / 900.0)))
-        return paced
-    }
-}
-
-private struct StreamingTurnGradientOpacityMask: View {
-    var body: some View {
         LinearGradient(
             stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .black.opacity(0.78), location: 0.42),
-                .init(color: .black, location: 0.66),
-                .init(color: .black.opacity(0.72), location: 0.84),
-                .init(color: .clear, location: 1)
+                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0), location: 0),
+                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.78), location: 0.48),
+                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.98), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
+        .frame(height: height)
+        .frame(width: visualWidth)
     }
 }
 
-private enum OpenCodeActivityTint {
+enum OpenCodeActivityTint {
     private static let fallbackPalette: [Color] = [
         agentAsk,
         agentBuild,
@@ -1286,31 +1460,33 @@ private struct ContextToolGroupCard: View {
     let expanded: Bool
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.55))
-                .offset(x: 6, y: 8)
+        ActivityRow(
+            style: ActivityStyle(
+                title: style.title,
+                subtitle: style.subtitle,
+                icon: style.icon,
+                tint: style.tint,
+                isRunning: style.isRunning,
+                showsDisclosure: false,
+                shimmerTitle: style.shimmerTitle
+            ),
+            trailingAccessoryInset: 14
+        )
+        .overlay(alignment: .trailing) {
+            Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.trailing, 12)
+        }
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.55))
+                    .offset(x: 6, y: 8)
 
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.8))
-                .offset(x: 3, y: 4)
-
-            ActivityRow(
-                style: ActivityStyle(
-                    title: style.title,
-                    subtitle: style.subtitle,
-                    icon: style.icon,
-                    tint: style.tint,
-                    isRunning: style.isRunning,
-                    showsDisclosure: true,
-                    shimmerTitle: style.shimmerTitle
-                )
-            )
-            .overlay(alignment: .trailing) {
-                Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .padding(.trailing, 12)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.8))
+                    .offset(x: 3, y: 4)
             }
         }
         .padding(.trailing, 6)

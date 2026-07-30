@@ -319,6 +319,38 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.first?.parts.first?.text, "hello apple intelligence")
         XCTAssertEqual(viewModel.messages.count, 2)
         XCTAssertEqual(viewModel.messages.last?.info.role, "assistant")
+        XCTAssertEqual(
+            viewModel.directoryStore.syncState.messageEnvelopes(forSessionID: session.id).map(\.id),
+            viewModel.messages.map(\.id)
+        )
+    }
+
+    func testAppleIntelligenceAssistantUpdateStaysInDirectoryTranscript() {
+        let viewModel = AppViewModel()
+        let sessionID = "apple-session:test"
+        let user = makeMessage(id: "msg_user", text: "hello", sessionID: sessionID, role: "user")
+
+        viewModel.selectedSession = OpenCodeSession(
+            id: sessionID,
+            title: "Apple Intelligence",
+            workspaceID: nil,
+            directory: "/tmp/apple-workspace-test",
+            projectID: "apple-intelligence",
+            parentID: nil
+        )
+        viewModel.messages = [user]
+
+        viewModel.updateAppleIntelligenceAssistantMessage(
+            messageID: "msg_assistant",
+            partID: "part_assistant",
+            sessionID: sessionID,
+            text: "Local response"
+        )
+
+        let directoryMessages = viewModel.directoryStore.syncState.messageEnvelopes(forSessionID: sessionID)
+        XCTAssertEqual(directoryMessages.map(\.id), ["msg_user", "msg_assistant"])
+        XCTAssertEqual(directoryMessages.last?.info.agent, "Apple Intelligence")
+        XCTAssertEqual(directoryMessages.last?.parts.first?.text, "Local response")
     }
 
     func testMessageDraftPersistsAcrossViewModels() {

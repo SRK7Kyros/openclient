@@ -8,6 +8,107 @@ struct OpenCodeAPIClient: Sendable {
         try await send(path: "/global/health", method: "GET")
     }
 
+    func listPTYs(
+        directory: String,
+        workspaceID: String? = nil
+    ) async throws -> [OpenCodePTY] {
+        try await send(
+            path: "/pty",
+            method: "GET",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
+    func createPTY(
+        title: String? = nil,
+        directory: String,
+        workspaceID: String? = nil
+    ) async throws -> OpenCodePTY {
+        try await send(
+            path: "/pty",
+            method: "POST",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            body: OpenCodePTYCreateRequest(title: title),
+            directoryHeader: directory
+        )
+    }
+
+    func getPTY(
+        id: String,
+        directory: String,
+        workspaceID: String? = nil
+    ) async throws -> OpenCodePTY {
+        try await send(
+            path: "/pty/\(id)",
+            method: "GET",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
+    func updatePTY(
+        id: String,
+        title: String? = nil,
+        rows: Int? = nil,
+        columns: Int? = nil,
+        directory: String,
+        workspaceID: String? = nil
+    ) async throws -> OpenCodePTY {
+        try await send(
+            path: "/pty/\(id)",
+            method: "PUT",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            body: OpenCodePTYUpdateRequest(title: title, rows: rows, columns: columns),
+            directoryHeader: directory
+        )
+    }
+
+    func deletePTY(
+        id: String,
+        directory: String,
+        workspaceID: String? = nil
+    ) async throws {
+        try await sendNoContent(
+            path: "/pty/\(id)",
+            method: "DELETE",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
+    func ptyConnectRequest(
+        id: String,
+        directory: String,
+        workspaceID: String? = nil,
+        cursor: Int
+    ) throws -> URLRequest {
+        var queryItems = scopedQueryItems(directory: directory, workspaceID: workspaceID)
+        queryItems.append(URLQueryItem(name: "cursor", value: String(cursor)))
+        guard let url = resolvedURL(path: "/pty/\(id)/connect", queryItems: queryItems),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw OpenCodeAPIError.invalidURL
+        }
+        switch components.scheme?.lowercased() {
+        case "https":
+            components.scheme = "wss"
+        case "http":
+            components.scheme = "ws"
+        default:
+            throw OpenCodeAPIError.invalidURL
+        }
+        guard let webSocketURL = components.url else {
+            throw OpenCodeAPIError.invalidURL
+        }
+
+        var request = URLRequest(url: webSocketURL)
+        request.setValue(basicAuthHeader(), forHTTPHeaderField: "Authorization")
+        if let directoryHeader = explicitDirectoryHeader(directory) {
+            request.setValue(directoryHeader, forHTTPHeaderField: "x-opencode-directory")
+        }
+        return request
+    }
+
     func listSessions(directory: String? = nil, roots: Bool? = nil, limit: Int? = nil) async throws -> [OpenCodeSession] {
         var queryItems: [URLQueryItem] = []
         if let directory, !directory.isEmpty {

@@ -4,6 +4,8 @@ import Foundation
 @MainActor
 final class ChatStore: ObservableObject {
     private static let pendingTranscriptDeltaChunkLimit = 4_096
+    let imageLoadingStore = OpenClientImageLoadingStore()
+    let videoPlaybackStore = OpenClientVideoPlaybackStore()
 
     struct TranscriptDeltaKey: Hashable {
         let sessionID: String

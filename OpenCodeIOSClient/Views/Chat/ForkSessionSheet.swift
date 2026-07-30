@@ -42,8 +42,8 @@ struct ForkSessionSheet: View {
             }
         }
         .navigationTitle("Fork Session")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
+        .opencodeInlineNavigationTitle()
+        .searchable(text: $searchText, prompt: "Search messages")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {

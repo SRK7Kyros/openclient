@@ -14,7 +14,7 @@ platform :ios do
 
   def screenshot_devices
     [
-      "iPhone 11 Pro Max",
+      "iPhone 13 Pro Max",
       "iPad Pro 13-inch (M5)"
     ]
   end
@@ -24,7 +24,7 @@ platform :ios do
     return if devices.include?("#{device} (")
 
     device_types = {
-      "iPhone 11 Pro Max" => "com.apple.CoreSimulator.SimDeviceType.iPhone-11-Pro-Max",
+      "iPhone 13 Pro Max" => "com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max",
       "iPad Pro 13-inch (M5)" => "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"
     }
     device_type = device_types[device]

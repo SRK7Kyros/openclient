@@ -11,11 +11,15 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     }
 
     private var username: String {
-        environment["SNAPSHOT_OPENCODE_USERNAME"] ?? environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"
+        nonEmptyEnvironmentValue("SNAPSHOT_OPENCODE_USERNAME")
+            ?? nonEmptyEnvironmentValue("OPENCODE_UI_TEST_USERNAME")
+            ?? "opencode"
     }
 
     private var password: String {
-        environment["SNAPSHOT_OPENCODE_PASSWORD"] ?? environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""
+        nonEmptyEnvironmentValue("SNAPSHOT_OPENCODE_PASSWORD")
+            ?? nonEmptyEnvironmentValue("OPENCODE_UI_TEST_PASSWORD")
+            ?? ""
     }
 
     private var projectDirectory: String {
@@ -26,9 +30,14 @@ final class OpenCodeIOSClientUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    private func nonEmptyEnvironmentValue(_ key: String) -> String? {
+        guard let value = environment[key], !value.isEmpty else { return nil }
+        return value
+    }
+
     @MainActor
     func testAppStoreScreenshots() {
-        let scenes: [(scene: String, screenshotName: String)] = [
+        let allScenes: [(scene: String, screenshotName: String)] = [
             ("connection", "01-connection"),
             ("recent-servers", "02-recent-servers"),
             ("projects", "03-projects"),
@@ -49,7 +58,23 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("live-activity", "18-live-activity"),
             ("session-actions", "19-session-actions"),
             ("session-pinned", "20-session-pinned"),
+            ("browser", "21-browser"),
+            ("visual-tools", "22-visual-tools"),
+            ("terminal-showcase", "23-terminal"),
         ]
+
+        let requestedScenes = Set(
+            (environment["OPENCLIENT_SCREENSHOT_SCENES"] ?? "")
+                .split(separator: ",")
+                .map(String.init)
+        )
+        let scenes = requestedScenes.isEmpty
+            ? allScenes
+            : allScenes.filter { requestedScenes.contains($0.scene) }
+
+        XCTAssertEqual(Set(scenes.map(\.scene)).count, scenes.count, "Screenshot scene names must be unique")
+        XCTAssertEqual(Set(scenes.map(\.screenshotName)).count, scenes.count, "Screenshot output names must be unique")
+        XCTAssertEqual(scenes.count, requestedScenes.isEmpty ? allScenes.count : requestedScenes.count, "Every requested screenshot scene must exist")
 
         let simulatorDeviceName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
         #if canImport(UIKit)
@@ -65,6 +90,9 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             let app = XCUIApplication()
             setupSnapshot(app)
             app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = scene
+            if scene == "terminal-showcase" {
+                app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+            }
             app.launch()
             XCUIDevice.shared.orientation = capturesLandscape ? .landscapeLeft : .portrait
             if capturesLandscape {
@@ -114,6 +142,32 @@ final class OpenCodeIOSClientUITests: XCTestCase {
                 XCTAssertTrue(app.navigationBars["Add Provider"].waitForExistence(timeout: 10), "Expected Add Provider screen to load")
             }
 
+            if scene == "browser" {
+                XCTAssertTrue(
+                    app.staticTexts["screenshot.browser.ready"].waitForExistence(timeout: 15),
+                    "Expected offline browser fixture to finish loading"
+                )
+                XCTAssertTrue(app.textFields["browser.address"].waitForExistence(timeout: 10), "Expected browser address bar")
+                XCTAssertTrue(app.descendants(matching: .any)["browser.instruction"].waitForExistence(timeout: 10), "Expected browser instruction banner")
+            }
+
+            if scene == "visual-tools" {
+                XCTAssertTrue(
+                    app.staticTexts["screenshot.visual-tools.ready"].waitForExistence(timeout: 15),
+                    "Expected visual HTML fixture to finish loading"
+                )
+                XCTAssertTrue(app.descendants(matching: .any)["chat.tool.visual-chart"].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.descendants(matching: .any)["chat.tool.visual-html"].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.descendants(matching: .any)["chat.tool.visual-video"].waitForExistence(timeout: 10))
+            }
+
+            if scene == "terminal-showcase" {
+                let terminal = app.descendants(matching: .any)["terminal.viewport"]
+                XCTAssertTrue(terminal.waitForExistence(timeout: 10), "Expected terminal viewport")
+                XCTAssertTrue(waitForTerminalPosition(in: 0.95 ... 1.0, element: terminal), "Expected release transcript at the latest output")
+                sleep(1)
+            }
+
             snapshot(screenshotName)
             app.terminate()
         }
@@ -137,6 +191,257 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
         XCTAssertTrue(modelTrigger.exists)
         XCTAssertEqual(modelTrigger.value as? String, "Claude Sonnet 4.5")
+    }
+
+    @MainActor
+    func testTerminalScrollsAndDismissesKeyboard() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "terminal"
+        app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+        app.launchEnvironment["OPENCODE_UI_TEST_PASTE_TEXT"] = "fixture-paste"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.terminal"].waitForExistence(timeout: 10))
+        let terminalRow = app.buttons.matching(identifier: "terminal.row").firstMatch
+        XCTAssertTrue(terminalRow.waitForExistence(timeout: 10), "Expected seeded terminal session row")
+        terminalRow.tap()
+
+        let terminal = app.descendants(matching: .any)["terminal.viewport"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10), "Expected terminal viewport")
+        XCTAssertTrue(waitForTerminalPosition(in: 0.95 ... 1.0, element: terminal), "Expected fixture to begin at the bottom")
+
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 10), "Expected terminal keyboard to open")
+
+        let pasteButton = app.buttons["terminal.paste"]
+        XCTAssertTrue(pasteButton.waitForExistence(timeout: 10), "Expected fixed terminal Paste action")
+        XCTAssertTrue(waitForEnabled(pasteButton), "Expected terminal Paste action to accept plain text")
+        let pasteCount = Int(pasteButton.value as? String ?? "") ?? 0
+        pasteButton.tap()
+        XCTAssertTrue(
+            waitForAccessibilityValue(of: pasteButton, above: pasteCount),
+            "Expected terminal Paste action to receive the clipboard text"
+        )
+        attachScreenshot(named: "terminal-01-keyboard-bottom")
+
+        let keyboardBottomPosition = terminalPosition(of: terminal)
+        dragTerminal(terminal, fromY: 0.32, toY: 0.58)
+        let didScrollUpWithKeyboard = waitForTerminalPosition(below: keyboardBottomPosition - 0.005, element: terminal)
+        let keyboardScrolledPosition = terminalPosition(of: terminal)
+        attachScreenshot(named: "terminal-02-keyboard-scrolled-up")
+        XCTAssertTrue(
+            didScrollUpWithKeyboard,
+            "Expected swipe down to reveal earlier output with keyboard visible; position stayed at \(keyboardScrolledPosition) from \(keyboardBottomPosition)"
+        )
+
+        dragTerminal(terminal, fromY: 0.58, toY: 0.32)
+        XCTAssertTrue(
+            waitForTerminalPosition(above: keyboardScrolledPosition + 0.005, element: terminal),
+            "Expected swipe up to move back toward recent terminal output with keyboard visible"
+        )
+        attachScreenshot(named: "terminal-03-keyboard-scrolled-down")
+
+        let dismissKeyboard = app.buttons["terminal.keyboard.dismiss"]
+        XCTAssertTrue(dismissKeyboard.waitForExistence(timeout: 10), "Expected fixed keyboard dismissal control")
+        let dismissalCount = Int(dismissKeyboard.value as? String ?? "") ?? 0
+        dismissKeyboard.tap()
+        let didInvokeDismissal = waitForAccessibilityValue(of: dismissKeyboard, above: dismissalCount)
+        attachScreenshot(named: "terminal-04-keyboard-dismiss-tapped")
+        XCTAssertTrue(didInvokeDismissal, "Expected keyboard dismissal button action to run")
+        XCTAssertTrue(waitForDisappearance(of: keyboard), "Expected keyboard dismissal control to close the keyboard")
+        attachScreenshot(named: "terminal-05-keyboard-dismissed")
+
+        let noKeyboardBottomPosition = terminalPosition(of: terminal)
+        dragTerminal(terminal, fromY: 0.32, toY: 0.58)
+        XCTAssertTrue(waitForDisappearance(of: keyboard), "Expected scrolling to keep the keyboard dismissed")
+        let didScrollUpWithoutKeyboard = waitForTerminalPosition(below: noKeyboardBottomPosition - 0.005, element: terminal)
+        let keyboardHiddenScrolledPosition = terminalPosition(of: terminal)
+        attachScreenshot(named: "terminal-06-no-keyboard-scrolled-up")
+        XCTAssertTrue(
+            didScrollUpWithoutKeyboard,
+            "Expected swipe down to reveal earlier output without keyboard; position stayed at \(keyboardHiddenScrolledPosition) from \(noKeyboardBottomPosition)"
+        )
+
+        dragTerminal(terminal, fromY: 0.58, toY: 0.32)
+        XCTAssertTrue(waitForDisappearance(of: keyboard), "Expected reverse scrolling to keep the keyboard dismissed")
+        XCTAssertTrue(
+            waitForTerminalPosition(above: keyboardHiddenScrolledPosition + 0.005, element: terminal),
+            "Expected swipe up to move toward recent output without the keyboard"
+        )
+        attachScreenshot(named: "terminal-07-no-keyboard-scrolled-down")
+
+        terminal.tap()
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 10), "Expected tapping the terminal to reopen the keyboard")
+        dismissKeyboard.tap()
+        XCTAssertTrue(waitForDisappearance(of: keyboard), "Expected dismissal control to remain functional after reopening")
+        attachScreenshot(named: "terminal-08-keyboard-redismissed")
+
+        let initialFontSize = terminalFontSize(of: terminal)
+        terminal.pinch(withScale: 0.7, velocity: -1)
+        XCTAssertTrue(
+            waitForTerminalFontSize(below: initialFontSize, element: terminal),
+            "Expected pinch gesture to decrease terminal font size"
+        )
+    }
+
+    @MainActor
+    func testTerminalCopiesSelectedText() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "terminal"
+        app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.terminal"].waitForExistence(timeout: 10))
+        let terminalRow = app.buttons.matching(identifier: "terminal.row").firstMatch
+        XCTAssertTrue(terminalRow.waitForExistence(timeout: 10), "Expected seeded terminal session row")
+        terminalRow.tap()
+
+        let terminal = app.descendants(matching: .any)["terminal.viewport"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10), "Expected terminal viewport")
+
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            .press(forDuration: 0.75)
+
+        let selectionText = app.textViews["terminal.selection.text"]
+        XCTAssertTrue(selectionText.waitForExistence(timeout: 10), "Expected terminal selection sheet")
+        let copyButton = app.buttons["terminal.selection.copy"]
+        XCTAssertTrue(copyButton.waitForExistence(timeout: 10), "Expected terminal Copy action")
+        copyButton.tap()
+        XCTAssertTrue(
+            waitForAccessibilityValue(of: copyButton, above: 0),
+            "Expected Copy to place the selected terminal text on the pasteboard"
+        )
+
+        let doneButton = app.buttons["terminal.selection.done"]
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 10), "Expected terminal selection Done action")
+        doneButton.tap()
+        XCTAssertTrue(waitForDisappearance(of: selectionText), "Expected Done to dismiss terminal selection")
+    }
+
+    @MainActor
+    func testTerminalAgainstLocalBackend() {
+        let app = XCUIApplication()
+        let terminalTitle = "UI Terminal \(UUID().uuidString.prefix(8))"
+        app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+        app.launchEnvironment["OPENCODE_UI_TEST_BASE_URL"] = baseURL.absoluteString
+        app.launchEnvironment["OPENCODE_UI_TEST_USERNAME"] = username
+        app.launchEnvironment["OPENCODE_UI_TEST_PASSWORD"] = password
+        app.launchEnvironment["OPENCODE_UI_TEST_DIRECTORY"] = projectDirectory
+        app.launchEnvironment["OPENCODE_UI_TEST_AUTO_CONNECT"] = "1"
+        app.launchEnvironment["OPENCODE_UI_TEST_TERMINAL_TITLE"] = terminalTitle
+        app.launch()
+
+        let projectCell = app.staticTexts[projectDirectory]
+        XCTAssertTrue(projectCell.waitForExistence(timeout: 30), "Expected local project after auto-connect")
+        projectCell.tap()
+
+        let terminalTab = app.buttons["Terminal"]
+        XCTAssertTrue(terminalTab.waitForExistence(timeout: 20), "Expected Terminal project tab")
+        terminalTab.tap()
+
+        let terminalRows = app.buttons.matching(identifier: "terminal.row")
+        let emptyCreateButton = app.buttons["terminal.create.empty"]
+        XCTAssertTrue(
+            terminalRows.firstMatch.waitForExistence(timeout: 10) || emptyCreateButton.exists,
+            "Expected terminal list hydration to finish"
+        )
+        let createButton = app.buttons["terminal.create"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 10), "Expected new terminal action")
+        createButton.tap()
+        let terminalRow = app.buttons[terminalTitle]
+        let terminalList = app.descendants(matching: .any)["terminal.list"]
+        for _ in 0 ..< 12 where !terminalRow.exists {
+            terminalList.swipeUp()
+        }
+        XCTAssertTrue(terminalRow.waitForExistence(timeout: 20), "Expected a new terminal session row")
+        terminalRow.tap()
+
+        let terminal = app.descendants(matching: .any)["terminal.viewport"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 20), "Expected live terminal viewport")
+        attachScreenshot(named: "terminal-live-01-prompt")
+        XCTAssertTrue(
+            waitForTerminalOutput(element: terminal),
+            "Expected live PTY output; terminal state: \(terminal.label)"
+        )
+
+        terminal.tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 10), "Expected terminal keyboard")
+
+#if canImport(UIKit)
+        UIPasteboard.general.string = "id"
+#endif
+        let pasteButton = app.buttons["terminal.paste"]
+        XCTAssertTrue(pasteButton.waitForExistence(timeout: 10), "Expected terminal Paste action")
+        pasteButton.tap()
+        XCTAssertTrue(
+            waitForTerminalText("% id", element: terminal, timeout: 10),
+            "Expected pasted command to reach the live terminal; terminal state: \(terminal.label)"
+        )
+        let returnKey = keyboard.buttons["return"]
+        XCTAssertTrue(returnKey.waitForExistence(timeout: 10), "Expected software keyboard Return key")
+        returnKey.tap()
+        XCTAssertTrue(
+            waitForTerminalText("uid=", element: terminal, timeout: 15),
+            "Expected pasted id command to execute; terminal state: \(terminal.label)"
+        )
+
+        XCTAssertTrue(
+            typeKeyboardKey("p", expecting: "% p", keyboard: keyboard, terminal: terminal),
+            "Expected first command character; terminal state: \(terminal.label)"
+        )
+        XCTAssertTrue(
+            typeKeyboardKey("w", expecting: "% pw", keyboard: keyboard, terminal: terminal),
+            "Expected second command character"
+        )
+        XCTAssertTrue(
+            typeKeyboardKey("d", expecting: "% pwd", keyboard: keyboard, terminal: terminal),
+            "Expected complete command to echo"
+        )
+        attachScreenshot(named: "terminal-live-02-keyboard-echo")
+
+        XCTAssertTrue(returnKey.waitForExistence(timeout: 10), "Expected software keyboard Return key")
+        returnKey.tap()
+        XCTAssertTrue(
+            waitForTerminalText(projectDirectory, element: terminal, timeout: 15),
+            "Expected Return to execute pwd; terminal state: \(terminal.label)"
+        )
+        attachScreenshot(named: "terminal-live-03-command-executed")
+
+        let navigationBar = app.navigationBars[terminalTitle]
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 10), "Expected terminal navigation bar")
+        let backButton = navigationBar.buttons
+            .matching(NSPredicate(format: "identifier != %@", "terminal.close"))
+            .firstMatch
+        XCTAssertTrue(backButton.waitForExistence(timeout: 10), "Expected terminal list back button")
+        backButton.tap()
+
+        let reopenedRow = app.buttons.matching(identifier: "terminal.row")
+            .matching(NSPredicate(format: "label == %@", terminalTitle))
+            .firstMatch
+        XCTAssertTrue(reopenedRow.waitForExistence(timeout: 10), "Expected terminal row after navigating back")
+        reopenedRow.tap()
+
+        let reopenedTerminal = app.descendants(matching: .any)["terminal.viewport"]
+        XCTAssertTrue(reopenedTerminal.waitForExistence(timeout: 10), "Expected reopened terminal viewport")
+        XCTAssertTrue(
+            waitForTerminalText(projectDirectory, element: reopenedTerminal, timeout: 15),
+            "Expected reopened renderer to reconstruct terminal output; terminal state: \(reopenedTerminal.label)"
+        )
+        attachScreenshot(named: "terminal-live-04-reopened")
+
+        reopenedTerminal.tap()
+        let reopenedKeyboard = app.keyboards.firstMatch
+        XCTAssertTrue(reopenedKeyboard.waitForExistence(timeout: 10), "Expected keyboard after reopening terminal")
+        XCTAssertTrue(
+            typeKeyboardKey("l", expecting: "% l", keyboard: reopenedKeyboard, terminal: reopenedTerminal),
+            "Expected live input after reopening; terminal state: \(reopenedTerminal.label)"
+        )
+        XCTAssertTrue(
+            typeKeyboardKey("s", expecting: "% ls", keyboard: reopenedKeyboard, terminal: reopenedTerminal),
+            "Expected complete live input after reopening"
+        )
+        attachScreenshot(named: "terminal-live-05-reopened-keyboard-echo")
     }
 
     @MainActor
@@ -200,6 +505,36 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
         try await sendPrompt("Reply with exactly: \(secondReply)", in: app)
         XCTAssertTrue(waitForAssistantReply(secondReply, in: app, timeout: 90))
+    }
+
+    @MainActor
+    func testInlineVideoPlaysAgainstLocalBackend() async throws {
+        guard let resourceID = nonEmptyEnvironmentValue("OPENCODE_UI_TEST_VIDEO_RESOURCE_ID") else {
+            throw XCTSkip("Set OPENCODE_UI_TEST_VIDEO_RESOURCE_ID to a persisted video resource")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+        app.launchEnvironment["OPENCODE_UI_TEST_BASE_URL"] = baseURL.absoluteString
+        app.launchEnvironment["OPENCODE_UI_TEST_USERNAME"] = username
+        app.launchEnvironment["OPENCODE_UI_TEST_PASSWORD"] = password
+        app.launchEnvironment["OPENCODE_UI_TEST_DIRECTORY"] = projectDirectory
+        app.launchEnvironment["OPENCODE_UI_TEST_VIDEO_RESOURCE_ID"] = resourceID
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["video.ui-test.ready"].waitForExistence(timeout: 30))
+
+        let videoTitle = app.staticTexts["UI Test Earth Video"]
+        XCTAssertTrue(videoTitle.waitForExistence(timeout: 10))
+        videoTitle.tap()
+
+        let playingVideo = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ AND value == %@", "chat.tool.visual-video", "playing"))
+            .firstMatch
+        XCTAssertTrue(
+            playingVideo.waitForExistence(timeout: 30),
+            "Expected AVPlayer to advance"
+        )
+        attachScreenshot(named: "inline-video-playing")
     }
 
     @MainActor
@@ -320,6 +655,175 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     }
 
     @MainActor
+    private func waitForTerminalPosition(in range: ClosedRange<Double>, element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        waitForTerminalPosition(element: element, timeout: timeout) { range.contains($0) }
+    }
+
+    @MainActor
+    private func waitForTerminalPosition(below value: Double, element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        waitForTerminalPosition(element: element, timeout: timeout) { $0 < value }
+    }
+
+    @MainActor
+    private func waitForTerminalPosition(above value: Double, element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        waitForTerminalPosition(element: element, timeout: timeout) { $0 > value }
+    }
+
+    @MainActor
+    private func waitForTerminalPosition(
+        element: XCUIElement,
+        timeout: TimeInterval,
+        matches: (Double) -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if matches(terminalPosition(of: element)) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForTerminalText(_ text: String, element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.label.contains(text) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForTerminalOutput(element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.label.range(of: #"rx=([1-9][0-9]*)"#, options: .regularExpression) != nil {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func typeKeyboardKey(
+        _ key: String,
+        expecting text: String,
+        keyboard: XCUIElement,
+        terminal: XCUIElement
+    ) -> Bool {
+        for _ in 0 ..< 3 {
+            keyboard.keys[key].tap()
+            if waitForTerminalText(text, element: terminal, timeout: 3) {
+                return true
+            }
+        }
+        return false
+    }
+
+    @MainActor
+    private func dragTerminal(_ terminal: XCUIElement, fromY: CGFloat, toY: CGFloat) {
+        let start = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: fromY))
+        let end = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: toY))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    @MainActor
+    private func terminalPosition(of element: XCUIElement) -> Double {
+        guard let value = element.value as? String else { return -1 }
+        return Double(value) ?? -1
+    }
+
+    @MainActor
+    private func terminalFontSize(of element: XCUIElement) -> Double {
+        guard let match = element.label.range(of: #"font=([0-9]+(?:\.[0-9]+)?)"#, options: .regularExpression) else {
+            return -1
+        }
+        return Double(element.label[match].dropFirst("font=".count)) ?? -1
+    }
+
+    @MainActor
+    private func waitForTerminalFontSize(
+        below value: Double,
+        element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if terminalFontSize(of: element) >= 0, terminalFontSize(of: element) < value {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if !element.exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.isEnabled {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForAccessibilityValue(of element: XCUIElement, above value: Int, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let current = Int(element.value as? String ?? "") ?? -1
+            if current > value {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForAccessibilityValue(
+        of element: XCUIElement,
+        equalTo expectedValue: String,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if (element.value as? String) == expectedValue {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func attachScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     private func connectAndOpenSession(named title: String, in app: XCUIApplication) async throws {
         let connectButton = app.buttons["connection.connect"]
         if connectButton.waitForExistence(timeout: 10) {
@@ -330,14 +834,37 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             reconnectButton.tap()
         }
 
-        let projectCell = app.staticTexts["opencode-ios-client"]
-        if projectCell.waitForExistence(timeout: 10) {
-            projectCell.tap()
+        let sessionCell = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", title))
+            .firstMatch
+        if sessionCell.waitForExistence(timeout: 5), sessionCell.isHittable {
+            sessionCell.tap()
+            return
+        }
+        if app.staticTexts["Loading chat..."].exists || app.textFields["chat.input"].exists {
+            return
         }
 
-        let sessionCell = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
-        XCTAssertTrue(sessionCell.waitForExistence(timeout: 20))
-        sessionCell.tap()
+        if !sessionCell.exists {
+            let projectCell = app.staticTexts["opencode-ios-client"]
+            if projectCell.waitForExistence(timeout: 10), projectCell.isHittable {
+                projectCell.tap()
+            }
+        }
+        if sessionCell.waitForExistence(timeout: 20), sessionCell.isHittable {
+            sessionCell.tap()
+            return
+        }
+        if !app.staticTexts["Loading chat..."].exists,
+           !app.textFields["chat.input"].exists {
+            attachScreenshot(named: "session-bootstrap-failure")
+            let attachment = XCTAttachment(string: app.debugDescription)
+            attachment.name = "Session Bootstrap Accessibility Tree"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTFail("Expected bootstrapped session \(title)")
+            return
+        }
     }
 
     @MainActor

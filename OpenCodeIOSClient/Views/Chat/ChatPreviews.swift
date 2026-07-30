@@ -83,7 +83,7 @@ private struct MessageComposerPreviewHost: View {
     @Namespace private var glassNamespace
 
     var body: some View {
-        MessageComposer(draftStore: draftStore, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, mentionableAgents: OpenCodePreviewData.agents.filter { $0.mode != "primary" }, pinnedCommands: Array(OpenCodePreviewData.commands.prefix(2)), pinnedCommandNames: Set(OpenCodePreviewData.commands.prefix(2).map(\.name)), attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onFocusChange: { _ in }, onTextChange: { _ in }, onAgentMentionsChange: { _ in }, onHeightChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onPinCommand: { _ in }, onUnpinCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in }, glassNamespace: glassNamespace)
+        MessageComposer(draftStore: draftStore, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, mentionableAgents: OpenCodePreviewData.agents.filter { $0.mode != "primary" }, pinnedCommands: Array(OpenCodePreviewData.commands.prefix(2)), pinnedCommandNames: Set(OpenCodePreviewData.commands.prefix(2).map(\.name)), attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onFocusChange: { _ in }, onTextChange: { _ in }, onAgentMentionsChange: { _ in }, onHeightChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onPinCommand: { _ in }, onUnpinCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in }, onOpenBrowser: nil, glassNamespace: glassNamespace)
             .padding()
             .background(OpenCodePlatformColor.groupedBackground)
     }
@@ -94,7 +94,11 @@ private struct ChatViewPreviewHost: View {
 
     var body: some View {
         NavigationStack {
-            ChatView(chatFacade: viewModel.chatFacade, sessionID: OpenCodePreviewData.primarySession.id)
+            ChatView(
+                chatFacade: viewModel.chatFacade,
+                browser: viewModel.appShellFacade.browser,
+                sessionID: OpenCodePreviewData.primarySession.id
+            )
         }
     }
 }
@@ -191,13 +195,13 @@ private struct ChatViewPreviewHost: View {
 }
 
 #Preview("User Message Bubble") {
-            MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: false, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in nil }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onShowEarlierActivity: {})
+            MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: false, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], expandedContextGroupIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in nil }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onToggleContextGroup: { _ in }, onShowEarlierActivity: {}, onOpenVisualHTML: { _ in }, imageContent: nil, imageLoadingStore: OpenClientImageLoadingStore(), videoStreams: nil, videoPlaybackStore: OpenClientVideoPlaybackStore())
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Assistant Message Bubble") {
-            MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: true, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in OpenCodePreviewData.secondarySession.id }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onShowEarlierActivity: {})
+            MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: true, animatesStreamingText: true, hidesReasoningBlocks: false, reserveEntryFromComposer: false, animateEntryFromComposer: false, expandedReasoningPartIDs: [], expandedContextGroupIDs: [], showsAllActivity: false, resolveTaskSessionID: { _, _ in OpenCodePreviewData.secondarySession.id }, onSelectPart: { _ in }, onOpenTaskSession: { _ in }, onForkMessage: { _ in }, onInspectDebugMessage: { _ in }, onEntryAnimationStarted: { _ in }, onToggleReasoningPart: { _ in }, onToggleContextGroup: { _ in }, onShowEarlierActivity: {}, onOpenVisualHTML: { _ in }, imageContent: nil, imageLoadingStore: OpenClientImageLoadingStore(), videoStreams: nil, videoPlaybackStore: OpenClientVideoPlaybackStore())
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }

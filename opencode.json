@@ -3,14 +3,27 @@
   "instructions": [
     "AGENTS.md",
     "OPENCODE_WEB_UI_PARITY.md",
-    "TEMP_MARKETING_DEMO_INSTRUCTIONS.md"
+    "TEMP_MARKETING_DEMO_INSTRUCTIONS.md",
+    "LOCAL_TESTING_INSTRUCTIONS.md"
   ],
+  "references": {
+    "openclient-backend": {
+      "path": "../openclient-backend",
+      "description": "Use for OpenClient cloud relay architecture, AWS services, pairing, StoreKit validation, APNs, and Live Activities."
+    }
+  },
   "plugin": [
-    "./OpenClientPlugin/src/index.ts"
+    "@openclient-ios/opencode-plugin@0.2.0"
   ],
+  "mcp": {
+    "xcode-tools": {
+      "enabled": true
+    }
+  },
   "permission": {
     "external_directory": {
-      "~/opencode/**": "allow"
+      "~/opencode/**": "allow",
+      "~/XCodeProjects/openclient-backend/**": "allow"
     },
     "edit": {
       "~/opencode/**": "deny"

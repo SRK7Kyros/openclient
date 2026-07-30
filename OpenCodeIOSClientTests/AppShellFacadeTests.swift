@@ -88,6 +88,21 @@ final class AppShellFacadeTests: XCTestCase {
         XCTAssertNil(request?.composerSelection)
     }
 
+    func testPluginSetupPresentsPrefilledGlobalChat() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+
+        shell.presentPluginSetupChat()
+
+        let request = viewModel.newProjectChatSheetRequest
+        XCTAssertEqual(request?.projectID, "global")
+        XCTAssertNil(request?.workspaceDirectory)
+        XCTAssertEqual(request?.locksProject, true)
+        XCTAssertEqual(request?.initialContent?.text, OpenClientPluginSetup.prompt)
+        XCTAssertEqual(request?.initialContent?.attachments, [])
+        XCTAssertEqual(request?.presentsAboveConnection, true)
+    }
+
     func testDetailRoutePrioritizesGitThenMCPThenServerChat() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade
@@ -223,6 +238,49 @@ final class AppShellFacadeTests: XCTestCase {
         XCTAssertEqual(viewModel.composerStore.draftsByChatKey[draftKey]?.text, "Keep MCP draft")
     }
 
+    func testTerminalTabIsAvailableForServerProjectAndClearsSelectedSession() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        let project = makeProject(vcs: "git")
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = project.worktree
+        viewModel.selectedSession = makeSession()
+        viewModel.backendMode = .server
+        viewModel.isConnected = true
+
+        XCTAssertTrue(shell.projectContentSnapshot.availableTabs.contains(.terminal))
+
+        shell.selectProjectContentTab(.terminal)
+
+        XCTAssertEqual(viewModel.selectedProjectContentTab, .terminal)
+        XCTAssertNil(viewModel.selectedSession)
+    }
+
+    func testTerminalDetailRouteUsesSelectedTerminal() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        let project = makeProject(vcs: "git")
+        let terminal = OpenCodePTY(
+            id: "pty_1",
+            title: "Terminal 1",
+            command: "/bin/zsh",
+            args: ["-l"],
+            cwd: project.worktree,
+            status: "running",
+            pid: 42
+        )
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = project.worktree
+        viewModel.selectedProjectContentTab = .terminal
+        viewModel.terminalStore.activate(directory: project.worktree)
+
+        XCTAssertEqual(shell.detailRoute(isCompact: false), .selectTerminal)
+
+        viewModel.terminalStore.append(terminal, directory: project.worktree)
+
+        XCTAssertEqual(shell.detailRoute(isCompact: false), .terminal(id: terminal.id))
+    }
+
     func testObservationRebindsToNewActiveDirectoryStore() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade
@@ -269,10 +327,27 @@ final class AppShellFacadeTests: XCTestCase {
         withExtendedLifetime(observation) {}
     }
 
-    private func makeProject(vcs: String? = nil) -> OpenCodeProject {
+    func testBrowserScopeFollowsCurrentProject() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+
+        viewModel.currentProject = makeProject(id: "project-a")
+        shell.browser.openAddressBar()
+        shell.browser.collapse()
+
+        viewModel.currentProject = makeProject(id: "project-b")
+        XCTAssertEqual(shell.browser.activeProjectID, "project-b")
+        XCTAssertEqual(shell.browser.presentation, .closed)
+
+        viewModel.currentProject = makeProject(id: "project-a")
+        XCTAssertEqual(shell.browser.activeProjectID, "project-a")
+        XCTAssertEqual(shell.browser.presentation, .collapsed)
+    }
+
+    private func makeProject(id: String = "project", vcs: String? = nil) -> OpenCodeProject {
         OpenCodeProject(
-            id: "project",
-            worktree: "/tmp/project",
+            id: id,
+            worktree: "/tmp/\(id)",
             vcs: vcs,
             name: "Project",
             sandboxes: nil,

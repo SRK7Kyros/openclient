@@ -25,6 +25,7 @@ fastlane/report.xml
 # Local scratch space
 tmp/
 .opencode/.env*
+LOCAL_TESTING_INSTRUCTIONS.md
 
 # App Review credentials (managed locally, not in repo)
 fastlane/metadata/review_information/

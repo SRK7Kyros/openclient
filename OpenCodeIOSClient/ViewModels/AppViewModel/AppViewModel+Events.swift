@@ -241,6 +241,10 @@ extension AppViewModel {
             return
         }
 
+        if terminalFacade.consume(managed) {
+            return
+        }
+
         let targetStores = directorySyncFacade.targetStores(
             for: managed,
             selectedSessionID: selectedSession?.id,

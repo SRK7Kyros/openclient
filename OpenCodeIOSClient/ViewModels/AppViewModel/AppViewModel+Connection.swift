@@ -575,6 +575,7 @@ extension AppViewModel {
 
         UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
         OpenClientSharePayloadStore.mirrorRecentServersData(nil)
+        config.name = environment["OPENCODE_UI_TEST_SERVER_NAME"] ?? "UI Test Server"
         config.baseURL = environment["OPENCODE_UI_TEST_BASE_URL"] ?? "http://127.0.0.1:4096"
         config.username = environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"
         config.password = environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""

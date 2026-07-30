@@ -7,6 +7,10 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case projects
     case newSession = "new-session"
     case sessions
+    case browser
+    case visualTools = "visual-tools"
+    case terminal
+    case terminalShowcase = "terminal-showcase"
     case chat
     case permission
     case question
@@ -48,6 +52,12 @@ extension AppViewModel {
             return screenshotNewSession()
         case .sessions:
             return screenshotSessions()
+        case .browser:
+            return screenshotBrowser()
+        case .visualTools:
+            return screenshotSessions()
+        case .terminal, .terminalShowcase:
+            return screenshotTerminal()
         case .sessionActions:
             return screenshotSessionActions()
         case .sessionPinned:
@@ -141,6 +151,19 @@ extension AppViewModel {
     private static func screenshotSessions() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
         viewModel.pinnedSessionIDsByScope = [viewModel.currentPinScopeKey: [OpenClientScreenshotData.releaseSession.id]]
+        return viewModel
+    }
+
+    private static func screenshotBrowser() -> AppViewModel {
+        screenshotSessions()
+    }
+
+    private static func screenshotTerminal() -> AppViewModel {
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        let directory = OpenClientScreenshotData.repoProject.worktree
+        viewModel.selectedProjectContentTab = .terminal
+        viewModel.terminalStore.activate(directory: directory)
+        viewModel.terminalStore.append(OpenClientScreenshotData.terminal, directory: directory)
         return viewModel
     }
 
@@ -299,6 +322,55 @@ extension AppViewModel {
 }
 
 enum OpenClientScreenshotData {
+    static let browserURL = URL(string: "https://preview.openclient.dev/")!
+
+    static let browserHTML = """
+    <!doctype html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>OpenClient Launch Preview</title>
+      <style>
+        :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #111827; background: #f8fafc; }
+        nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 7vw; background: rgba(255,255,255,.92); border-bottom: 1px solid #e5e7eb; }
+        .brand { display: flex; gap: 10px; align-items: center; font-weight: 800; font-size: 19px; }
+        .mark { width: 31px; height: 31px; border-radius: 10px; background: linear-gradient(135deg,#6366f1,#a855f7); }
+        .navlinks { display: flex; gap: 24px; color: #64748b; font-size: 14px; }
+        main { min-height: calc(100vh - 76px); display: grid; grid-template-columns: 1.1fr .9fr; align-items: center; gap: 6vw; padding: 7vh 7vw; background: radial-gradient(circle at 85% 20%,#ddd6fe 0,transparent 35%),linear-gradient(145deg,#eef2ff,#fff 52%,#ecfeff); }
+        .eyebrow { color: #6366f1; font-size: 13px; font-weight: 800; letter-spacing: .12em; }
+        h1 { margin: 16px 0; max-width: 680px; font-size: clamp(46px,7vw,86px); line-height: .96; letter-spacing: -.04em; }
+        .lede { max-width: 590px; color: #64748b; font-size: clamp(17px,2vw,23px); line-height: 1.5; }
+        .actions { display: flex; gap: 12px; margin-top: 30px; }
+        button { border: 0; border-radius: 999px; padding: 14px 22px; font: inherit; font-weight: 700; background: #4f46e5; color: white; }
+        .secondary { background: white; color: #334155; border: 1px solid #dbe2ea; }
+        .preview { padding: 22px; border-radius: 28px; background: rgba(255,255,255,.78); box-shadow: 0 30px 80px rgba(79,70,229,.18); border: 1px solid rgba(255,255,255,.9); transform: rotate(1.5deg); }
+        .window { overflow: hidden; border-radius: 18px; background: #101827; color: white; }
+        .chrome { display: flex; gap: 7px; padding: 13px; background: #1e293b; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #818cf8; }
+        .content { padding: 32px; }
+        .status { display: inline-block; padding: 7px 11px; border-radius: 999px; color: #6ee7b7; background: rgba(16,185,129,.14); font-size: 12px; font-weight: 800; }
+        .metric { margin-top: 22px; padding: 18px; border-radius: 15px; background: #172033; }
+        .bar { height: 10px; margin-top: 12px; border-radius: 8px; background: linear-gradient(90deg,#818cf8 74%,#334155 74%); }
+        @media(max-width:700px){ main{grid-template-columns:1fr;padding-top:5vh}.preview{display:none}.navlinks{display:none} }
+      </style>
+    </head>
+    <body>
+      <nav><div class="brand"><span class="mark"></span>OpenClient</div><div class="navlinks"><span>Features</span><span>Docs</span><span>Download</span></div></nav>
+      <main>
+        <section>
+          <div class="eyebrow">BUILD WITH OPENCODE</div>
+          <h1>Your workspace,<br>in your hands.</h1>
+          <p class="lede">Browse, build, review, and ship from one focused native workspace.</p>
+          <div class="actions"><button>Get OpenClient</button><button class="secondary">See what’s new</button></div>
+        </section>
+        <section class="preview"><div class="window"><div class="chrome"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div><div class="content"><span class="status">UPDATE VERIFIED</span><h2>Homepage ready to ship</h2><div class="metric">Performance score <strong>96</strong><div class="bar"></div></div></div></div></section>
+      </main>
+    </body>
+    </html>
+    """
+
     static let secureConfig = OpenCodeServerConfig(
         baseURL: "https://open-client.com/demo",
         username: "nick",
@@ -329,6 +401,16 @@ enum OpenClientScreenshotData {
     static let docsIconDataURL = "data:image/png;base64,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"
 
     static let projects = [OpenCodePreviewData.globalProject, repoProject, docsProject]
+
+    static let terminal = OpenCodePTY(
+        id: "terminal-screenshot-fixture",
+        title: "Release Validation",
+        command: "/bin/zsh",
+        args: [],
+        cwd: repoProject.worktree,
+        status: "running",
+        pid: 4_096
+    )
 
     static let releaseSession = OpenCodeSession(
         id: "session-screenshot-release",

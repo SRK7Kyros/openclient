@@ -38,6 +38,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenClient connects to your OpenCode server and its device-tool bridge on your local network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>OpenClient uses the microphone to dictate chat messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -50,6 +52,10 @@
 	<string>$(AppIdentifierPrefix)com.ntoporcov.openclient.shared</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

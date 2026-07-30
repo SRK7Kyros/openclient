@@ -628,8 +628,7 @@ Current screenshot scenes:
 
 Current validated capture devices:
 
-- `iPhone 17 Pro`
-- `iPhone 17 Pro Max`
+- `iPhone 13 Pro Max` (`1284 × 2778`)
 - `iPad Pro 13-inch (M5)`
 
 Current one-command screenshot flow:

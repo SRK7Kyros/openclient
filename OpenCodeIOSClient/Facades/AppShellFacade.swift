@@ -42,6 +42,8 @@ enum AppShellDetailRoute: Equatable {
     case gitFile
     case gitDiff
     case mcp
+    case terminal(id: String)
+    case selectTerminal
     case loadingChat(sessionID: String)
     case chat(AppShellChatRoute)
     case selectSession
@@ -59,6 +61,7 @@ final class AppShellFacade: ObservableObject {
         let isLoadingVCS: Bool
         let isLoadingFileTree: Bool
         let isLoadingMCP: Bool
+        let isTerminalAvailable: Bool
         let currentProjectID: String?
         let effectiveSelectedDirectory: String?
 
@@ -68,6 +71,8 @@ final class AppShellFacade: ObservableObject {
                 return "square.and.pencil"
             case .git, .mcp:
                 return "arrow.clockwise"
+            case .terminal:
+                return "plus"
             }
         }
 
@@ -79,6 +84,8 @@ final class AppShellFacade: ObservableObject {
                 return filesMode == .tree ? "Refresh File Tree" : "Refresh Files"
             case .mcp:
                 return "Refresh MCP Servers"
+            case .terminal:
+                return "New Terminal"
             }
         }
 
@@ -90,6 +97,8 @@ final class AppShellFacade: ObservableObject {
                 return "git.refresh"
             case .mcp:
                 return "mcp.refresh"
+            case .terminal:
+                return "terminal.create"
             }
         }
 
@@ -101,6 +110,8 @@ final class AppShellFacade: ObservableObject {
                 return isLoadingVCS || isLoadingFileTree
             case .mcp:
                 return isLoadingMCP
+            case .terminal:
+                return false
             }
         }
 
@@ -116,9 +127,11 @@ final class AppShellFacade: ObservableObject {
     let sessions: SessionListFacade
     let projectFiles: ProjectFilesFacade
     let mcp: MCPFacade
+    let terminal: TerminalFacade
     let configurations: ConfigurationsFacade
     let funAndGames: FunAndGamesFacade
     let chat: ChatFacade
+    let browser: BrowserStore
 
     private unowned let viewModel: AppViewModel
     private var observations: Set<AnyCancellable> = []
@@ -133,9 +146,11 @@ final class AppShellFacade: ObservableObject {
         sessions = viewModel.sessionListFacade
         projectFiles = viewModel.projectFilesFacade
         mcp = viewModel.mcpFacade
+        terminal = viewModel.terminalFacade
         configurations = viewModel.configurationsFacade
         funAndGames = viewModel.funAndGamesFacade
         chat = viewModel.chatFacade
+        browser = BrowserStore(projectID: viewModel.projectStore.currentProject?.id)
 
         Publishers.MergeMany([
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
@@ -143,6 +158,8 @@ final class AppShellFacade: ObservableObject {
             commerce.objectWillChange.eraseToAnyPublisher(),
             projectFiles.objectWillChange.eraseToAnyPublisher(),
             mcp.objectWillChange.eraseToAnyPublisher(),
+            terminal.objectWillChange.eraseToAnyPublisher(),
+            browser.objectWillChange.eraseToAnyPublisher(),
             viewModel.chatStore.$preparedSessionID.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingConnectionOverlay.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$newProjectChatSheetRequest.map { _ in () }.eraseToAnyPublisher(),
@@ -152,6 +169,14 @@ final class AppShellFacade: ObservableObject {
         ])
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
+
+        viewModel.projectStore.$currentProject
+            .map { $0?.id }
+            .removeDuplicates()
+            .sink { [weak browser] projectID in
+                browser?.selectProject(projectID)
+            }
+            .store(in: &observations)
 
         bindActiveDirectoryStore(viewModel.directoryStoreRegistry.activeStore)
         viewModel.directoryStoreRegistry.$activeStore
@@ -196,7 +221,16 @@ final class AppShellFacade: ObservableObject {
         let scopeTitle = viewModel.projectScopeTitle
         return ProjectContentSnapshot(
             selectedTab: selectedTab,
-            availableTabs: OpenClientProjectContentTab.allCases.filter { $0 != .git || projectFiles.hasGitProject },
+            availableTabs: OpenClientProjectContentTab.allCases.filter { tab in
+                switch tab {
+                case .git:
+                    return projectFiles.hasGitProject
+                case .terminal:
+                    return connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil
+                case .sessions, .mcp:
+                    return true
+                }
+            },
             title: scopeTitle.split(separator: "/").last.map(String.init) ?? scopeTitle,
             isShowingSettings: projects.isShowingProjectSettingsSheet,
             hasGitProject: projectFiles.hasGitProject,
@@ -204,6 +238,7 @@ final class AppShellFacade: ObservableObject {
             isLoadingVCS: files.isLoadingVCS,
             isLoadingFileTree: files.isLoadingFileTree,
             isLoadingMCP: mcp.snapshot.isLoading,
+            isTerminalAvailable: connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil,
             currentProjectID: projects.currentProject?.id,
             effectiveSelectedDirectory: viewModel.effectiveSelectedDirectory
         )
@@ -225,6 +260,12 @@ final class AppShellFacade: ObservableObject {
         }
         if projectContent.selectedTab == .mcp {
             return .mcp
+        }
+        if projectContent.selectedTab == .terminal {
+            guard let terminalID = terminal.snapshot.activeTerminalID else {
+                return .selectTerminal
+            }
+            return .terminal(id: terminalID)
         }
 
         let directory = viewModel.directoryStoreRegistry.activeStore
@@ -256,6 +297,9 @@ final class AppShellFacade: ObservableObject {
     }
 
     func selectProjectContentTab(_ tab: OpenClientProjectContentTab) {
+        if viewModel.selectedProjectContentTab == .terminal, tab != .terminal {
+            terminal.detachRenderer()
+        }
         switch tab {
         case .sessions:
             viewModel.selectedProjectContentTab = .sessions
@@ -284,12 +328,25 @@ final class AppShellFacade: ObservableObject {
             Task { [mcp] in
                 await mcp.loadIfNeeded()
             }
+        case .terminal:
+            guard projectContentSnapshot.isTerminalAvailable else { return }
+            viewModel.preserveCurrentMessageDraftForNavigation()
+            withAnimation(opencodeSelectionAnimation) {
+                viewModel.selectedProjectContentTab = .terminal
+                viewModel.selectedSession = nil
+            }
+            terminal.prepareForPresentation()
         }
     }
 
     func reconcileInvalidGitSelection() {
-        guard !projectFiles.hasGitProject, viewModel.selectedProjectContentTab == .git else { return }
-        viewModel.selectedProjectContentTab = .sessions
+        if !projectFiles.hasGitProject, viewModel.selectedProjectContentTab == .git {
+            viewModel.selectedProjectContentTab = .sessions
+        }
+        if !projectContentSnapshot.isTerminalAvailable, viewModel.selectedProjectContentTab == .terminal {
+            terminal.detachRenderer()
+            viewModel.selectedProjectContentTab = .sessions
+        }
     }
 
     func presentNewChat(
@@ -312,6 +369,19 @@ final class AppShellFacade: ObservableObject {
         )
     }
 
+    func presentPluginSetupChat() {
+        viewModel.presentNewProjectChatSheet(
+            projectID: "global",
+            workspaceDirectory: nil,
+            locksProject: true,
+            initialContent: NewProjectChatInitialContent(
+                text: OpenClientPluginSetup.prompt,
+                attachments: []
+            ),
+            presentsAboveConnection: true
+        )
+    }
+
     func performProjectContentToolbarAction() {
         switch viewModel.selectedProjectContentTab {
         case .sessions:
@@ -324,6 +394,8 @@ final class AppShellFacade: ObservableObject {
             Task { [mcp] in
                 await mcp.reload()
             }
+        case .terminal:
+            terminal.createTerminal()
         }
     }
 

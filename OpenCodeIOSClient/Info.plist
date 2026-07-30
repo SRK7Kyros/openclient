@@ -7,5 +7,7 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenClient connects to your OpenCode server and its device-tool bridge on your local network.</string>
 </dict>
 </plist>

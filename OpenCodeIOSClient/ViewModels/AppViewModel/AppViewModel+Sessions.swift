@@ -1844,12 +1844,16 @@ extension AppViewModel {
     }
 
     func openSession(sessionID: String) async {
+        guard let session = await sessionForPresentation(sessionID: sessionID) else { return }
+        await selectSession(session)
+    }
+
+    func sessionForPresentation(sessionID: String) async -> OpenCodeSession? {
         if session(matching: sessionID) == nil {
             await ensureAllSessionsLoaded()
         }
 
-        guard let session = session(matching: sessionID) else { return }
-        await selectSession(session)
+        return session(matching: sessionID)
     }
 
     func resolveTaskSessionID(from part: OpenCodePart, currentSessionID: String) -> String? {
@@ -2039,6 +2043,10 @@ extension AppViewModel {
                     appendUserMessage: appendOptimisticMessage
                 )
             }
+            if appendOptimisticMessage {
+                directoryStore.appendMessage(localUserMessage, forSessionID: session.id)
+            }
+            directoryStore.appendMessage(localAssistantMessage, forSessionID: session.id)
         }
 
         persistAppleIntelligenceMessages()
@@ -2162,6 +2170,9 @@ extension AppViewModel {
             sessionID: sessionID,
             text: text
         )
+        if let message = chatStore.messages.first(where: { $0.id == messageID }) {
+            directoryStore.appendMessage(message, forSessionID: sessionID)
+        }
     }
 
     func inferAppleIntelligenceIntent(

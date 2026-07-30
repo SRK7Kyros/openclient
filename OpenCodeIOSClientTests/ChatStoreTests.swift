@@ -1,4 +1,9 @@
 import XCTest
+import CoreGraphics
+import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import OpenClient
 
 @MainActor
@@ -69,6 +74,154 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertTrue(projection.retainedIndices.contains(2))
         XCTAssertTrue(projection.retainedIndices.isSuperset(of: [17, 18, 19]))
     }
+
+    func testAttachmentCardLayoutPreservesCommonImageAspectRatios() {
+        XCTAssertEqual(
+            AttachmentCardLayout.fittedImageSize(sourceSize: CGSize(width: 2_000, height: 1_000)),
+            CGSize(width: 220, height: 110)
+        )
+        XCTAssertEqual(
+            AttachmentCardLayout.fittedImageSize(sourceSize: CGSize(width: 1_000, height: 1_250)),
+            CGSize(width: 112, height: 140)
+        )
+    }
+
+    func testAttachmentCardLayoutKeepsExtremeImagesVisible() {
+        XCTAssertEqual(
+            AttachmentCardLayout.fittedImageSize(sourceSize: CGSize(width: 10_000, height: 100)),
+            CGSize(width: 220, height: 72)
+        )
+        XCTAssertEqual(
+            AttachmentCardLayout.fittedImageSize(sourceSize: CGSize(width: 100, height: 10_000)),
+            CGSize(width: 72, height: 140)
+        )
+        XCTAssertEqual(
+            AttachmentCardLayout.fittedImageSize(sourceSize: nil),
+            CGSize(width: 140, height: 140)
+        )
+    }
+
+    func testStreamingChunkAnimationCacheDoesNotReplayTextAfterViewRebuild() {
+        let cache = StreamingChunkAnimationCache()
+        let first = cache.snapshot(animationID: "part:block-0", text: "Hello", animatesAppend: true, at: 0)
+        let rebuilt = cache.snapshot(animationID: "part:block-0", text: "Hello", animatesAppend: true, at: 0.05)
+        let appended = cache.snapshot(animationID: "part:block-0", text: "Hello world", animatesAppend: true, at: 0.1)
+
+        XCTAssertEqual(first.chunks, [
+            .init(range: NSRange(location: 0, length: 5), startedAt: 0)
+        ])
+        XCTAssertEqual(rebuilt, first)
+        XCTAssertEqual(appended.chunks, [
+            .init(range: NSRange(location: 0, length: 5), startedAt: 0),
+            .init(range: NSRange(location: 5, length: 6), startedAt: 0.1)
+        ])
+    }
+
+    func testStreamingGradientOnlyTargetsTrailingFencedCodeBlock() {
+        XCTAssertTrue(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "```json\n{\"ok\": true}"))
+        XCTAssertTrue(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "```json\n{\"ok\": true}\n```"))
+        XCTAssertFalse(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "```json\n{\"ok\": true}\n```\nFollowing text"))
+        XCTAssertFalse(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "A normal streaming paragraph"))
+    }
+
+    func testContextIdentitySurvivesPartIndexChanges() {
+        let part = OpenCodePart(
+            id: "part_read",
+            messageID: "msg_1",
+            sessionID: "ses_1",
+            type: "tool",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "read",
+            callID: "call_1",
+            state: nil,
+            text: nil
+        )
+
+        XCTAssertEqual(
+            MessageBubbleDisplayIdentity.partID(index: 0, part: part),
+            MessageBubbleDisplayIdentity.partID(index: 4, part: part)
+        )
+        XCTAssertEqual(
+            MessageBubbleDisplayIdentity.contextID(messageID: "msg_1", firstIndex: 0, firstPart: part),
+            MessageBubbleDisplayIdentity.contextID(messageID: "msg_1", firstIndex: 4, firstPart: part)
+        )
+    }
+
+    func testBottomInsetPreservesAnchorOnlyWhenPinnedAndIdle() {
+        XCTAssertTrue(OpenCodeChatBottomAnchorPolicy.preservesBottom(isAtBottom: true, isUserScrolling: false))
+        XCTAssertFalse(OpenCodeChatBottomAnchorPolicy.preservesBottom(isAtBottom: false, isUserScrolling: false))
+        XCTAssertFalse(OpenCodeChatBottomAnchorPolicy.preservesBottom(isAtBottom: true, isUserScrolling: true))
+    }
+
+    func testBottomInsetAnimationRequiresNewAccessoryTokenAndPinnedState() {
+        XCTAssertTrue(OpenCodeChatBottomInsetAnimationPolicy.shouldAnimate(
+            animationToken: 2,
+            lastAnimationToken: 1,
+            preservesBottom: true
+        ))
+        XCTAssertFalse(OpenCodeChatBottomInsetAnimationPolicy.shouldAnimate(
+            animationToken: 2,
+            lastAnimationToken: 2,
+            preservesBottom: true
+        ))
+        XCTAssertFalse(OpenCodeChatBottomInsetAnimationPolicy.shouldAnimate(
+            animationToken: 2,
+            lastAnimationToken: 1,
+            preservesBottom: false
+        ))
+    }
+
+#if canImport(UIKit)
+    func testTodoCardsReserveHeightBeforeFullContentArrives() {
+        let provisional = UIHostingController(rootView: TodoCard(todo: OpenCodeTodo(
+            content: "Updating todos",
+            status: "pending",
+            priority: "medium"
+        )))
+        let populated = UIHostingController(rootView: TodoCard(todo: OpenCodeTodo(
+            content: "Verify that the populated todo content can wrap across two complete lines",
+            status: "in_progress",
+            priority: "high"
+        )))
+
+        let provisionalHeight = provisional.sizeThatFits(in: CGSize(width: 220, height: 1_000)).height
+        let populatedHeight = populated.sizeThatFits(in: CGSize(width: 220, height: 1_000)).height
+
+        XCTAssertEqual(provisionalHeight, populatedHeight, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(provisionalHeight, 78)
+    }
+
+    func testTodoActivityReservesSubtitleHeight() {
+        let provisionalStyle = ActivityStyle(
+            title: "Updating Todos",
+            subtitle: nil,
+            icon: "checklist",
+            tint: .blue,
+            isRunning: true,
+            showsDisclosure: true,
+            shimmerTitle: false
+        )
+        let populatedStyle = ActivityStyle(
+            title: "Todo Update",
+            subtitle: "1 in progress, 2 pending",
+            icon: "checklist",
+            tint: .blue,
+            isRunning: false,
+            showsDisclosure: true,
+            shimmerTitle: false
+        )
+        let provisional = UIHostingController(rootView: ActivityRow(style: provisionalStyle, reservesSubtitleSpace: true))
+        let populated = UIHostingController(rootView: ActivityRow(style: populatedStyle, reservesSubtitleSpace: true))
+
+        let provisionalHeight = provisional.sizeThatFits(in: CGSize(width: 360, height: 1_000)).height
+        let populatedHeight = populated.sizeThatFits(in: CGSize(width: 360, height: 1_000)).height
+
+        XCTAssertEqual(provisionalHeight, populatedHeight, accuracy: 0.5)
+    }
+#endif
 
     func testUserPartPolicyDisplaysOnlyFirstNonSyntheticTextPart() throws {
         let original = OpenCodePart(id: "part_original", messageID: "msg_1", sessionID: "ses_1", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "@general inspect Downloads")

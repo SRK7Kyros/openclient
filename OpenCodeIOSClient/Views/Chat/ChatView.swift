@@ -898,13 +898,16 @@ private extension OpenCodePart {
         segments.append(state?.metadata?.files?.count.description ?? "0")
         segments.append(state?.metadata?.loaded?.count.description ?? "0")
         segments.append(state?.metadata?.truncated?.description ?? "false")
+        segments.append(state?.metadata?.renderer ?? "")
+        segments.append(state?.metadata?.schemaVersion?.description ?? "")
+        segments.append(ChatRenderSignatures.jsonSignature(from: state?.metadata?.payload))
         return segments.joined(separator: "\u{1f}")
     }
 }
 
 private enum ChatRenderSignatures {
     static func inputSignature(from input: OpenCodeToolInput) -> String {
-        [
+        var values = [
             input.command,
             input.description,
             input.filePath,
@@ -914,9 +917,27 @@ private enum ChatRenderSignatures {
             input.pattern,
             input.subagentType,
             input.url,
+            input.clientID,
+            input.toolID,
         ]
         .map { $0 ?? "" }
-        .joined(separator: "\u{1f}")
+        values.append(jsonSignature(from: input.arguments.map(OpenCodeJSONValue.object)))
+        return values.joined(separator: "\u{1f}")
+    }
+
+    static func jsonSignature(from value: OpenCodeJSONValue?) -> String {
+        guard let value,
+              let data = try? sortedJSONEncoder().encode(value),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return encoded
+    }
+
+    private static func sortedJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
     }
 }
 
@@ -964,6 +985,9 @@ private struct ChatDisplayItemCacheKey: Equatable {
         let metadataFileCount: Int?
         let metadataLoadedCount: Int?
         let metadataTruncated: Bool?
+        let metadataRenderer: String?
+        let metadataSchemaVersion: Int?
+        let metadataPayloadHash: Int
     }
 
     let messages: [MessageKey]
@@ -1046,6 +1070,22 @@ private enum ChatScrollTarget {
     static let olderMessagesButton = "chat-older-messages-button"
     static let thinkingRow = "chat-thinking-row"
     static let bottomAnchor = "chat-bottom-anchor"
+}
+
+enum OpenCodeChatBottomAnchorPolicy {
+    static func preservesBottom(isAtBottom: Bool, isUserScrolling: Bool) -> Bool {
+        isAtBottom && !isUserScrolling
+    }
+}
+
+enum OpenCodeChatBottomInsetAnimationPolicy {
+    static func shouldAnimate(
+        animationToken: Int,
+        lastAnimationToken: Int,
+        preservesBottom: Bool
+    ) -> Bool {
+        preservesBottom && animationToken != lastAnimationToken
+    }
 }
 
 private final class ChatTranscriptScrollController {
@@ -1167,6 +1207,7 @@ private struct LargeMessageChunkRow: View, Equatable {
     let allowsTextSelection: Bool
     let isStreamingTail: Bool
     let animatesStreamingText: Bool
+    let streamingAnimationID: String
 
     var body: some View {
         if allowsTextSelection {
@@ -1183,7 +1224,8 @@ private struct LargeMessageChunkRow: View, Equatable {
                 isUser: false,
                 style: .standard,
                 isStreaming: isStreamingTail,
-                animatesStreamingText: animatesStreamingText
+                animatesStreamingText: animatesStreamingText,
+                streamingAnimationID: streamingAnimationID
             )
 
             Spacer(minLength: 0)
@@ -1457,6 +1499,7 @@ private struct MessageBubbleSnapshot: Equatable {
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
     let expandedReasoningPartIDs: Set<String>
+    let expandedContextGroupIDs: Set<String>
     let showsAllActivity: Bool
     let streamingReservePadding: CGFloat
 }
@@ -1481,6 +1524,7 @@ private struct LargeMessageChunkRowRenderSnapshot {
     let allowsTextSelection: Bool
     let isStreamingTail: Bool
     let animatesStreamingText: Bool
+    let streamingAnimationID: String
     let bottomPadding: CGFloat
     let streamingReservePadding: CGFloat
 }
@@ -1644,6 +1688,10 @@ enum OpenCodeChatTranscriptWindowing {
 
 private struct EquatableMessageBubbleHost: View, Equatable {
     let snapshot: MessageBubbleSnapshot
+    let imageContent: OpenClientImageContentCoordinator?
+    let imageLoadingStore: OpenClientImageLoadingStore
+    let videoStreams: OpenClientVideoStreamCoordinator?
+    let videoPlaybackStore: OpenClientVideoPlaybackStore
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
     let onOpenTaskSession: (String) -> Void
@@ -1651,7 +1699,9 @@ private struct EquatableMessageBubbleHost: View, Equatable {
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
     let onEntryAnimationStarted: (String) -> Void
     let onToggleReasoningPart: (String) -> Void
+    let onToggleContextGroup: (String) -> Void
     let onShowEarlierActivity: () -> Void
+    let onOpenVisualHTML: (OpenClientVisualHTMLPayload) -> Void
 
     nonisolated static func == (lhs: EquatableMessageBubbleHost, rhs: EquatableMessageBubbleHost) -> Bool {
         lhs.snapshot == rhs.snapshot
@@ -1668,6 +1718,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             reserveEntryFromComposer: snapshot.reserveEntryFromComposer,
             animateEntryFromComposer: snapshot.animateEntryFromComposer,
             expandedReasoningPartIDs: snapshot.expandedReasoningPartIDs,
+            expandedContextGroupIDs: snapshot.expandedContextGroupIDs,
             showsAllActivity: snapshot.showsAllActivity,
             resolveTaskSessionID: resolveTaskSessionID,
             onSelectPart: onSelectPart,
@@ -1676,7 +1727,13 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             onInspectDebugMessage: onInspectDebugMessage,
             onEntryAnimationStarted: onEntryAnimationStarted,
             onToggleReasoningPart: onToggleReasoningPart,
-            onShowEarlierActivity: onShowEarlierActivity
+            onToggleContextGroup: onToggleContextGroup,
+            onShowEarlierActivity: onShowEarlierActivity,
+            onOpenVisualHTML: onOpenVisualHTML,
+            imageContent: imageContent,
+            imageLoadingStore: imageLoadingStore,
+            videoStreams: videoStreams,
+            videoPlaybackStore: videoPlaybackStore
         )
         .padding(.bottom, snapshot.streamingReservePadding)
     }
@@ -1692,6 +1749,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
     let animatedBottomScrollToken: Int
     let composerMeasuredHeight: CGFloat
     let keyboardMeasuredHeight: CGFloat
+    let bottomContentInsetAnimationToken: Int
     let messageBottomPadding: CGFloat
     let bottomRefreshThreshold: CGFloat
     let bottomRefreshIndicatorHeight: CGFloat
@@ -1724,6 +1782,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
                 bottomScrollToken: bottomReadjustmentToken,
                 animatedBottomScrollToken: animatedBottomScrollToken,
                 bottomContentInset: composerMeasuredHeight + keyboardMeasuredHeight + messageBottomPadding,
+                bottomContentInsetAnimationToken: bottomContentInsetAnimationToken,
                 bottomRefreshThreshold: bottomRefreshThreshold,
                 bottomRefreshProgress: bottomRefreshRenderSnapshot.progress,
                 showsBottomRefreshIndicator: bottomRefreshRenderSnapshot.showsIndicator,
@@ -1791,6 +1850,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
     let onLoadMCP: () -> Void
     let onToggleMCP: (String) -> Void
     let onAddAttachments: ([OpenCodeComposerAttachment]) -> Void
+    let onOpenBrowser: () -> Void
     let glassNamespace: Namespace.ID
 
     nonisolated static func == (lhs: EquatableMessageComposerHost, rhs: EquatableMessageComposerHost) -> Bool {
@@ -1828,6 +1888,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
             onLoadMCP: onLoadMCP,
             onToggleMCP: onToggleMCP,
             onAddAttachments: onAddAttachments,
+            onOpenBrowser: onOpenBrowser,
             glassNamespace: glassNamespace
         )
     }
@@ -1848,11 +1909,23 @@ struct ChatView: View {
     @ObservedObject private var mcpStore: MCPStore
     @ObservedObject private var funAndGamesStore: FunAndGamesStore
     @ObservedObject private var chatPresentationStore: ChatPresentationStore
+    @ObservedObject private var browser: BrowserStore
+    private let imageContent: OpenClientImageContentCoordinator?
+    private let videoStreams: OpenClientVideoStreamCoordinator?
     let sessionID: String
     let presentationRequest: Int
+    private let onDismissChildSession: (() -> Void)?
 
     @MainActor
-    init(chatFacade: ChatFacade, sessionID: String, presentationRequest: Int = 0) {
+    init(
+        chatFacade: ChatFacade,
+        browser: BrowserStore,
+        imageContent: OpenClientImageContentCoordinator? = nil,
+        videoStreams: OpenClientVideoStreamCoordinator? = nil,
+        sessionID: String,
+        presentationRequest: Int = 0,
+        onDismissChildSession: (() -> Void)? = nil
+    ) {
         _connectionStore = ObservedObject(wrappedValue: chatFacade.connectionStore)
         _projectStore = ObservedObject(wrappedValue: chatFacade.projectStore)
         _directoryStore = ObservedObject(wrappedValue: chatFacade.directoryStore(forSessionID: sessionID))
@@ -1865,8 +1938,12 @@ struct ChatView: View {
         _mcpStore = ObservedObject(wrappedValue: chatFacade.mcpStore)
         _funAndGamesStore = ObservedObject(wrappedValue: chatFacade.funAndGamesStore)
         _chatPresentationStore = ObservedObject(wrappedValue: chatFacade.chatPresentationStore)
+        _browser = ObservedObject(wrappedValue: browser)
+        self.imageContent = imageContent
+        self.videoStreams = videoStreams
         self.sessionID = sessionID
         self.presentationRequest = presentationRequest
+        self.onDismissChildSession = onDismissChildSession
     }
 
     @Namespace private var toolbarGlassNamespace
@@ -1875,6 +1952,8 @@ struct ChatView: View {
     @State private var selectedMessageDebugPayload: MessageDebugPayload?
     @State private var selectedCompactionSummary: CompactionSummaryPayload?
     @State private var selectedActivityDetail: ActivityDetail?
+    @State private var presentedTaskSession: OpenCodeSession?
+    @State private var taskSessionDetent: PresentationDetent = .medium
     @State private var showingTodoInspector = false
     @State private var showingContextMetrics = false
     @State private var visibleRoundCount = 3
@@ -1887,6 +1966,7 @@ struct ChatView: View {
     @State private var isComposerInputFocused = false
     @State private var composerAccessoryExpansion: ComposerAccessoryExpansion = .collapsed
     @State private var selectedAttachmentPreview: OpenCodeComposerAttachment?
+    @State private var selectedVisualHTML: OpenClientVisualHTMLPresentation?
     @State private var isComposerMenuOpen = false
     @State private var copiedTranscript = false
     @State private var pendingOutgoingSend: PendingOutgoingSend?
@@ -1900,6 +1980,7 @@ struct ChatView: View {
     @State private var animatingOutgoingMessageID: String?
     @State private var outgoingEntryAnimationStartedMessageIDs: Set<String> = []
     @State private var expandedReasoningPartIDs: Set<String> = []
+    @State private var expandedContextGroupIDs: Set<String> = []
     @State private var expandedEarlierActivityMessageIDs: Set<String> = []
     @State private var hasCompletedInitialHydrationSnap = false
     @State private var isScrollGeometryAtBottom = true
@@ -1912,6 +1993,7 @@ struct ChatView: View {
     @State private var chatViewportHeight: CGFloat = 0
     @State private var composerMeasuredHeight: CGFloat = 0
     @State private var keyboardMeasuredHeight: CGFloat = 0
+    @State private var bottomContentInsetAnimationToken = 0
     @State private var transcriptScrollController = ChatTranscriptScrollController()
     @State private var bottomReadjustmentToken = 0
     @State private var animatedBottomScrollToken = 0
@@ -1942,7 +2024,14 @@ struct ChatView: View {
     )
 
     private var composerOverlaySnapshot: ChatFacade.ChatComposerOverlaySnapshot {
-        chatFacade.composerOverlaySnapshot(forSessionID: sessionID)
+        let snapshot = chatFacade.composerOverlaySnapshot(forSessionID: sessionID)
+        guard onDismissChildSession != nil else { return snapshot }
+        return ChatFacade.ChatComposerOverlaySnapshot(
+            todos: [],
+            attachments: [],
+            permissions: snapshot.permissions,
+            questions: snapshot.questions
+        )
     }
 
     private var todoIDs: String {
@@ -2048,6 +2137,7 @@ struct ChatView: View {
                 animatedBottomScrollToken: animatedBottomScrollToken,
                 composerMeasuredHeight: composerMeasuredHeight,
                 keyboardMeasuredHeight: keyboardMeasuredHeight,
+                bottomContentInsetAnimationToken: bottomContentInsetAnimationToken,
                 messageBottomPadding: messageBottomPadding,
                 bottomRefreshThreshold: bottomRefreshThreshold,
                 bottomRefreshIndicatorHeight: bottomRefreshIndicatorHeight,
@@ -2081,7 +2171,7 @@ struct ChatView: View {
                 },
                 onAppear: { _ in
                     chatFacade.setActiveChatSessionID(sessionID)
-                    hasCompletedInitialHydrationSnap = !chatStore.messages.isEmpty
+                    hasCompletedInitialHydrationSnap = chatSourceMessageCount > 0
                     updateDelayedLoadingIndicator()
                     scheduleInitialBottomReadjustments()
                 },
@@ -2126,6 +2216,15 @@ struct ChatView: View {
         .overlay(alignment: .bottom) {
             composerOverlay
         }
+        .overlay(alignment: .top) {
+            if isSessionBusy {
+                ChatStatusBarStateShimmer(tint: activeSessionTint)
+                    .ignoresSafeArea(.container, edges: .top)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.22), value: isSessionBusy)
         .navigationTitle("")
         .opencodeInlineNavigationTitle()
         .onAppear {
@@ -2149,7 +2248,9 @@ struct ChatView: View {
         }
 #endif
         .onDisappear {
-            persistComposerDraftNow()
+            if directoryStore.selectedSession?.id == sessionID {
+                persistComposerDraftNow()
+            }
             chatFacade.setComposerStreamingFocus(false)
             taskStore.delayedLoadingIndicatorTask?.cancel()
             taskStore.composerDraftPersistenceTask?.cancel()
@@ -2172,6 +2273,22 @@ struct ChatView: View {
             NavigationStack {
                 ActivityDetailView(chatFacade: chatFacade, detail: detail)
             }
+        }
+        .sheet(item: $presentedTaskSession, onDismiss: restoreActiveSessionAfterTaskSheet) { taskSession in
+            NavigationStack {
+                ChatView(
+                    chatFacade: chatFacade,
+                    browser: browser,
+                    imageContent: imageContent,
+                    videoStreams: videoStreams,
+                    sessionID: taskSession.id,
+                    onDismissChildSession: {
+                        presentedTaskSession = nil
+                    }
+                )
+            }
+            .presentationDetents([.fraction(0.3), .medium, .large], selection: $taskSessionDetent)
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $selectedMessageDebugPayload) { payload in
             NavigationStack {
@@ -2199,6 +2316,11 @@ struct ChatView: View {
             NavigationStack {
                 AttachmentPreviewSheet(attachment: attachment)
             }
+        }
+        .sheet(item: $selectedVisualHTML) { presentation in
+            OpenClientVisualHTMLDetailView(payload: presentation.payload)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $chatPresentationStore.isShowingAppleIntelligenceInstructionsSheet) {
             NavigationStack {
@@ -2241,6 +2363,9 @@ struct ChatView: View {
                 composerAccessoryExpansion = .collapsed
             }
         }
+        .onChange(of: composerOverlaySnapshot.showsAccessoryArea) { _, _ in
+            bottomContentInsetAnimationToken &+= 1
+        }
         .onChange(of: chatStore.messages.count) { _, _ in
             copiedTranscript = false
             pruneExpandedReasoningParts()
@@ -2248,19 +2373,21 @@ struct ChatView: View {
                 refreshCachedForkableMessages()
             }
         }
-        .onReceive(chatStore.$messages.dropFirst()) { messages in
+        .onReceive(chatStore.$messages.dropFirst()) { _ in
             guard !isSessionBusy else { return }
-            refreshCachedContextMetrics(
-                messages: messages,
-                providers: modelConfigurationStore.availableProviders
-            )
+            refreshCachedContextMetrics()
         }
-        .onReceive(modelConfigurationStore.$availableProviders.dropFirst()) { providers in
+        .onReceive(modelConfigurationStore.$availableProviders.dropFirst()) { _ in
             guard !isSessionBusy else { return }
-            refreshCachedContextMetrics(
-                messages: chatStore.messages,
-                providers: providers
-            )
+            refreshCachedContextMetrics()
+        }
+        .onReceive(
+            directoryStore.syncStore.$version
+                .dropFirst()
+                .debounce(for: .milliseconds(180), scheduler: RunLoop.main)
+        ) { _ in
+            guard !isSessionBusy else { return }
+            refreshCachedContextMetrics()
         }
         .onChange(of: reasoningPartKeySignature) { _, _ in
             pruneExpandedReasoningParts()
@@ -2284,7 +2411,7 @@ struct ChatView: View {
 
     private func refreshCachedContextMetrics() {
         refreshCachedContextMetrics(
-            messages: chatStore.messages,
+            messages: sessionScopedFallbackMessages,
             providers: modelConfigurationStore.availableProviders
         )
     }
@@ -2411,10 +2538,40 @@ struct ChatView: View {
             case .activeComposer:
                 activeMessageComposer(isBusy: isComposerBusy)
             }
+
+            if showsChatBrowserAccessory {
+                BrowserAccessoryRow(
+                    browser: browser,
+                    accessibilityIdentifier: "browser.chatAccessory"
+                )
+                .opencodeConcentricGlassSurface(
+                    isInteractive: true,
+                    minimumCornerRadius: 20,
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .transaction { transaction in
             transaction.animation = nil
         }
+        .animation(.snappy(duration: 0.3, extraBounce: 0.02), value: showsChatBrowserAccessory)
+    }
+
+    private var showsChatBrowserAccessory: Bool {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            return browser.presentation == .collapsed
+                && keyboardMeasuredHeight < 1
+        }
+        #endif
+        return false
     }
 
     private func composerOverlayModeSnapshot(
@@ -2548,6 +2705,13 @@ struct ChatView: View {
             onAddAttachments: { attachments in
                 chatFacade.addDraftAttachments(attachments)
             },
+            onOpenBrowser: {
+                if browser.presentation == .closed {
+                    browser.openAddressBar()
+                } else {
+                    browser.expand()
+                }
+            },
             glassNamespace: composerGlassNamespace
         )
 
@@ -2570,7 +2734,7 @@ struct ChatView: View {
     private func makeForkableMessages() -> [OpenCodeForkableMessage] {
         var result: [OpenCodeForkableMessage] = []
 
-        for message in chatStore.messages {
+        for message in sessionScopedFallbackMessages {
             guard (message.info.role ?? "").lowercased() == "user" else { continue }
             let promptText = chatFacade.forkPromptText(from: message)
             let trimmedText = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2605,12 +2769,19 @@ struct ChatView: View {
 
             Spacer(minLength: 0)
 
-            Button("Back") {
-                guard let parentSession = headerSnapshot.parentSession else { return }
-                Task { await chatFacade.selectSession(parentSession) }
+            if let onDismissChildSession {
+                Button("Close", action: onDismissChildSession)
+                    .buttonStyle(.bordered)
+                    .tint(.purple)
+                    .accessibilityLabel("Close subagent thread")
+            } else {
+                Button("Back") {
+                    guard let parentSession = headerSnapshot.parentSession else { return }
+                    Task { await chatFacade.selectSession(parentSession) }
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
             }
-            .buttonStyle(.bordered)
-            .tint(.purple)
         }
         .padding(12)
         .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -2928,7 +3099,6 @@ struct ChatView: View {
         guard height > 0 else { return }
         guard abs(height - composerMeasuredHeight) > 0.5 else { return }
         composerMeasuredHeight = height
-        requestBottomReadjustmentIfPinned()
     }
 
     private func updateDelayedLoadingIndicator() {
@@ -2995,7 +3165,11 @@ struct ChatView: View {
 
     private var chatSourceMessageCount: Int {
         let syncedCount = directoryStore.syncStore.messageCount(forSessionID: sessionID)
-        return syncedCount == 0 ? chatStore.messages.count : syncedCount
+        return syncedCount == 0 ? sessionScopedFallbackMessages.count : syncedCount
+    }
+
+    private var sessionScopedFallbackMessages: [OpenCodeMessageEnvelope] {
+        chatFacade.messageSource(for: liveSession)
     }
 
     private var visibleChatMessages: [OpenCodeMessageEnvelope] {
@@ -3014,7 +3188,7 @@ struct ChatView: View {
             baseCount = OpenCodeChatTranscriptWindowing.messageCountIncludingLatestUserRounds(
                 visibleRoundCount,
                 fallbackMessageCount: fallbackMessageWindowSize,
-                in: chatStore.messages.map(\.info)
+                in: sessionScopedFallbackMessages.map(\.info)
             )
         }
         return min(chatSourceMessageCount, baseCount + additionalLeadingMessageCount)
@@ -3024,7 +3198,7 @@ struct ChatView: View {
         if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
             return directoryStore.syncStore.userMessageCount(forSessionID: sessionID)
         }
-        return chatStore.messages.userMessageCount
+        return sessionScopedFallbackMessages.userMessageCount
     }
 
     private func transcriptSuffix(_ count: Int) -> [OpenCodeMessageEnvelope] {
@@ -3032,7 +3206,7 @@ struct ChatView: View {
             return directoryStore.syncStore.messageEnvelopes(forSessionID: sessionID, suffix: count)
         }
 
-        return Array(chatStore.messages.suffix(count))
+        return Array(sessionScopedFallbackMessages.suffix(count))
     }
 
     private func transcriptContainsMessage(_ messageID: String) -> Bool {
@@ -3040,7 +3214,7 @@ struct ChatView: View {
             return directoryStore.syncStore.containsMessage(id: messageID, forSessionID: sessionID)
         }
 
-        return chatStore.messages.contains { $0.id == messageID }
+        return sessionScopedFallbackMessages.contains { $0.id == messageID }
     }
 
     private var reasoningPartKeySignature: String {
@@ -3127,24 +3301,17 @@ struct ChatView: View {
             metadataSessionID: part.state?.metadata?.sessionId,
             metadataFileCount: part.state?.metadata?.files?.count,
             metadataLoadedCount: part.state?.metadata?.loaded?.count,
-            metadataTruncated: part.state?.metadata?.truncated
+            metadataTruncated: part.state?.metadata?.truncated,
+            metadataRenderer: part.state?.metadata?.renderer,
+            metadataSchemaVersion: part.state?.metadata?.schemaVersion,
+            metadataPayloadHash: ChatRenderSignatures
+                .jsonSignature(from: part.state?.metadata?.payload)
+                .chatRenderSampleHash
         )
     }
 
     private func displayItemCacheInputSignature(from input: OpenCodeToolInput) -> String {
-        [
-            input.command,
-            input.description,
-            input.filePath,
-            input.name,
-            input.path,
-            input.query,
-            input.pattern,
-            input.subagentType,
-            input.url,
-        ]
-        .map { $0 ?? "" }
-        .joined(separator: "\u{1f}")
+        ChatRenderSignatures.inputSignature(from: input)
     }
 
     private func sampledTextHash(_ value: String?) -> Int {
@@ -3264,16 +3431,26 @@ struct ChatView: View {
             ForEach(snapshot.bubbles, id: \.message.id) { bubble in
                 EquatableMessageBubbleHost(
                     snapshot: bubble,
+                    imageContent: imageContent,
+                    imageLoadingStore: chatStore.imageLoadingStore,
+                    videoStreams: videoStreams,
+                    videoPlaybackStore: chatStore.videoPlaybackStore,
                     resolveTaskSessionID: { part, currentSessionID in
                         chatFacade.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
                     },
                     onSelectPart: { part in selectedActivityDetail = ActivityDetail(message: bubble.message, part: part) },
-                    onOpenTaskSession: { taskSessionID in Task { await chatFacade.openSession(sessionID: taskSessionID) } },
+                    onOpenTaskSession: { taskSessionID in
+                        Task { await presentTaskSession(sessionID: taskSessionID) }
+                    },
                     onForkMessage: { forkMessage in Task { await chatFacade.forkSelectedSession(from: forkMessage.id) } },
                     onInspectDebugMessage: { debugMessage in selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage) },
                     onEntryAnimationStarted: { messageID in outgoingEntryAnimationStartedMessageIDs.insert(messageID) },
                     onToggleReasoningPart: toggleReasoningPart,
-                    onShowEarlierActivity: { expandedEarlierActivityMessageIDs.insert(bubble.message.id) }
+                    onToggleContextGroup: toggleContextGroup,
+                    onShowEarlierActivity: { expandedEarlierActivityMessageIDs.insert(bubble.message.id) },
+                    onOpenVisualHTML: { payload in
+                        selectedVisualHTML = OpenClientVisualHTMLPresentation(payload: payload)
+                    }
                 )
                 .equatable()
                 .padding(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -3295,7 +3472,8 @@ struct ChatView: View {
             text: snapshot.text,
             allowsTextSelection: snapshot.allowsTextSelection,
             isStreamingTail: snapshot.isStreamingTail,
-            animatesStreamingText: snapshot.animatesStreamingText
+            animatesStreamingText: snapshot.animatesStreamingText,
+            streamingAnimationID: snapshot.streamingAnimationID
         )
             .equatable()
             .contextMenu {
@@ -3312,6 +3490,7 @@ struct ChatView: View {
             allowsTextSelection: !isStreaming,
             isStreamingTail: isStreaming && item.chunk.isTail,
             animatesStreamingText: shouldAnimateStreamingText,
+            streamingAnimationID: item.id,
             bottomPadding: item.chunk.isTail ? 6 : 0,
             streamingReservePadding: isStreaming && item.chunk.isTail ? 44 : 0
         )
@@ -3355,13 +3534,17 @@ struct ChatView: View {
 
         return EquatableMessageBubbleHost(
             snapshot: snapshot.bubble,
+            imageContent: imageContent,
+            imageLoadingStore: chatStore.imageLoadingStore,
+            videoStreams: videoStreams,
+            videoPlaybackStore: chatStore.videoPlaybackStore,
             resolveTaskSessionID: { part, currentSessionID in
                 chatFacade.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
             }
         ) { part in
             selectedActivityDetail = ActivityDetail(message: message, part: part)
         } onOpenTaskSession: { taskSessionID in
-            Task { await chatFacade.openSession(sessionID: taskSessionID) }
+            Task { await presentTaskSession(sessionID: taskSessionID) }
         } onForkMessage: { forkMessage in
             Task { await chatFacade.forkSelectedSession(from: forkMessage.id) }
         } onInspectDebugMessage: { debugMessage in
@@ -3370,8 +3553,12 @@ struct ChatView: View {
             outgoingEntryAnimationStartedMessageIDs.insert(messageID)
         } onToggleReasoningPart: { partID in
             toggleReasoningPart(partID)
+        } onToggleContextGroup: { groupID in
+            toggleContextGroup(groupID)
         } onShowEarlierActivity: {
             expandedEarlierActivityMessageIDs.insert(message.id)
+        } onOpenVisualHTML: { payload in
+            selectedVisualHTML = OpenClientVisualHTMLPresentation(payload: payload)
         }
         .equatable()
         .transition(.identity)
@@ -3397,6 +3584,7 @@ struct ChatView: View {
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
             animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
             expandedReasoningPartIDs: expandedReasoningPartIDs,
+            expandedContextGroupIDs: Set(expandedContextGroupIDs.filter { $0.hasPrefix("context-\(message.id)-") }),
             showsAllActivity: expandedEarlierActivityMessageIDs.contains(message.id),
             streamingReservePadding: isStreaming ? 44 : 0
         )
@@ -3723,7 +3911,30 @@ struct ChatView: View {
         guard isSessionBusy else { return false }
         guard (message.info.role ?? "").lowercased() == "assistant" else { return false }
         guard message.info.time?.completed == nil else { return false }
-        return chatStore.messages.last?.id == message.id
+        return lastSessionMessageID == message.id
+    }
+
+    private var latestSessionMessage: OpenCodeMessageEnvelope? {
+        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
+            return directoryStore.syncStore.messageEnvelopes(forSessionID: sessionID, suffix: 1).last
+        }
+        return sessionScopedFallbackMessages.last
+    }
+
+    private var activeSessionTint: Color {
+        let agent: String?
+        if let latestSessionMessage,
+           (latestSessionMessage.info.role ?? "").lowercased() == "assistant",
+           latestSessionMessage.info.time?.completed == nil {
+            agent = latestSessionMessage.info.agent
+        } else {
+            agent = nil
+        }
+        return OpenCodeActivityTint.color(forAgent: agent)
+    }
+
+    private var lastSessionMessageID: String? {
+        latestSessionMessage?.id
     }
 
     @ToolbarContentBuilder
@@ -3755,60 +3966,20 @@ struct ChatView: View {
             }
         } else {
             let headerSnapshot = chatHeaderSnapshot
-            let toolbarSnapshot = chatFacade.toolbarSnapshot(for: liveSession)
-            if headerSnapshot.isChildSession {
+            if headerSnapshot.isChildSession, let onDismissChildSession {
+                let childToolbarSnapshot = chatFacade.childSessionToolbarSnapshot(for: liveSession)
                 ToolbarItem(placement: .opencodeLeading) {
-                    if let parentSession = headerSnapshot.parentSession {
-                        Button("Back") {
-                            Task { await chatFacade.selectSession(parentSession) }
-                        }
-                    }
-                }
-            }
-
-            ToolbarItem(placement: .principal) {
-                ChatNavigationTitle(snapshot: headerSnapshot)
-                    .frame(maxWidth: 300, alignment: .leading)
-            }
-
-            if toolbarSnapshot.isLoading {
-                ToolbarItem(placement: .opencodeTrailing) {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .controlSize(.small)
-                        .opencodeToolbarGlassID("chat-toolbar-loading", in: toolbarGlassNamespace)
-                        .accessibilityLabel("Loading chat controls")
-                }
-            } else {
-                #if DEBUG
-                if OpenClientScreenshotScene.current == nil {
-                    ToolbarItem(placement: .opencodeTrailing) {
-                        Button {
-                            chatPresentationStore.isShowingDebugProbe = true
-                        } label: {
-                            Image(systemName: "waveform.path.ecg")
-                        }
-                        .accessibilityLabel("Open Streaming Debug Log")
-                    }
-                }
-                #endif
-
-                if toolbarSnapshot.showsAgentMenu {
-                    ToolbarItem(placement: .opencodeTrailing) {
-                        AgentToolbarMenu(
-                            title: toolbarSnapshot.agentTitle,
-                            agents: toolbarSnapshot.selectableAgents,
-                            glassNamespace: toolbarGlassNamespace,
-                            onSelectAgent: { chatFacade.selectAgent(named: $0, for: liveSession) }
-                        )
-                    }
+                    Button("Close", action: onDismissChildSession)
+                        .accessibilityLabel("Close subagent thread")
                 }
 
-                #if !os(macOS)
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.flexible, placement: .topBarTrailing)
+                ToolbarItem(placement: .principal) {
+                    ChildSessionSheetNavigationTitle(
+                        title: headerSnapshot.navigationTitle,
+                        agentTitle: childToolbarSnapshot.agentTitle,
+                        modelTitle: childToolbarSnapshot.modelTitle
+                    )
                 }
-                #endif
 
                 ToolbarItem(placement: .opencodeTrailing) {
                     SessionContextUsageToolbarButton(metrics: contextMetrics) {
@@ -3816,20 +3987,104 @@ struct ChatView: View {
                     }
                     .opencodeToolbarGlassID("context-usage-toolbar", in: toolbarGlassNamespace)
                 }
+            } else {
+                standardChatToolbar(
+                    headerSnapshot: headerSnapshot,
+                    toolbarSnapshot: chatFacade.toolbarSnapshot(for: liveSession)
+                )
+            }
+        }
+    }
 
-                ToolbarItem(placement: .opencodeTrailing) {
-                    ModelToolbarMenu(
-                        modelTitle: toolbarSnapshot.modelTitle,
-                        providerGroups: toolbarSnapshot.providerGroups,
-                        reasoningVariants: toolbarSnapshot.reasoningVariants,
-                        reasoningTitle: toolbarSnapshot.reasoningTitle,
-                        glassNamespace: toolbarGlassNamespace,
-                        onSelectModel: { chatFacade.selectModel($0, for: liveSession) },
-                        onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
-                    )
+    @ToolbarContentBuilder
+    private func standardChatToolbar(
+        headerSnapshot: ChatFacade.ChatSessionHeaderSnapshot,
+        toolbarSnapshot: ChatFacade.ToolbarSnapshot
+    ) -> some ToolbarContent {
+        if headerSnapshot.isChildSession {
+            ToolbarItem(placement: .opencodeLeading) {
+                if let parentSession = headerSnapshot.parentSession {
+                    Button("Back") {
+                        Task { await chatFacade.selectSession(parentSession) }
+                    }
                 }
             }
         }
+
+        ToolbarItem(placement: .principal) {
+            ChatNavigationTitle(snapshot: headerSnapshot)
+                .frame(maxWidth: 300, alignment: .leading)
+        }
+
+        if toolbarSnapshot.isLoading {
+            ToolbarItem(placement: .opencodeTrailing) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+                    .opencodeToolbarGlassID("chat-toolbar-loading", in: toolbarGlassNamespace)
+                    .accessibilityLabel("Loading chat controls")
+            }
+        } else {
+            #if DEBUG
+            if OpenClientScreenshotScene.current == nil {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        chatPresentationStore.isShowingDebugProbe = true
+                    } label: {
+                        Image(systemName: "waveform.path.ecg")
+                    }
+                    .accessibilityLabel("Open Streaming Debug Log")
+                }
+            }
+            #endif
+
+            if toolbarSnapshot.showsAgentMenu {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    AgentToolbarMenu(
+                        title: toolbarSnapshot.agentTitle,
+                        agents: toolbarSnapshot.selectableAgents,
+                        glassNamespace: toolbarGlassNamespace,
+                        onSelectAgent: { chatFacade.selectAgent(named: $0, for: liveSession) }
+                    )
+                }
+            }
+
+            #if !os(macOS)
+            if #available(iOS 26.0, *) {
+                ToolbarSpacer(.flexible, placement: .topBarTrailing)
+            }
+            #endif
+
+            ToolbarItem(placement: .opencodeTrailing) {
+                SessionContextUsageToolbarButton(metrics: contextMetrics) {
+                    showingContextMetrics = true
+                }
+                .opencodeToolbarGlassID("context-usage-toolbar", in: toolbarGlassNamespace)
+            }
+
+            ToolbarItem(placement: .opencodeTrailing) {
+                ModelToolbarMenu(
+                    modelTitle: toolbarSnapshot.modelTitle,
+                    providerGroups: toolbarSnapshot.providerGroups,
+                    reasoningVariants: toolbarSnapshot.reasoningVariants,
+                    reasoningTitle: toolbarSnapshot.reasoningTitle,
+                    glassNamespace: toolbarGlassNamespace,
+                    onSelectModel: { chatFacade.selectModel($0, for: liveSession) },
+                    onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func presentTaskSession(sessionID: String) async {
+        guard let session = await chatFacade.sessionForPresentation(sessionID: sessionID) else { return }
+        taskSessionDetent = .medium
+        presentedTaskSession = session
+    }
+
+    private func restoreActiveSessionAfterTaskSheet() {
+        chatFacade.setActiveChatSessionID(sessionID)
     }
 
     private func appleIntelligenceTranscript() -> String {
@@ -3859,12 +4114,23 @@ struct ChatView: View {
         } else {
             expandedReasoningPartIDs.insert(id)
         }
+        requestBottomReadjustmentIfPinned()
+    }
+
+    private func toggleContextGroup(_ id: String) {
+        if expandedContextGroupIDs.contains(id) {
+            expandedContextGroupIDs.remove(id)
+        } else {
+            expandedContextGroupIDs.insert(id)
+        }
+        requestBottomReadjustmentIfPinned()
     }
 
     private var transcriptContentInvalidationToken: String {
         let reasoning = expandedReasoningPartIDs.sorted().joined(separator: "|")
+        let context = expandedContextGroupIDs.sorted().joined(separator: "|")
         let activity = expandedEarlierActivityMessageIDs.sorted().joined(separator: "|")
-        return "reasoning:\(reasoning)#activity:\(activity)"
+        return "reasoning:\(reasoning)#context:\(context)#activity:\(activity)"
     }
 
     private func pruneExpandedReasoningParts() {
@@ -3918,6 +4184,29 @@ private struct ChatNavigationTitle: View {
     }
 }
 
+private struct ChildSessionSheetNavigationTitle: View {
+    let title: String
+    let agentTitle: String
+    let modelTitle: String
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text("\(agentTitle.capitalized) · \(modelTitle)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: 240)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue("Agent \(agentTitle), model \(modelTitle)")
+    }
+}
+
 private struct ShimmeringChatNavigationTitle: View {
     let text: String
     let active: Bool
@@ -3962,6 +4251,58 @@ private struct ShimmeringChatNavigationTitle: View {
         withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) {
             phase = 1.35
         }
+    }
+}
+
+private struct ChatStatusBarStateShimmer: View {
+    let tint: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                tint.opacity(0.14)
+
+                if reduceMotion {
+                    tint.opacity(0.06)
+                } else {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        let width = max(geometry.size.width, 1)
+                        let bandWidth = min(max(width * 0.42, 120), 260)
+                        let duration = max(1.4, min(3.0, Double(width * 1.8 / 900)))
+                        let phase = timeline.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: duration) / duration
+                        let travel = width + bandWidth * 2
+                        let centerX = -bandWidth + CGFloat(phase) * travel
+
+                        LinearGradient(
+                            stops: [
+                                .init(color: tint.opacity(0), location: 0),
+                                .init(color: tint.opacity(0.18), location: 0.28),
+                                .init(color: tint.opacity(0.38), location: 0.5),
+                                .init(color: tint.opacity(0.18), location: 0.72),
+                                .init(color: tint.opacity(0), location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: bandWidth, height: geometry.size.height)
+                        .position(x: centerX, y: geometry.size.height / 2)
+                        .blendMode(.plusLighter)
+                    }
+                }
+            }
+        }
+        .frame(height: 78)
+        .mask(
+            LinearGradient(
+                colors: [.black, .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .compositingGroup()
     }
 }
 
@@ -4586,6 +4927,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
     let bottomScrollToken: Int
     let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
+    let bottomContentInsetAnimationToken: Int
     let bottomRefreshThreshold: CGFloat
     let bottomRefreshProgress: CGFloat
     let showsBottomRefreshIndicator: Bool
@@ -4610,6 +4952,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             bottomRefreshHeight: bottomRefreshHeight,
             isRefreshing: isRefreshing,
             isStreaming: isStreaming,
+            bottomContentInsetAnimationToken: bottomContentInsetAnimationToken,
             contentInvalidationToken: contentInvalidationToken,
             animatedRowIDs: animatedRowIDs,
             onBottomPullChanged: onBottomPullChanged,
@@ -4650,7 +4993,11 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         context.coordinator.animatedRowIDs = animatedRowIDs
         context.coordinator.onBottomPullChanged = onBottomPullChanged
         context.coordinator.onBottomPullEnded = onBottomPullEnded
-        context.coordinator.updateBottomContentInset(bottomContentInset, in: collectionView)
+        context.coordinator.updateBottomContentInset(
+            bottomContentInset,
+            animationToken: bottomContentInsetAnimationToken,
+            in: collectionView
+        )
         context.coordinator.updateRows(rows, in: collectionView)
         if shouldInvalidateContent {
             context.coordinator.configureVisibleHostingCells(in: collectionView)
@@ -4711,6 +5058,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         private var lastAnimatedBottomScrollToken: Int?
         private var pendingBottomScroll: (token: Int, animated: Bool)?
         private var bottomContentInset: CGFloat = 0
+        private var lastBottomContentInsetAnimationToken: Int
+        private var bottomCorrectionGeneration = 0
         private var isBottomPullTracking = false
 
         init(
@@ -4723,6 +5072,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             bottomRefreshHeight: CGFloat,
             isRefreshing: Bool,
             isStreaming: Bool,
+            bottomContentInsetAnimationToken: Int,
             contentInvalidationToken: String,
             animatedRowIDs: Set<String>,
             onBottomPullChanged: @escaping (CGFloat) -> Void,
@@ -4738,6 +5088,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             self.bottomRefreshHeight = bottomRefreshHeight
             self.isRefreshing = isRefreshing
             self.isStreaming = isStreaming
+            self.lastBottomContentInsetAnimationToken = bottomContentInsetAnimationToken
             self.contentInvalidationToken = contentInvalidationToken
             self.animatedRowIDs = animatedRowIDs
             self.onBottomPullChanged = onBottomPullChanged
@@ -4832,20 +5183,25 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
             guard !changedRowIDs.isEmpty else { return }
 
-            configureVisibleHostingCells(in: collectionView, changedRowIDs: changedRowIDs)
-
-            guard wasAtBottom else { return }
+            guard wasAtBottom else {
+                configureVisibleHostingCells(in: collectionView, changedRowIDs: changedRowIDs)
+                return
+            }
             let changedIndexPaths = indexPaths(for: changedRowIDs)
             UIView.performWithoutAnimation {
                 if isStreaming, !changedIndexPaths.isEmpty {
                     collectionView.reloadItems(at: changedIndexPaths)
                 } else {
+                    configureVisibleHostingCells(in: collectionView, changedRowIDs: changedRowIDs)
                     collectionView.collectionViewLayout.invalidateLayout()
                 }
                 collectionView.layoutIfNeeded()
             }
             scrollToBottom(in: collectionView, animated: !isStreaming, performsLayout: false)
-            guard !isStreaming else { return }
+            if isStreaming {
+                schedulePinnedBottomCorrection(in: collectionView)
+                return
+            }
             DispatchQueue.main.async { [weak self, weak collectionView] in
                 guard let self, let collectionView, self.isAtBottom.wrappedValue else { return }
                 collectionView.layoutIfNeeded()
@@ -4853,12 +5209,57 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             }
         }
 
-        func updateBottomContentInset(_ inset: CGFloat, in collectionView: UICollectionView) {
+        func updateBottomContentInset(
+            _ inset: CGFloat,
+            animationToken: Int,
+            in collectionView: UICollectionView
+        ) {
             let inset = max(0, inset)
             guard abs(inset - bottomContentInset) > 0.5 else { return }
+            let preservesBottom = OpenCodeChatBottomAnchorPolicy.preservesBottom(
+                isAtBottom: isAtBottom.wrappedValue,
+                isUserScrolling: isUserScrolling(collectionView)
+            )
+            let animatesChange = OpenCodeChatBottomInsetAnimationPolicy.shouldAnimate(
+                animationToken: animationToken,
+                lastAnimationToken: lastBottomContentInsetAnimationToken,
+                preservesBottom: preservesBottom
+            )
+            lastBottomContentInsetAnimationToken = animationToken
             bottomContentInset = inset
-            collectionView.contentInset.bottom = inset
-            collectionView.verticalScrollIndicatorInsets.bottom = inset
+            UIView.performWithoutAnimation {
+                collectionView.contentInset.bottom = inset
+                collectionView.verticalScrollIndicatorInsets.bottom = inset
+                guard preservesBottom else { return }
+                collectionView.layoutIfNeeded()
+            }
+            if preservesBottom {
+                scrollToBottom(in: collectionView, animated: animatesChange, performsLayout: false)
+                schedulePinnedBottomCorrection(
+                    in: collectionView,
+                    delay: animatesChange ? 0.3 : 0
+                )
+            }
+        }
+
+        private func schedulePinnedBottomCorrection(
+            in collectionView: UICollectionView,
+            delay: TimeInterval = 0
+        ) {
+            bottomCorrectionGeneration &+= 1
+            let generation = bottomCorrectionGeneration
+            Task { @MainActor [weak self, weak collectionView] in
+                if delay > 0 {
+                    try? await Task.sleep(for: .milliseconds(Int(delay * 1_000)))
+                } else {
+                    await Task.yield()
+                }
+                guard let self, let collectionView else { return }
+                guard self.bottomCorrectionGeneration == generation else { return }
+                guard !self.isUserScrolling(collectionView) else { return }
+                collectionView.layoutIfNeeded()
+                self.scrollToBottom(in: collectionView, animated: false, performsLayout: false)
+            }
         }
 
         func scrollToBottomIfNeeded(token: Int, animated: Bool, in collectionView: UICollectionView) {
@@ -5091,6 +5492,7 @@ private final class ChatTranscriptHostingCell: UICollectionViewCell {
         if disablesAnimations {
             contentConfiguration = UIHostingConfiguration {
                 content
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .transaction { transaction in
                         transaction.animation = nil
                         transaction.disablesAnimations = true
@@ -5100,6 +5502,7 @@ private final class ChatTranscriptHostingCell: UICollectionViewCell {
         } else {
             contentConfiguration = UIHostingConfiguration {
                 content
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .margins(.all, 0)
         }
@@ -5148,6 +5551,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: View {
     let bottomScrollToken: Int
     let animatedBottomScrollToken: Int
     let bottomContentInset: CGFloat
+    let bottomContentInsetAnimationToken: Int
     let bottomRefreshThreshold: CGFloat
     let bottomRefreshProgress: CGFloat
     let showsBottomRefreshIndicator: Bool

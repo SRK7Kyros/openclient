@@ -98,6 +98,11 @@ final class ChatFacade: ObservableObject {
         let showsAgentMenu: Bool
     }
 
+    struct ChildSessionToolbarSnapshot: Equatable {
+        let agentTitle: String
+        let modelTitle: String
+    }
+
     struct TodoInspectorSnapshot: Equatable {
         let selectedSessionID: String?
         let todos: [OpenCodeTodo]
@@ -479,6 +484,10 @@ final class ChatFacade: ObservableObject {
         await viewModel.openSession(sessionID: sessionID)
     }
 
+    func sessionForPresentation(sessionID: String) async -> OpenCodeSession? {
+        await viewModel.sessionForPresentation(sessionID: sessionID)
+    }
+
     @discardableResult
     func insertOptimisticUserMessage(
         _ text: String,
@@ -624,6 +633,30 @@ final class ChatFacade: ObservableObject {
             showsAgentMenu: viewModel.funAndGamesStore.findPlaceGame(for: session.id) == nil
                 && viewModel.funAndGamesStore.findBugGame(for: session.id) == nil
         )
+    }
+
+    func childSessionToolbarSnapshot(for session: OpenCodeSession) -> ChildSessionToolbarSnapshot {
+        let messages = messageSource(for: session)
+        let agentTitle = messages.reversed().compactMap { message -> String? in
+            guard message.info.sessionID == session.id else { return nil }
+            let agent = message.info.agent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return agent.isEmpty ? nil : agent
+        }.first ?? "Subagent"
+
+        let modelReference = messages.reversed().compactMap { message -> OpenCodeModelReference? in
+            guard message.info.sessionID == session.id else { return nil }
+            if let model = message.info.model {
+                return OpenCodeModelReference(providerID: model.providerID, modelID: model.modelID)
+            }
+            guard let providerID = message.info.providerID,
+                  let modelID = message.info.modelID else { return nil }
+            return OpenCodeModelReference(providerID: providerID, modelID: modelID)
+        }.first
+        let modelTitle = viewModel.modelConfigurationStore.model(for: modelReference)?.name
+            ?? modelReference?.modelID
+            ?? "Model"
+
+        return ChildSessionToolbarSnapshot(agentTitle: agentTitle, modelTitle: modelTitle)
     }
 
     func reasoningVariants(for session: OpenCodeSession) -> [String] {

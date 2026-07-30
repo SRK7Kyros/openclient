@@ -13,6 +13,8 @@ struct ActivityStyle {
 struct ActivityRow: View {
     let style: ActivityStyle
     var compact: Bool = false
+    var trailingAccessoryInset: CGFloat = 0
+    var reservesSubtitleSpace = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -35,6 +37,11 @@ struct ActivityRow: View {
                         .lineLimit(nil)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
+                } else if reservesSubtitleSpace {
+                    Text("Reserved")
+                        .font(.caption)
+                        .hidden()
+                        .accessibilityHidden(true)
                 }
             }
             .layoutPriority(1)
@@ -49,6 +56,11 @@ struct ActivityRow: View {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
+            }
+
+            if trailingAccessoryInset > 0 {
+                Color.clear
+                    .frame(width: trailingAccessoryInset)
             }
         }
         .padding(.horizontal, compact ? 10 : 12)

@@ -8,6 +8,7 @@ enum OpenClientSavedServerEditorMode: Equatable {
 enum OpenClientProjectContentTab: String, CaseIterable {
     case sessions
     case git
+    case terminal
     case mcp
 
     var title: String {
@@ -16,6 +17,8 @@ enum OpenClientProjectContentTab: String, CaseIterable {
             return "Sessions"
         case .git:
             return "Files"
+        case .terminal:
+            return "Terminal"
         case .mcp:
             return "MCP"
         }
@@ -27,6 +30,8 @@ enum OpenClientProjectContentTab: String, CaseIterable {
             return "bubble.left.and.bubble.right"
         case .git:
             return "doc.on.doc"
+        case .terminal:
+            return "terminal"
         case .mcp:
             return "server.rack"
         }
@@ -44,4 +49,5 @@ enum OpenClientStorageKey {
     static let projectActionsByScope = "projectActionsByScope"
     static let messageDraftsByChat = "messageDraftsByChat"
     static let chatBreadcrumbs = "chatBreadcrumbs"
+    static let terminalFontSize = "terminalFontSize"
 }

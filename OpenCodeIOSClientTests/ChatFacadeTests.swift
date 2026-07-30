@@ -428,6 +428,60 @@ final class ChatFacadeTests: XCTestCase {
         XCTAssertEqual(snapshot.navigationTitle, "Fix issue")
     }
 
+    func testSessionForPresentationKeepsParentSelected() async {
+        let viewModel = makeViewModel()
+        let parent = OpenCodeSession(
+            id: "session-parent",
+            title: "Parent Chat",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: nil
+        )
+        let child = OpenCodeSession(
+            id: "session-child",
+            title: "Review changes (@explore subagent)",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: parent.id
+        )
+        viewModel.directoryStore.sessions = [parent, child]
+        viewModel.directoryStore.selectedSession = parent
+
+        let presentedSession = await viewModel.chatFacade.sessionForPresentation(sessionID: child.id)
+
+        XCTAssertEqual(presentedSession?.id, child.id)
+        XCTAssertEqual(viewModel.directoryStore.selectedSession?.id, parent.id)
+    }
+
+    func testChildSessionToolbarUsesChildMessageMetadataWhileParentIsSelected() {
+        let viewModel = makeViewModel()
+        let parent = makeSession(id: "session-parent")
+        let child = OpenCodeSession(
+            id: "session-child",
+            title: "Review changes (@explore subagent)",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: parent.id
+        )
+        viewModel.directoryStore.sessions = [parent, child]
+        viewModel.directoryStore.selectedSession = parent
+        viewModel.chatStore.messages = [
+            makeMessage(id: "parent-message", sessionID: parent.id, role: "assistant", agent: "build", modelID: "basic"),
+        ]
+        viewModel.directoryStore.applyCanonicalMessages(
+            [makeMessage(id: "child-message", sessionID: child.id, role: "assistant", agent: "review", modelID: "reasoner")],
+            forSessionID: child.id
+        )
+
+        let snapshot = viewModel.chatFacade.childSessionToolbarSnapshot(for: child)
+
+        XCTAssertEqual(snapshot.agentTitle, "review")
+        XCTAssertEqual(snapshot.modelTitle, "Reasoner")
+    }
+
     func testPreferenceScopeKeyCoversServerDirectoryGlobalAndAppleIntelligence() {
         let viewModel = makeViewModel()
         viewModel.config = OpenCodeServerConfig(

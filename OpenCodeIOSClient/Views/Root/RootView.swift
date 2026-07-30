@@ -2,16 +2,24 @@ import SwiftUI
 
 struct RootView<ChatDestination: View>: View {
     @ObservedObject var shell: AppShellFacade
+    @ObservedObject var whatsNew: OpenClientWhatsNewStore
+    let bridge: OpenClientBridgeFacade?
     let chatDestination: (String, Int) -> ChatDestination
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
+    @State private var didRunUITestAutoConnect = false
+    @State private var pendingPluginSetupConnectionID: String?
 
     init(
         shell: AppShellFacade,
+        bridge: OpenClientBridgeFacade? = nil,
+        whatsNew: OpenClientWhatsNewStore? = nil,
         @ViewBuilder chatDestination: @escaping (String, Int) -> ChatDestination
     ) {
         self.shell = shell
+        self.bridge = bridge
+        self.whatsNew = whatsNew ?? OpenClientWhatsNewStore(checksForUpdates: false)
         self.chatDestination = chatDestination
     }
 
@@ -21,6 +29,19 @@ struct RootView<ChatDestination: View>: View {
             set: { sheet in
                 guard sheet == nil else { return }
                 shell.dismissPrimarySheet()
+            }
+        )
+    }
+
+    private var rootWhatsNewSheet: Binding<OpenClientReleaseNotes?> {
+        Binding(
+            get: {
+                guard shell.primarySheet == nil else { return nil }
+                return whatsNew.presentedRelease
+            },
+            set: { release in
+                guard release == nil else { return }
+                whatsNew.dismiss()
             }
         )
     }
@@ -57,7 +78,9 @@ struct RootView<ChatDestination: View>: View {
             case .connection:
                 ConnectionSheetView(
                     facade: shell.connection,
-                    commerce: shell.commerce
+                    commerce: shell.commerce,
+                    whatsNew: whatsNew,
+                    onSelectPluginSetupConnection: beginPluginSetup
                 ) { sessionID in
                     chatDestination(sessionID, 0)
                         .id(sessionID)
@@ -71,6 +94,15 @@ struct RootView<ChatDestination: View>: View {
                 .equatable()
             }
         }
+        .sheet(item: rootWhatsNewSheet) { release in
+            OpenClientWhatsNewView(
+                release: release,
+                connections: shell.connection.recentServerConfigs,
+                activeConnectionID: activeConnectionID,
+                onSelectConnection: beginPluginSetup,
+                onDone: whatsNew.dismiss
+            )
+        }
         .sheet(item: Binding(
             get: { shell.commerce.paywallReason },
             set: { shell.commerce.paywallReason = $0 }
@@ -82,6 +114,7 @@ struct RootView<ChatDestination: View>: View {
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
+            completePluginSetupIfReady()
         }
         .onChange(of: shell.isShowingConnectionOverlay) { _, isShowing in
             guard !isShowing else { return }
@@ -89,13 +122,54 @@ struct RootView<ChatDestination: View>: View {
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
+            completePluginSetupIfReady()
         }
         .animation(opencodeSelectionAnimation, value: shell.hasActiveWorkspace)
+        .task {
+#if DEBUG
+            guard !didRunUITestAutoConnect,
+                  ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_AUTO_CONNECT"] == "1" else { return }
+            didRunUITestAutoConnect = true
+            await Task.yield()
+            shell.connection.startConnectionFromEditor()
+#endif
+        }
+    }
+
+    private var activeConnectionID: String? {
+        shell.isConnected ? shell.connection.config.recentServerID : nil
+    }
+
+    private func beginPluginSetup(on connection: OpenCodeServerConfig) {
+        pendingPluginSetupConnectionID = connection.recentServerID
+        whatsNew.dismiss()
+
+        if activeConnectionID == connection.recentServerID {
+            completePluginSetupIfReady()
+        } else {
+            shell.connection.startConnection(to: connection)
+        }
+    }
+
+    private func completePluginSetupIfReady() {
+        guard let pendingPluginSetupConnectionID,
+              shell.isConnected,
+              !shell.isShowingConnectionOverlay,
+              shell.connection.config.recentServerID == pendingPluginSetupConnectionID else { return }
+
+        self.pendingPluginSetupConnectionID = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            shell.presentPluginSetupChat()
+        }
     }
 
     @ViewBuilder
     private var appShell: some View {
-        splitShell
+        BrowserRootContainer(browser: shell.browser) {
+            splitShell
+        }
     }
 
     private var splitShell: some View {
@@ -104,7 +178,8 @@ struct RootView<ChatDestination: View>: View {
                 facade: shell.projects,
                 connection: shell.connection,
                 configurations: shell.configurations,
-                games: shell.funAndGames
+                games: shell.funAndGames,
+                bridge: bridge
             ) {
                 guard shell.hasCurrentProject else { return }
 
@@ -133,6 +208,11 @@ struct RootView<ChatDestination: View>: View {
                 ProjectFileContentView(facade: shell.projectFiles)
             case .mcp:
                 ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
+            case let .terminal(id):
+                TerminalDetailView(facade: shell.terminal, terminalID: id)
+                    .id(id)
+            case .selectTerminal:
+                ContentUnavailableView("Select a Terminal", systemImage: "terminal", description: Text("Choose a terminal session from the list."))
             case let .loadingChat(sessionID):
                 CompactRouteLoadingView(title: "Loading chat...")
                     .id(sessionID)

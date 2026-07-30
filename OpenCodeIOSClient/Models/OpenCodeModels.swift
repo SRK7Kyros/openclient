@@ -852,6 +852,11 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     let cost: Double?
     let tokens: OpenCodeMessageTokens?
     let system: String?
+    let command: String?
+    let args: [String]?
+    let cwd: String?
+    let ptyStatus: String?
+    let pid: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -873,6 +878,11 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         case cost
         case tokens
         case system
+        case command
+        case args
+        case cwd
+        case ptyStatus = "status"
+        case pid
     }
 
     init(message: OpenCodeMessage) {
@@ -895,6 +905,11 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         cost = message.cost
         tokens = message.tokens
         system = message.system
+        command = nil
+        args = nil
+        cwd = nil
+        ptyStatus = nil
+        pid = nil
     }
 
     func asMessage() -> OpenCodeMessage {
@@ -927,6 +942,19 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         return session
     }
 
+    func asPTY() -> OpenCodePTY? {
+        guard let title, let command, let cwd, let ptyStatus, let pid else { return nil }
+        return OpenCodePTY(
+            id: id,
+            title: title,
+            command: command,
+            args: args ?? [],
+            cwd: cwd,
+            status: ptyStatus,
+            pid: pid
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -948,6 +976,11 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         cost = try container.decodeIfPresent(Double.self, forKey: .cost)
         tokens = try container.decodeIfPresent(OpenCodeMessageTokens.self, forKey: .tokens)
         system = try container.decodeIfPresent(String.self, forKey: .system)
+        command = try container.decodeIfPresent(String.self, forKey: .command)
+        args = try container.decodeIfPresent([String].self, forKey: .args)
+        cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
+        ptyStatus = try container.decodeIfPresent(String.self, forKey: .ptyStatus)
+        pid = try container.decodeIfPresent(Int.self, forKey: .pid)
     }
 }
 
@@ -2217,6 +2250,9 @@ struct OpenCodeToolInput: Codable, Hashable, Sendable {
     let pattern: String?
     let subagentType: String?
     let url: String?
+    let clientID: String?
+    let toolID: String?
+    let arguments: [String: OpenCodeJSONValue]?
 
     enum CodingKeys: String, CodingKey {
         case command
@@ -2228,12 +2264,44 @@ struct OpenCodeToolInput: Codable, Hashable, Sendable {
         case pattern
         case subagentType = "subagent_type"
         case url
+        case clientID = "client_id"
+        case toolID = "tool_id"
+        case arguments
+    }
+
+    init(
+        command: String?,
+        description: String?,
+        filePath: String?,
+        name: String?,
+        path: String?,
+        query: String?,
+        pattern: String?,
+        subagentType: String?,
+        url: String?,
+        clientID: String? = nil,
+        toolID: String? = nil,
+        arguments: [String: OpenCodeJSONValue]? = nil
+    ) {
+        self.command = command
+        self.description = description
+        self.filePath = filePath
+        self.name = name
+        self.path = path
+        self.query = query
+        self.pattern = pattern
+        self.subagentType = subagentType
+        self.url = url
+        self.clientID = clientID
+        self.toolID = toolID
+        self.arguments = arguments
     }
 
     var estimatedKeyCount: Int {
-        [command, description, filePath, name, path, query, pattern, subagentType, url]
+        let scalarCount = [command, description, filePath, name, path, query, pattern, subagentType, url, clientID, toolID]
             .compactMap { $0?.isEmpty == false ? $0 : nil }
             .count
+        return scalarCount + (arguments?.isEmpty == false ? 1 : 0)
     }
 }
 
@@ -2246,6 +2314,11 @@ struct OpenCodeToolMetadata: Codable, Hashable, Sendable {
     let sessionId: String?
     let truncated: Bool?
     let files: [OpenCodeJSONValue]?
+    let clientID: String?
+    let toolID: String?
+    let renderer: String?
+    let schemaVersion: Int?
+    let payload: OpenCodeJSONValue?
 
     enum CodingKeys: String, CodingKey {
         case output
@@ -2256,6 +2329,41 @@ struct OpenCodeToolMetadata: Codable, Hashable, Sendable {
         case sessionId
         case truncated
         case files
+        case clientID
+        case toolID
+        case renderer
+        case schemaVersion
+        case payload
+    }
+
+    init(
+        output: String?,
+        description: String?,
+        exit: Int?,
+        filediff: OpenCodeJSONValue?,
+        loaded: [String]?,
+        sessionId: String?,
+        truncated: Bool?,
+        files: [OpenCodeJSONValue]?,
+        clientID: String? = nil,
+        toolID: String? = nil,
+        renderer: String? = nil,
+        schemaVersion: Int? = nil,
+        payload: OpenCodeJSONValue? = nil
+    ) {
+        self.output = output
+        self.description = description
+        self.exit = exit
+        self.filediff = filediff
+        self.loaded = loaded
+        self.sessionId = sessionId
+        self.truncated = truncated
+        self.files = files
+        self.clientID = clientID
+        self.toolID = toolID
+        self.renderer = renderer
+        self.schemaVersion = schemaVersion
+        self.payload = payload
     }
 }
 
@@ -2332,6 +2440,10 @@ enum OpenCodeTypedEvent: Sendable {
     case questionAsked(OpenCodeQuestionRequest)
     case questionReplied(sessionID: String, requestID: String)
     case questionRejected(sessionID: String, requestID: String)
+    case ptyCreated(OpenCodePTY)
+    case ptyUpdated(OpenCodePTY)
+    case ptyExited(id: String, exitCode: Int)
+    case ptyDeleted(id: String)
     case vcsBranchUpdated(branch: String?)
     case fileWatcherUpdated(file: String)
     case unknown(String)
@@ -2446,6 +2558,19 @@ enum OpenCodeTypedEvent: Sendable {
             guard let sessionID = envelope.properties.sessionID,
                   let requestID = envelope.properties.requestID ?? envelope.properties.id else { return nil }
             self = .questionRejected(sessionID: sessionID, requestID: requestID)
+        case "pty.created":
+            guard let pty = envelope.properties.info?.asPTY() else { return nil }
+            self = .ptyCreated(pty)
+        case "pty.updated":
+            guard let pty = envelope.properties.info?.asPTY() else { return nil }
+            self = .ptyUpdated(pty)
+        case "pty.exited":
+            guard let id = envelope.properties.id,
+                  let exitCode = envelope.properties.exitCode else { return nil }
+            self = .ptyExited(id: id, exitCode: exitCode)
+        case "pty.deleted":
+            guard let id = envelope.properties.id else { return nil }
+            self = .ptyDeleted(id: id)
         case "vcs.branch.updated":
             self = .vcsBranchUpdated(branch: envelope.properties.branch)
         case "file.watcher.updated":
@@ -2502,6 +2627,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let file: String?
     let directory: String?
     let version: String?
+    let exitCode: Int?
 
     init(
         worktree: String? = nil,
@@ -2547,7 +2673,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
         branch: String? = nil,
         file: String? = nil,
         directory: String? = nil,
-        version: String? = nil
+        version: String? = nil,
+        exitCode: Int? = nil
     ) {
         self.worktree = worktree
         self.vcs = vcs
@@ -2593,6 +2720,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         self.file = file
         self.directory = directory
         self.version = version
+        self.exitCode = exitCode
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2640,6 +2768,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case file
         case directory
         case version
+        case exitCode
     }
 
     init(from decoder: Decoder) throws {
@@ -2689,6 +2818,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         file = Self.decode(String.self, from: container, forKey: .file)
         directory = Self.decode(String.self, from: container, forKey: .directory)
         version = Self.decode(String.self, from: container, forKey: .version)
+        exitCode = Self.decode(Int.self, from: container, forKey: .exitCode)
     }
 
     private static func decode<T: Decodable>(

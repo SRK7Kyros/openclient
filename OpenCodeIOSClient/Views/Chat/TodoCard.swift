@@ -23,6 +23,7 @@ struct TodoCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(width: 220, alignment: .leading)
+        .frame(minHeight: 78, alignment: .leading)
         .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)

@@ -62,7 +62,9 @@ private struct ConnectionPreview: View {
     var body: some View {
         ConnectionView(
             facade: viewModel.connectionFacade,
-            commerce: viewModel.commerceFacade
+            commerce: viewModel.commerceFacade,
+            whatsNew: OpenClientWhatsNewStore(checksForUpdates: false),
+            onSelectPluginSetupConnection: nil
         )
     }
 }

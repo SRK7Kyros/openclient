@@ -22,6 +22,22 @@ struct ProjectContentView: View {
         .navigationTitle(projectTitle)
         .opencodeInlineNavigationTitle()
         .toolbar {
+            if showsBrowserToolbarAction {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        if shell.browser.presentation == .closed {
+                            shell.browser.openAddressBar()
+                        } else {
+                            shell.browser.expand()
+                        }
+                    } label: {
+                        Image(systemName: "globe")
+                    }
+                    .accessibilityLabel("Open Browser")
+                    .accessibilityIdentifier("browser.open")
+                }
+            }
+
             ToolbarItem(placement: .opencodeTrailing) {
                 Button {
                     shell.presentProjectSettings()
@@ -116,6 +132,14 @@ struct ProjectContentView: View {
                     .tag(OpenClientProjectContentTab.git)
             }
 
+            if snapshot.isTerminalAvailable {
+                TerminalProjectView(facade: shell.terminal, onTerminalChosen: onDetailChosen)
+                    .tabItem {
+                        Label(OpenClientProjectContentTab.terminal.title, systemImage: OpenClientProjectContentTab.terminal.systemImage)
+                    }
+                    .tag(OpenClientProjectContentTab.terminal)
+            }
+
             MCPListView(facade: shell.mcp)
                 .tabItem {
                     Label(OpenClientProjectContentTab.mcp.title, systemImage: OpenClientProjectContentTab.mcp.systemImage)
@@ -146,6 +170,17 @@ struct ProjectContentView: View {
                 }
             }
 
+
+            if snapshot.isTerminalAvailable {
+                Tab(
+                    OpenClientProjectContentTab.terminal.title,
+                    systemImage: OpenClientProjectContentTab.terminal.systemImage,
+                    value: ProjectNativeTab.terminal
+                ) {
+                    TerminalProjectView(facade: shell.terminal, onTerminalChosen: onDetailChosen)
+                }
+            }
+
             Tab(
                 OpenClientProjectContentTab.mcp.title,
                 systemImage: OpenClientProjectContentTab.mcp.systemImage,
@@ -163,6 +198,7 @@ struct ProjectContentView: View {
             }
         }
         .opencodeSearchTabSelectionActivation()
+        .opencodeProjectBrowserAccessory(browser: shell.browser)
     }
 
     @available(iOS 18.0, *)
@@ -184,6 +220,15 @@ struct ProjectContentView: View {
         snapshot.showsToolbarAction(usesNativeComposeTab: usesNativeSearchRoleComposeTab)
     }
 
+    private var showsBrowserToolbarAction: Bool {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        #endif
+        return false
+    }
+
     @ViewBuilder
     private var content: some View {
         switch snapshot.selectedTab {
@@ -197,6 +242,12 @@ struct ProjectContentView: View {
             }
         case .mcp:
             MCPListView(facade: shell.mcp)
+        case .terminal:
+            if snapshot.isTerminalAvailable {
+                TerminalProjectView(facade: shell.terminal, onTerminalChosen: onDetailChosen)
+            } else {
+                SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
+            }
         }
     }
 
@@ -263,6 +314,7 @@ struct ProjectContentTabSelector: View {
 private enum ProjectNativeTab: Hashable {
     case sessions
     case git
+    case terminal
     case mcp
     case compose
 
@@ -274,6 +326,8 @@ private enum ProjectNativeTab: Hashable {
             self = .git
         case .mcp:
             self = .mcp
+        case .terminal:
+            self = .terminal
         }
     }
 
@@ -285,6 +339,8 @@ private enum ProjectNativeTab: Hashable {
             return .git
         case .mcp:
             return .mcp
+        case .terminal:
+            return .terminal
         case .compose:
             return nil
         }

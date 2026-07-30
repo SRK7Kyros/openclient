@@ -6,9 +6,16 @@ struct OpenCodeMacApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(shell: composition.appShell) { sessionID, presentationRequest in
+            RootView(
+                shell: composition.appShell,
+                bridge: composition.bridge,
+                whatsNew: composition.whatsNew
+            ) { sessionID, presentationRequest in
                 ChatView(
                     chatFacade: composition.chat,
+                    browser: composition.appShell.browser,
+                    imageContent: composition.imageContent,
+                    videoStreams: composition.videoStreams,
                     sessionID: sessionID,
                     presentationRequest: presentationRequest
                 )

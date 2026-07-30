@@ -10,9 +10,27 @@ struct ProjectListView: View {
     let connection: ConnectionFacade
     @ObservedObject var configurations: ConfigurationsFacade
     @ObservedObject var games: FunAndGamesFacade
+    let bridge: OpenClientBridgeFacade?
     let onProjectChosen: () -> Void
     @State private var projectForColorPicker: OpenCodeProject?
     @State private var projectForImagePicker: OpenCodeProject?
+    @State private var isShowingBridgeStatus = false
+
+    init(
+        facade: ProjectFacade,
+        connection: ConnectionFacade,
+        configurations: ConfigurationsFacade,
+        games: FunAndGamesFacade,
+        bridge: OpenClientBridgeFacade? = nil,
+        onProjectChosen: @escaping () -> Void
+    ) {
+        self.facade = facade
+        self.connection = connection
+        self.configurations = configurations
+        self.games = games
+        self.bridge = bridge
+        self.onProjectChosen = onProjectChosen
+    }
 
     var body: some View {
         let snapshot = facade.listSnapshot
@@ -160,6 +178,14 @@ struct ProjectListView: View {
                 .accessibilityIdentifier("projects.disconnect")
             }
 
+            if let bridge {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    OpenClientBridgeToolbarButton(bridge: bridge) {
+                        isShowingBridgeStatus = true
+                    }
+                }
+            }
+
             ToolbarItem(placement: .opencodeTrailing) {
                 Button {
                     configurations.present()
@@ -181,6 +207,14 @@ struct ProjectListView: View {
             }
         }
         .sheet(isPresented: Binding(
+            get: { isShowingBridgeStatus },
+            set: { isShowingBridgeStatus = $0 }
+        )) {
+            if let bridge {
+                OpenClientBridgeStatusView(bridge: bridge)
+            }
+        }
+        .sheet(isPresented: Binding(
             get: { facade.isShowingCreateProjectSheet },
             set: { facade.isShowingCreateProjectSheet = $0 }
         )) {
@@ -190,7 +224,7 @@ struct ProjectListView: View {
             get: { configurations.isShowingConfigurationsSheet },
             set: { configurations.isShowingConfigurationsSheet = $0 }
         )) {
-            ConfigurationsSheet(viewModel: configurations)
+            ConfigurationsSheet(viewModel: configurations, bridge: bridge)
         }
         .sheet(isPresented: Binding(
             get: { games.isShowingFindPlaceModelSheet },
@@ -1378,6 +1412,7 @@ private struct NewChatInputBar: View {
             onLoadMCP: {},
             onToggleMCP: { _ in },
             onAddAttachments: onAddAttachments,
+            onOpenBrowser: nil,
             glassNamespace: glassNamespace,
             allowsTextTools: false,
             allowsSessionTools: false,

@@ -103,6 +103,12 @@ final class AppViewModel: ObservableObject {
         clientProvider: { [weak self] in self?.client },
         directoryProvider: { [weak self] in self?.effectiveSelectedDirectory }
     )
+    let terminalStore = TerminalStore()
+    lazy var terminalFacade = TerminalFacade(
+        store: terminalStore,
+        clientProvider: { [weak self] in self?.client },
+        directoryProvider: { [weak self] in self?.effectiveSelectedDirectory }
+    )
     let projectFilesStore = ProjectFilesStore()
     lazy var projectFilesFacade = ProjectFilesFacade(
         store: projectFilesStore,

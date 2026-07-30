@@ -33,6 +33,7 @@ struct MarkdownMessageText: View {
     let style: Style
     var isStreaming = false
     var animatesStreamingText = true
+    var streamingAnimationID: String? = nil
     var onStreamingRevealCompleted: (() -> Void)? = nil
 
     var body: some View {
@@ -78,14 +79,15 @@ struct MarkdownMessageText: View {
     private func markdownBlockView(_ block: MarkdownBlock) -> some View {
         Group {
             switch block {
-            case let .text(_, value):
+            case let .text(id, value):
                 if shouldUseNativeStreamingChunkText {
 #if canImport(UIKit)
                     NativeStreamingChunkTextLabel(
                         text: value,
                         isUser: isUser,
                         style: style,
-                        lineSpacing: textLineSpacing
+                        lineSpacing: textLineSpacing,
+                        animationID: streamingBlockAnimationID(blockID: id)
                     )
                     .padding(.bottom, textBlockBottomPadding(for: value))
 #else
@@ -104,11 +106,29 @@ struct MarkdownMessageText: View {
                 styledListItem(markdownText(value), marker: marker)
             case let .table(_, headers, rows):
                 styledTable(headers: headers, rows: rows)
-            case let .codeBlock(_, language, value):
+            case let .codeBlock(id, language, value):
                 HighlightedCodeBlock(code: value, language: language)
                     .padding(.vertical, codeBlockOuterPadding)
+                    .overlay(alignment: .bottom) {
+                        if id == activeStreamingCodeBlockID {
+                            StreamingTurnBottomGradient()
+                                .allowsHitTesting(false)
+                        }
+                    }
             }
         }
+    }
+
+    private func streamingBlockAnimationID(blockID: Int) -> String? {
+        streamingAnimationID.map { "\($0):block-\(blockID)" }
+    }
+
+    private var activeStreamingCodeBlockID: Int? {
+        guard isStreaming, let lastBlock = blocks.last else { return nil }
+        if case let .codeBlock(id, _, _) = lastBlock {
+            return id
+        }
+        return nil
     }
 
     private var shouldUseNativeStreamingChunkText: Bool {
@@ -409,6 +429,16 @@ struct MarkdownMessageText: View {
         }
 
         return nil
+    }
+
+    @MainActor
+    static func _testHasActiveStreamingCodeBlock(in text: String) -> Bool {
+        MarkdownMessageText(
+            text: text,
+            isUser: false,
+            style: .standard,
+            isStreaming: true
+        ).activeStreamingCodeBlockID != nil
     }
 #endif
 
@@ -920,6 +950,7 @@ private struct NativeStreamingChunkTextLabel: UIViewRepresentable {
     let isUser: Bool
     let style: MarkdownMessageText.Style
     let lineSpacing: CGFloat
+    let animationID: String?
 
     func makeUIView(context: Context) -> StreamingChunkUILabel {
         let label = StreamingChunkUILabel()
@@ -933,7 +964,13 @@ private struct NativeStreamingChunkTextLabel: UIViewRepresentable {
     }
 
     func updateUIView(_ label: StreamingChunkUILabel, context: Context) {
-        label.configure(text: text, font: uiFont, textColor: uiTextColor, lineSpacing: lineSpacing)
+        label.configure(
+            text: text,
+            font: uiFont,
+            textColor: uiTextColor,
+            lineSpacing: lineSpacing,
+            animationID: animationID
+        )
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView label: StreamingChunkUILabel, context: Context) -> CGSize? {
@@ -942,7 +979,7 @@ private struct NativeStreamingChunkTextLabel: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ label: StreamingChunkUILabel, coordinator: ()) {
-        label.stopAnimatingSuffix()
+        label.stopAnimatingChunks()
     }
 
     private var uiFont: UIFont {
@@ -966,48 +1003,128 @@ private struct NativeStreamingChunkTextLabel: UIViewRepresentable {
     }
 }
 
+@MainActor
+final class StreamingChunkAnimationCache {
+    struct FadingChunk: Equatable {
+        let range: NSRange
+        let startedAt: CFTimeInterval
+    }
+
+    struct Snapshot: Equatable {
+        let chunks: [FadingChunk]
+    }
+
+    private struct Entry {
+        var text: String
+        var chunks: [FadingChunk]
+        var lastAccess: UInt64
+    }
+
+    static let shared = StreamingChunkAnimationCache()
+    static let fadeDuration: CFTimeInterval = 0.32
+
+    private var entries: [String: Entry] = [:]
+    private var accessCounter: UInt64 = 0
+
+    func snapshot(
+        animationID: String,
+        text: String,
+        animatesAppend: Bool,
+        at time: CFTimeInterval
+    ) -> Snapshot {
+        accessCounter &+= 1
+        var entry = entries[animationID] ?? Entry(text: "", chunks: [], lastAccess: accessCounter)
+        entry.chunks.removeAll { time - $0.startedAt >= Self.fadeDuration }
+        if !animatesAppend {
+            entry.chunks.removeAll(keepingCapacity: true)
+        }
+
+        if entry.text != text {
+            let previousUTF16Length = (entry.text as NSString).length
+            let currentUTF16Length = (text as NSString).length
+            if animatesAppend, text.hasPrefix(entry.text), currentUTF16Length > previousUTF16Length {
+                entry.chunks.append(FadingChunk(
+                    range: NSRange(
+                        location: previousUTF16Length,
+                        length: currentUTF16Length - previousUTF16Length
+                    ),
+                    startedAt: time
+                ))
+            } else {
+                entry.chunks.removeAll(keepingCapacity: true)
+            }
+            entry.text = text
+        }
+
+        entry.lastAccess = accessCounter
+        entries[animationID] = entry
+        trimIfNeeded()
+        return Snapshot(chunks: entry.chunks)
+    }
+
+    private func trimIfNeeded() {
+        guard entries.count > 600 else { return }
+        let expiredIDs = entries
+            .sorted { $0.value.lastAccess < $1.value.lastAccess }
+            .prefix(150)
+            .map(\.key)
+        for id in expiredIDs {
+            entries.removeValue(forKey: id)
+        }
+    }
+}
+
 private final class StreamingChunkUILabel: UILabel {
     private var configuredText = ""
     private var configuredFont: UIFont?
     private var configuredTextColor: UIColor?
     private var configuredLineSpacing: CGFloat = 0
-    private var suffixStartIndex: Int?
-    private var suffixAnimationStartedAt: CFTimeInterval = 0
+    private var configuredAnimationID: String?
+    private var fadingChunks: [StreamingChunkAnimationCache.FadingChunk] = []
     private var displayLink: CADisplayLink?
+    private let fallbackAnimationID = UUID().uuidString
 
-    private let suffixFadeDuration: CFTimeInterval = 0.28
-    private let suffixMinimumOpacity: CGFloat = 0.08
+    private let chunkMinimumOpacity: CGFloat = 0.08
 
-    func configure(text: String, font: UIFont, textColor: UIColor, lineSpacing: CGFloat) {
-        guard configuredText != text || configuredFont != font || configuredTextColor != textColor || configuredLineSpacing != lineSpacing else {
+    func configure(text: String, font: UIFont, textColor: UIColor, lineSpacing: CGFloat, animationID: String?) {
+        guard configuredText != text
+                || configuredFont != font
+                || configuredTextColor != textColor
+                || configuredLineSpacing != lineSpacing
+                || configuredAnimationID != animationID else {
             return
         }
 
-        let previousText = configuredText
-        let canAnimateSuffix = !previousText.isEmpty && text.hasPrefix(previousText) && text.count > previousText.count
+        let now = CACurrentMediaTime()
         configuredText = text
         configuredFont = font
         configuredTextColor = textColor
         configuredLineSpacing = lineSpacing
+        configuredAnimationID = animationID
 
-        if canAnimateSuffix {
-            suffixStartIndex = previousText.count
-            suffixAnimationStartedAt = CACurrentMediaTime()
-            renderText(suffixOpacity: suffixMinimumOpacity)
+        let snapshot = StreamingChunkAnimationCache.shared.snapshot(
+            animationID: animationID ?? fallbackAnimationID,
+            text: text,
+            animatesAppend: !UIAccessibility.isReduceMotionEnabled,
+            at: now
+        )
+        fadingChunks = snapshot.chunks
+
+        if !fadingChunks.isEmpty {
+            renderText(at: now)
             startDisplayLink()
         } else {
-            suffixStartIndex = nil
-            renderText(suffixOpacity: 1)
-            stopAnimatingSuffix()
+            renderText(at: now)
+            stopAnimatingChunks()
         }
     }
 
-    func stopAnimatingSuffix() {
+    func stopAnimatingChunks() {
         displayLink?.invalidate()
         displayLink = nil
     }
 
-    private func renderText(suffixOpacity: CGFloat) {
+    private func renderText(at time: CFTimeInterval) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = configuredLineSpacing
         paragraph.lineBreakMode = .byWordWrapping
@@ -1018,21 +1135,18 @@ private final class StreamingChunkUILabel: UILabel {
             .paragraphStyle: paragraph
         ]
 
-        guard let suffixStartIndex, suffixStartIndex < configuredText.count else {
-            attributedText = NSAttributedString(string: configuredText, attributes: baseAttributes)
-            return
+        let attributed = NSMutableAttributedString(string: configuredText, attributes: baseAttributes)
+        for chunk in fadingChunks {
+            let elapsed = max(0, time - chunk.startedAt)
+            let linear = min(1, elapsed / StreamingChunkAnimationCache.fadeDuration)
+            let eased = 1 - pow(1 - linear, 2.2)
+            let opacity = chunkMinimumOpacity + (1 - chunkMinimumOpacity) * CGFloat(eased)
+            attributed.addAttribute(
+                .foregroundColor,
+                value: color.withAlphaComponent(opacity),
+                range: chunk.range
+            )
         }
-
-        let suffixStart = configuredText.index(configuredText.startIndex, offsetBy: suffixStartIndex)
-        let attributed = NSMutableAttributedString(string: String(configuredText[..<suffixStart]), attributes: baseAttributes)
-        attributed.append(NSAttributedString(
-            string: String(configuredText[suffixStart...]),
-            attributes: [
-                .font: configuredFont ?? UIFont.preferredFont(forTextStyle: .body),
-                .foregroundColor: color.withAlphaComponent(suffixOpacity),
-                .paragraphStyle: paragraph
-            ]
-        ))
         attributedText = attributed
     }
 
@@ -1045,16 +1159,17 @@ private final class StreamingChunkUILabel: UILabel {
     }
 
     @objc private func displayLinkDidTick() {
-        let elapsed = max(0, CACurrentMediaTime() - suffixAnimationStartedAt)
-        let linear = min(1, elapsed / suffixFadeDuration)
-        let eased = 1 - pow(1 - linear, 2.2)
-        renderText(suffixOpacity: suffixMinimumOpacity + (1 - suffixMinimumOpacity) * CGFloat(eased))
+        let now = CACurrentMediaTime()
+        removeCompletedChunks(at: now)
+        renderText(at: now)
 
-        if linear >= 1 {
-            suffixStartIndex = nil
-            renderText(suffixOpacity: 1)
-            stopAnimatingSuffix()
+        if fadingChunks.isEmpty {
+            stopAnimatingChunks()
         }
+    }
+
+    private func removeCompletedChunks(at time: CFTimeInterval) {
+        fadingChunks.removeAll { time - $0.startedAt >= StreamingChunkAnimationCache.fadeDuration }
     }
 
     override func layoutSubviews() {
@@ -1069,8 +1184,8 @@ private final class StreamingChunkUILabel: UILabel {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window == nil {
-            stopAnimatingSuffix()
-        } else if suffixStartIndex != nil {
+            stopAnimatingChunks()
+        } else if !fadingChunks.isEmpty {
             startDisplayLink()
         }
     }

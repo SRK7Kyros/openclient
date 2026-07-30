@@ -21,6 +21,8 @@ private let connectionSheetHomeDetent: PresentationDetent = .fraction(0.98)
 struct ConnectionSheetView<ChatDestination: View>: View {
     @ObservedObject var facade: ConnectionFacade
     @ObservedObject var commerce: CommerceFacade
+    @ObservedObject var whatsNew: OpenClientWhatsNewStore
+    let onSelectPluginSetupConnection: (OpenCodeServerConfig) -> Void
     let chatDestination: (String) -> ChatDestination
 
     @State private var path: [ConnectionSheetRoute] = []
@@ -33,7 +35,12 @@ struct ConnectionSheetView<ChatDestination: View>: View {
     var body: some View {
         ZStack {
             NavigationStack(path: $path) {
-                ConnectionView(facade: facade, commerce: commerce) { route in
+                ConnectionView(
+                    facade: facade,
+                    commerce: commerce,
+                    whatsNew: whatsNew,
+                    onSelectPluginSetupConnection: onSelectPluginSetupConnection
+                ) { route in
                     path.append(route)
                 }
                 .navigationDestination(for: ConnectionSheetRoute.self) { route in
@@ -129,6 +136,8 @@ struct ConnectionSheetView<ChatDestination: View>: View {
 struct ConnectionView: View {
     @ObservedObject var facade: ConnectionFacade
     @ObservedObject var commerce: CommerceFacade
+    @ObservedObject var whatsNew: OpenClientWhatsNewStore
+    var onSelectPluginSetupConnection: ((OpenCodeServerConfig) -> Void)?
     var navigate: ((ConnectionSheetRoute) -> Void)? = nil
 
     private var hasRecentServers: Bool {
@@ -170,6 +179,28 @@ struct ConnectionView: View {
             Text("Folder picking is unavailable on this platform.")
                 .presentationDetents([.medium])
 #endif
+        }
+        .sheet(item: Binding(
+            get: { whatsNew.presentedRelease },
+            set: { release in
+                guard release == nil else { return }
+                whatsNew.dismiss()
+            }
+        )) { release in
+            OpenClientWhatsNewView(
+                release: release,
+                connections: facade.recentServerConfigs,
+                activeConnectionID: facade.isConnected ? facade.config.recentServerID : nil,
+                onSelectConnection: { connection in
+                    if let onSelectPluginSetupConnection {
+                        onSelectPluginSetupConnection(connection)
+                    } else {
+                        whatsNew.dismiss()
+                        facade.startConnection(to: connection)
+                    }
+                },
+                onDone: whatsNew.dismiss
+            )
         }
         .scrollContentBackground(.hidden)
         .background(.clear)
@@ -282,6 +313,18 @@ struct ConnectionView: View {
     private var helpSection: some View {
         Section("Help") {
             Button {
+                whatsNew.presentLatestRelease()
+            } label: {
+                LatestUpdatesNavigationRow()
+            }
+            .buttonStyle(.plain)
+            .disabled(!whatsNew.hasCurrentRelease)
+            .accessibilityIdentifier("help.latest-updates")
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            Button {
                 navigate?(.help)
             } label: {
                 HelpNavigationRow()
@@ -306,7 +349,7 @@ private struct ServerConnectionEditorView: View {
         .scrollContentBackground(.hidden)
         .background(.clear)
         .navigationTitle(facade.isEditingSavedServer ? "Edit Server" : "Server")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
         .toolbar {
             if facade.isEditingSavedServer {
                 ToolbarItem(placement: .confirmationAction) {
@@ -534,7 +577,7 @@ private struct ServerConnectionSections: View {
     ]
 
     @ObservedObject var facade: ConnectionFacade
-    @State private var acknowledgesInsecureConnection = false
+    @State private var acknowledgesInsecureConnection = ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_MODE"] == "1"
 
     private var requiresInsecureConnectionAcknowledgment: Bool {
         facade.config.usesInsecureHTTP
@@ -676,7 +719,7 @@ private struct ConnectionListStyleModifier: ViewModifier {
                 .opencodeSoftScrollEdgeEffect()
         } else {
             content
-                .listStyle(.insetGrouped)
+                .opencodeGroupedListStyle()
                 .scrollContentBackground(.hidden)
                 .background(.clear)
                 .opencodeSoftScrollEdgeEffect()
@@ -722,6 +765,47 @@ private struct HelpNavigationRow: View {
             }
 
             Spacer()
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct LatestUpdatesNavigationRow: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.indigo.opacity(0.92), Color.purple.opacity(0.82)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 52, height: 52)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("See Latest Big Updates")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text("Catch up on the biggest features added to OpenClient.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)

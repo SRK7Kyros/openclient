@@ -461,6 +461,7 @@ struct MessageComposer: View {
     let onLoadMCP: () -> Void
     let onToggleMCP: (String) -> Void
     let onAddAttachments: ([OpenCodeComposerAttachment]) -> Void
+    let onOpenBrowser: (() -> Void)?
     let glassNamespace: Namespace.ID
     var allowsTextTools = true
     var allowsSessionTools = true
@@ -718,7 +719,7 @@ struct MessageComposer: View {
     }
 
     private var expandedAccessorySheetDetentHeight: CGFloat {
-        #if canImport(PhotosUI)
+        #if canImport(PhotosUI) && canImport(UIKit)
         recentPhotoAssets.isEmpty ? 475 : 575
         #else
         380
@@ -942,7 +943,7 @@ struct MessageComposer: View {
             NavigationStack(path: $accessoryNavigationPath) {
                 accessorySheetContent
                     .navigationTitle("Message Tools")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .opencodeInlineNavigationTitle()
                     .navigationDestination(for: AccessoryDestination.self) { destination in
                         switch destination {
                         case .fork:
@@ -1344,8 +1345,25 @@ struct MessageComposer: View {
 #endif
 #endif
 
-                if allowsTextTools || allowsSessionTools {
+                if allowsTextTools || allowsSessionTools || onOpenBrowser != nil {
                     AccessorySectionTitle("Utilities")
+
+                    if let onOpenBrowser {
+                        AccessoryMenuAction(
+                            title: "Browser",
+                            subtitle: "Open a webpage",
+                            systemImage: "globe",
+                            tint: .blue,
+                            isDisabled: false,
+                            accessibilityIdentifier: "chat.composer.browser",
+                            action: {
+                                isAccessoryMenuOpen = false
+                                DispatchQueue.main.async {
+                                    onOpenBrowser()
+                                }
+                            }
+                        )
+                    }
 
                     if allowsSessionTools {
                         AccessoryMenuAction(
@@ -2674,8 +2692,8 @@ private struct ComposerForkListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .navigationTitle("Fork Session")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
+        .opencodeInlineNavigationTitle()
+        .searchable(text: $searchText, prompt: "Search messages")
     }
 }
 
@@ -2789,10 +2807,10 @@ private struct ComposerMCPListView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .opencodeGroupedListStyle()
         .searchable(text: $searchText, prompt: "Search MCP servers")
         .navigationTitle("MCP")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
         .task {
             onLoad()
         }

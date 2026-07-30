@@ -70,8 +70,10 @@ struct HelpView: View {
             }
         }
         .navigationTitle("Help")
-        .navigationBarTitleDisplayMode(.large)
+        .opencodeLargeNavigationTitle()
+        #if os(iOS) || targetEnvironment(macCatalyst)
         .toolbar(selectedArticle == nil ? Visibility.visible : Visibility.hidden, for: .navigationBar)
+        #endif
     }
 
     private var helpIntro: some View {

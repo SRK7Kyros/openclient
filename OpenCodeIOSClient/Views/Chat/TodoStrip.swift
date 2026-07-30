@@ -128,34 +128,42 @@ struct ComposerAccessoryArea: View {
     }
 
     private var collapsedStacks: some View {
-        HStack(spacing: 14) {
-            AccessoryStackSummary(
-                focus: .todos,
-                expansion: $expansion
-            ) {
-                ForEach(Array(activeTodos.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
-                    let todo = entry.element
-                    StackTodoCard(todo: todo, showsContent: entry.offset == 0)
-                        .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
-                        .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
-                        .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
-                }
-            }
+        GeometryReader { geometry in
+            let stackWidth = max(0, (geometry.size.width - 14) / 2)
 
-            AccessoryStackSummary(
-                focus: .attachments,
-                expansion: $expansion
-            ) {
-                ForEach(Array(attachments.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
-                    let attachment = entry.element
-                    StackAttachmentCard(attachment: attachment, showsContent: entry.offset == 0)
-                        .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
-                        .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
-                        .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
-                        .transition(.composerAttachmentEntry)
+            HStack(spacing: 14) {
+                AccessoryStackSummary(
+                    focus: .todos,
+                    expansion: $expansion
+                ) {
+                    ForEach(Array(activeTodos.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
+                        let todo = entry.element
+                        StackTodoCard(todo: todo, showsContent: entry.offset == 0)
+                            .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
+                            .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
+                            .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
+                    }
                 }
+                .frame(width: stackWidth)
+
+                AccessoryStackSummary(
+                    focus: .attachments,
+                    expansion: $expansion
+                ) {
+                    ForEach(Array(attachments.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
+                        let attachment = entry.element
+                        StackAttachmentCard(attachment: attachment, showsContent: entry.offset == 0)
+                            .matchedGeometryEffect(id: attachmentCardGeometryID(attachment.id), in: accessoryCardNamespace)
+                            .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
+                            .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
+                            .transition(.composerAttachmentEntry)
+                    }
+                }
+                .frame(width: stackWidth)
             }
+            .frame(width: geometry.size.width, alignment: .leading)
         }
+        .frame(height: 104)
     }
 
     private var expandedRail: some View {
@@ -323,8 +331,9 @@ struct AttachmentCard: View {
     @ViewBuilder
     private var cardContent: some View {
         if attachment.isImage {
-            AttachmentThumbnail(attachment: attachment)
-                .frame(width: 140, height: 140)
+            let size = AttachmentCardLayout.fittedImageSize(sourceSize: imageDimensions(for: attachment))
+            AttachmentThumbnail(attachment: attachment, contentMode: .fit)
+                .frame(width: size.width, height: size.height)
                 .background(OpenCodePlatformColor.secondaryGroupedBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         } else {
@@ -357,6 +366,26 @@ struct AttachmentCard: View {
         if attachment.mime.lowercased().contains("text") { return "Text File" }
         if attachment.filename.lowercased().hasSuffix(".txt") { return "Text File" }
         return attachment.mime
+    }
+}
+
+enum AttachmentCardLayout {
+    static let maximumImageSize = CGSize(width: 220, height: 140)
+    static let minimumImageEdge: CGFloat = 72
+
+    static func fittedImageSize(sourceSize: CGSize?) -> CGSize {
+        guard let sourceSize, sourceSize.width > 0, sourceSize.height > 0 else {
+            return CGSize(width: 140, height: 140)
+        }
+
+        let scale = min(
+            maximumImageSize.width / sourceSize.width,
+            maximumImageSize.height / sourceSize.height
+        )
+        return CGSize(
+            width: max(minimumImageEdge, floor(sourceSize.width * scale)),
+            height: max(minimumImageEdge, floor(sourceSize.height * scale))
+        )
     }
 }
 
@@ -512,7 +541,8 @@ private struct StackAttachmentCard: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .clipped()
                     }
                     .padding(12)
                 }
@@ -544,6 +574,18 @@ private func image(for attachment: OpenCodeComposerAttachment) -> Image? {
 #elseif canImport(UIKit)
     guard let platformImage = UIImage(data: data) else { return nil }
     return Image(uiImage: platformImage)
+#else
+    return nil
+#endif
+}
+
+private func imageDimensions(for attachment: OpenCodeComposerAttachment) -> CGSize? {
+    guard let data = dataPayload(from: attachment.dataURL) else { return nil }
+
+#if canImport(AppKit)
+    return NSImage(data: data)?.size
+#elseif canImport(UIKit)
+    return UIImage(data: data)?.size
 #else
     return nil
 #endif

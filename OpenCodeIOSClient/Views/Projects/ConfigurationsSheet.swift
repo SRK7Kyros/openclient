@@ -1,8 +1,11 @@
-import SafariServices
 import SwiftUI
+#if canImport(UIKit)
+import SafariServices
+#endif
 
 struct ConfigurationsSheet: View {
     @ObservedObject var viewModel: ConfigurationsFacade
+    let bridge: OpenClientBridgeFacade?
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
@@ -114,7 +117,11 @@ struct ConfigurationsSheet: View {
             .navigationDestination(for: ConfigurationRoute.self) { route in
                 switch route {
                 case .plugins:
-                    PluginsConfigurationView(viewModel: viewModel, store: viewModel.pluginStore)
+                    PluginsConfigurationView(
+                        viewModel: viewModel,
+                        store: viewModel.pluginStore,
+                        bridge: bridge
+                    )
                 case .addProvider:
                     AddProviderView(viewModel: viewModel)
                 case .customProvider:
@@ -168,6 +175,7 @@ private enum ConfigurationRoute: Hashable {
 private struct PluginsConfigurationView: View {
     let viewModel: ConfigurationsFacade
     @ObservedObject var store: PluginStore
+    let bridge: OpenClientBridgeFacade?
 
     var body: some View {
         Group {
@@ -194,7 +202,16 @@ private struct PluginsConfigurationView: View {
                 List {
                     Section("\(store.plugins.count) Plugins") {
                         ForEach(store.plugins) { plugin in
-                            ConfiguredPluginRow(specifier: plugin.specifier)
+                            if let bridge, isOpenClientPlugin(plugin.specifier) {
+                                NavigationLink {
+                                    OpenClientBridgeDiagnosticsView(bridge: bridge)
+                                } label: {
+                                    ConfiguredPluginRow(specifier: plugin.specifier)
+                                }
+                                .accessibilityIdentifier("plugins.openclient.diagnostics-link")
+                            } else {
+                                ConfiguredPluginRow(specifier: plugin.specifier)
+                            }
                         }
                     }
                 }
@@ -205,6 +222,10 @@ private struct PluginsConfigurationView: View {
         .task {
             await viewModel.loadPluginsForConfiguration()
         }
+    }
+
+    private func isOpenClientPlugin(_ specifier: String) -> Bool {
+        specifier.localizedCaseInsensitiveContains("openclient")
     }
 }
 
@@ -884,9 +905,12 @@ private struct ProviderOAuthBrowserSheet: View {
     let url: URL
     let confirmationCode: String?
     @State private var didCopyCode = false
+    #if canImport(UIKit)
     @State private var keyboardHeight: CGFloat = 0
+    #endif
 
     var body: some View {
+        #if canImport(UIKit)
         ProviderOAuthSafariView(url: url) {
             dismiss()
         }
@@ -910,8 +934,33 @@ private struct ProviderOAuthBrowserSheet: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
         }
+        #else
+        NavigationStack {
+            ContentUnavailableView {
+                Label("Continue in Browser", systemImage: "safari")
+            } description: {
+                Text("Open the provider authorization page in your default browser.")
+            } actions: {
+                Link("Open Authorization Page", destination: url)
+                if let confirmationCode {
+                    Button(didCopyCode ? "Code Copied" : "Copy Confirmation Code") {
+                        OpenCodeClipboard.copy(confirmationCode)
+                        didCopyCode = true
+                    }
+                }
+            }
+            .navigationTitle("Provider Authorization")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .frame(minWidth: 520, minHeight: 360)
+        #endif
     }
 
+    #if canImport(UIKit)
     private func keyboardHeight(from notification: Notification) -> CGFloat {
         guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return 0 }
         return max(0, UIScreen.main.bounds.maxY - frame.minY)
@@ -920,6 +969,7 @@ private struct ProviderOAuthBrowserSheet: View {
     private var copyButtonBottomPadding: CGFloat {
         keyboardHeight > 0 ? keyboardHeight + 8 : 96
     }
+    #endif
 }
 
 private struct ProviderOAuthCopyCodeButton: View {
@@ -949,6 +999,7 @@ private struct ProviderOAuthCopyCodeButton: View {
     }
 }
 
+#if canImport(UIKit)
 private struct ProviderOAuthSafariView: UIViewControllerRepresentable {
     let url: URL
     let onFinish: () -> Void
@@ -978,6 +1029,7 @@ private struct ProviderOAuthSafariView: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 private struct ProviderAPIKeyConnectView: View {
     @ObservedObject var viewModel: ConfigurationsFacade
