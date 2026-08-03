@@ -68,6 +68,18 @@ struct RootView<ChatDestination: View>: View {
             appShell
                 .opacity(isShowingConnectionExperience ? 0 : 1)
 
+            if shell.isBrowsingLocalCache, !shell.isShowingConnectionOverlay {
+                VStack {
+                    CachedServerBanner {
+                        shell.retryCachedServerConnection()
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             if let message = shell.openURLNavigationMessage {
                 RootDeepLinkProgressOverlay(message: message)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -81,10 +93,7 @@ struct RootView<ChatDestination: View>: View {
                     commerce: shell.commerce,
                     whatsNew: whatsNew,
                     onSelectPluginSetupConnection: beginPluginSetup
-                ) { sessionID in
-                    chatDestination(sessionID, 0)
-                        .id(sessionID)
-                }
+                )
             case let .newProjectChat(request):
                 ProjectNewChatSheet(viewModel: shell.newProjectChat, request: request, autoFocusInput: shouldAutoFocusNewChatInput) {
                     withAnimation(opencodeSelectionAnimation) {
@@ -127,12 +136,15 @@ struct RootView<ChatDestination: View>: View {
         .animation(opencodeSelectionAnimation, value: shell.hasActiveWorkspace)
         .task {
 #if DEBUG
-            guard !didRunUITestAutoConnect,
-                  ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_AUTO_CONNECT"] == "1" else { return }
-            didRunUITestAutoConnect = true
-            await Task.yield()
-            shell.connection.startConnectionFromEditor()
+            if !didRunUITestAutoConnect,
+               ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_AUTO_CONNECT"] == "1" {
+                didRunUITestAutoConnect = true
+                await Task.yield()
+                shell.connection.startConnectionFromEditor()
+                return
+            }
 #endif
+            shell.connection.startAutomaticConnectionIfConfigured()
         }
     }
 
@@ -225,6 +237,7 @@ struct RootView<ChatDestination: View>: View {
         }
         .onChange(of: shell.selectedSessionID) { _, sessionID in
             if sessionID != nil {
+                guard shell.isSelectedSessionPrepared else { return }
                 withAnimation(opencodeSelectionAnimation) {
                     showDetailColumn()
                 }
@@ -262,7 +275,6 @@ struct RootView<ChatDestination: View>: View {
         .onAppear {
             showCurrentRoute()
         }
-        .animation(opencodeSelectionAnimation, value: shell.selectedSessionID)
     }
 
     private func showCurrentRoute() {
@@ -298,6 +310,30 @@ struct RootView<ChatDestination: View>: View {
     private func showDetailColumn() {
         columnVisibility = horizontalSizeClass == .compact ? .detailOnly : .doubleColumn
         preferredCompactColumn = .detail
+    }
+}
+
+private struct CachedServerBanner: View {
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "externaldrive.fill.badge.exclamationmark")
+                .foregroundStyle(.orange)
+            Text("Browsing downloaded chats")
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 8)
+            Button("Retry", action: retry)
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .overlay {
+            Capsule().stroke(.primary.opacity(0.1), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("cache.offline-banner")
     }
 }
 

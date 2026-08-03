@@ -59,7 +59,10 @@ enum WidgetSnapshotBuilder {
             )
         }
         let rootSessions = input.sessions.filter(\.isRootSession)
-        let pinnedOrder = Dictionary(uniqueKeysWithValues: input.pinnedSessionIDs.enumerated().map { ($0.element, $0.offset) })
+        var pinnedOrder: [String: Int] = [:]
+        for (index, sessionID) in input.pinnedSessionIDs.enumerated() {
+            pinnedOrder[sessionID] = index
+        }
         let sessions = rootSessions.map { session in
             let summary = summary(for: session, input: input, now: now)
             return OpenCodeWidgetSessionSnapshot(

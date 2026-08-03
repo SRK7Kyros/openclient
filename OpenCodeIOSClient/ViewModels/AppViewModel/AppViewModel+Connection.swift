@@ -45,6 +45,13 @@ extension AppViewModel {
 
     func connect() async {
         resetRecentProjectSessionsForConnectionChange()
+        resetLocalCacheRuntimeState()
+        let cacheServerID = config.recentServerID
+        let cachedProjects = await loadCachedProjectsIfEnabled()
+        guard !Task.isCancelled, config.recentServerID == cacheServerID else { return }
+        if let cachedProjects {
+            projects = projectCoordinator.bootstrapProjects(cachedProjects.projects, currentProject: nil)
+        }
         await connectionCoordinator.connect(
             client: client,
             applyBootstrap: { bootstrap in
@@ -52,6 +59,7 @@ extension AppViewModel {
                 loadNewSessionDefaults()
                 loadFunAndGamesPreferences()
                 projects = projectCoordinator.bootstrapProjects(bootstrap.projects, currentProject: bootstrap.currentProject)
+                persistProjectsToLocalCache()
                 currentProject = nil
                 selectedDirectory = nil
                 selectedProjectContentTab = .sessions
@@ -71,6 +79,10 @@ extension AppViewModel {
                 directoryStoreRegistry.reset()
             }
         )
+        if !isConnected, cachedProjects != nil, usesLocalCache {
+            connectionStore.applyCachedServerConnection()
+            await liveActivityFacade.stopAll()
+        }
         if isConnected {
             beginRecentProjectSessionsLoadingIfPossible()
         }
@@ -116,6 +128,19 @@ extension AppViewModel {
     func startConnection(to serverConfig: OpenCodeServerConfig) {
         config = hydratedServerConfig(from: serverConfig)
         startConnection()
+    }
+
+    func startAutomaticConnectionIfConfigured() {
+        guard !hasAttemptedAutomaticConnection else { return }
+        hasAttemptedAutomaticConnection = true
+
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["OPENCODE_UI_TEST_MODE"] != "1",
+              environment["OPENCLIENT_SCREENSHOT_SCENE"] == nil,
+              !isConnected,
+              backendMode == .none,
+              let server = appCustomizationStore.autoConnectServer(in: recentServerConfigs) else { return }
+        startConnection(to: server)
     }
 
     func cancelConnectionAttempt() {
@@ -182,6 +207,7 @@ extension AppViewModel {
         connectionAttemptTask = nil
         appleIntelligenceResponseTask?.cancel()
         resetRecentProjectSessionsForConnectionChange()
+        resetLocalCacheRuntimeState()
         connectionCoordinator.disconnect(
             hasSavedServer: hasSavedServer,
             stopActiveWorkspace: {
@@ -499,7 +525,13 @@ extension AppViewModel {
     }
 
     func removeRecentServer(_ serverConfig: OpenCodeServerConfig) {
+        let removedServerID = serverConfig.recentServerID
+        let cacheRepository = localCacheRepository
+        Task {
+            try? await cacheRepository.clear(serverID: removedServerID)
+        }
         connectionStore.removeRecentServer(serverConfig)
+        appCustomizationStore.reconcileAutoConnectServer(in: recentServerConfigs)
 
         if config.recentServerID == serverConfig.recentServerID,
            let replacement = recentServerConfigs.first {
@@ -534,6 +566,10 @@ extension AppViewModel {
             replacingServerID: originalServerID,
             maxCount: Self.maxRecentServerCount
         )
+        if let originalServerID, originalServerID != updatedID {
+            appCustomizationStore.migrateAutoConnectServerID(from: originalServerID, to: updatedID)
+        }
+        appCustomizationStore.reconcileAutoConnectServer(in: recentServerConfigs)
         let migratedPassword: String?
         if let replacedConfig, replacedConfig.recentServerID != updatedID, updatedConfig.password.isEmpty {
             migratedPassword = passwordStore.loadPassword(for: replacedConfig.recentServerID) ?? replacedConfig.password
@@ -543,6 +579,10 @@ extension AppViewModel {
 
         if let originalServerID, originalServerID != updatedID {
             passwordStore.deletePassword(for: originalServerID)
+            let cacheRepository = localCacheRepository
+            Task {
+                try? await cacheRepository.clear(serverID: originalServerID)
+            }
         }
 
         if let migratedPassword, migratedPassword.isEmpty == false {

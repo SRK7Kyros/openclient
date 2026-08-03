@@ -11,25 +11,27 @@ struct TodoStrip: View {
     let onTapCard: () -> Void
 
     private var focusTodoID: String? {
-        todos.first(where: { $0.isInProgress })?.id ?? todos.first(where: { !$0.isComplete })?.id
+        let index = todos.firstIndex(where: { $0.isInProgress })
+            ?? todos.firstIndex(where: { !$0.isComplete })
+        return index.map { todoPresentationID(index: $0, todo: todos[$0]) }
     }
 
     private var todoIDs: String {
-        todos.map { $0.id }.joined(separator: "|")
+        todos.enumerated().map { todoPresentationID(index: $0.offset, todo: $0.element) }.joined(separator: "|")
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(todos) { todo in
+                    ForEach(Array(todos.enumerated()), id: \.offset) { index, todo in
                         Button {
                             onTapCard()
                         } label: {
                             TodoCard(todo: todo)
                         }
                         .buttonStyle(.plain)
-                        .id(todo.id)
+                        .id(todoPresentationID(index: index, todo: todo))
                     }
                 }
                 .padding(.horizontal, 1)
@@ -55,6 +57,10 @@ struct TodoStrip: View {
         } else {
             action()
         }
+    }
+
+    private func todoPresentationID(index: Int, todo: OpenCodeTodo) -> String {
+        "\(index):\(todo.id)"
     }
 }
 
@@ -136,10 +142,10 @@ struct ComposerAccessoryArea: View {
                     focus: .todos,
                     expansion: $expansion
                 ) {
-                    ForEach(Array(activeTodos.prefix(3).enumerated()).reversed(), id: \.element.id) { entry in
+                    ForEach(Array(activeTodos.prefix(3).enumerated()).reversed(), id: \.offset) { entry in
                         let todo = entry.element
                         StackTodoCard(todo: todo, showsContent: entry.offset == 0)
-                            .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
+                            .matchedGeometryEffect(id: todoCardGeometryID("\(entry.offset):\(todo.id)"), in: accessoryCardNamespace)
                             .rotationEffect(.degrees(summaryRotation(index: entry.offset)))
                             .offset(x: CGFloat(entry.offset) * 5, y: CGFloat(entry.offset) * -2)
                     }
@@ -172,12 +178,12 @@ struct ComposerAccessoryArea: View {
                 HStack(alignment: .top, spacing: 16) {
                     accessorySection {
                         HStack(spacing: 10) {
-                            ForEach(activeTodos) { todo in
+                            ForEach(Array(activeTodos.enumerated()), id: \.offset) { index, todo in
                                 Button {
                                     onTapTodo()
                                 } label: {
                                     TodoCard(todo: todo)
-                                        .matchedGeometryEffect(id: todoCardGeometryID(todo.id), in: accessoryCardNamespace)
+                                        .matchedGeometryEffect(id: todoCardGeometryID("\(index):\(todo.id)"), in: accessoryCardNamespace)
                                 }
                                 .buttonStyle(.plain)
                             }

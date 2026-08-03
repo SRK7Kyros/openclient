@@ -124,6 +124,14 @@ final class ConnectionStore: ObservableObject {
         connectionPhase = .idle
     }
 
+    func applyCachedServerConnection() {
+        backendMode = .cachedServer
+        isConnected = false
+        serverVersion = ""
+        errorMessage = nil
+        connectionPhase = .idle
+    }
+
     func resetToDisconnected(showPrompt: Bool? = nil) {
         backendMode = .none
         isConnected = false

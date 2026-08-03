@@ -16,7 +16,6 @@ struct SessionListView: View {
 private struct SessionListContent: View {
     let facade: SessionListFacade
     let snapshot: SessionListFacade.Snapshot
-    @Namespace private var sessionRowNamespace
     @State private var renamingSession: OpenCodeSession?
     @State private var renameTitle = ""
     @State private var isShowingCreateWorkspaceAlert = false
@@ -25,21 +24,21 @@ private struct SessionListContent: View {
 
     var body: some View {
         List {
-            if !snapshot.hasProUnlock {
+            if !snapshot.isReadOnly, !snapshot.hasProUnlock {
                 ProjectUsageCTA(facade: facade)
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
 
-            if snapshot.hasProUnlock {
+            if !snapshot.isReadOnly, snapshot.hasProUnlock {
                 if !snapshot.currentProjectActions.isEmpty {
                     ProjectActionStrip(facade: facade, actions: snapshot.currentProjectActions)
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 8, trailing: 0))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
-            } else {
+            } else if !snapshot.isReadOnly {
                 LockedProjectActionStrip {
                     facade.presentPaywall(reason: .actions)
                 }
@@ -87,7 +86,7 @@ private struct SessionListContent: View {
                             .listRowSeparator(.hidden)
                     }
                     } else if snapshot.unpinnedRows.isEmpty {
-                        Text(snapshot.isEmpty ? "Create a session to start chatting." : "All visible sessions are pinned.")
+                        Text(snapshot.isEmpty ? (snapshot.isReadOnly ? "No downloaded sessions." : "Create a session to start chatting.") : "All visible sessions are pinned.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
@@ -100,6 +99,27 @@ private struct SessionListContent: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }
+                    }
+
+                    if snapshot.hasMoreSessions {
+                        Button {
+                            Task { await facade.loadMoreSessions() }
+                        } label: {
+                            HStack {
+                                Spacer(minLength: 0)
+                                Text(snapshot.isLoadingMoreSessions ? "Loading..." : "Show More")
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(snapshot.isLoadingMoreSessions)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
                 } header: {
                     SessionSectionHeader(title: "Sessions", systemImage: "bubble.left.and.bubble.right")
@@ -124,6 +144,9 @@ private struct SessionListContent: View {
         .opencodeInteractiveKeyboardDismiss()
         .refreshable {
             await facade.refresh()
+        }
+        .task(id: cachePrefetchKey) {
+            await facade.prefetchCachedChats()
         }
         .transaction { transaction in
             if snapshot.hasBusySession {
@@ -165,6 +188,13 @@ private struct SessionListContent: View {
             Text("OpenCode will create a separate git worktree for this project.")
         }
         .animation(opencodeSelectionAnimation, value: snapshot.selectedSessionID)
+    }
+
+    private var cachePrefetchKey: String {
+        let rows = snapshot.pinnedRows
+            + snapshot.unpinnedRows
+            + snapshot.workspaceSections.flatMap(\.rows)
+        return rows.prefix(1).map(\.id).joined(separator: "|")
     }
 
     private var renameAlertBinding: Binding<Bool> {
@@ -266,10 +296,11 @@ private struct SessionListContent: View {
     ) -> some View {
         Button {
             let ticket = facade.beginSelection(row.session)
-            withAnimation(opencodeSelectionAnimation) {
-                onSessionChosen()
-            }
             Task { @MainActor in
+                guard await facade.prepareSelectionForNavigation(ticket) else { return }
+                withAnimation(opencodeSelectionAnimation) {
+                    onSessionChosen()
+                }
                 await facade.completeSelection(ticket)
             }
         } label: {
@@ -290,22 +321,25 @@ private struct SessionListContent: View {
             .equatable()
         }
         .buttonStyle(SessionRowButtonStyle())
-        .matchedGeometryEffect(id: row.session.id, in: sessionRowNamespace)
         .contentShape(Rectangle())
         .accessibilityIdentifier("session.row.\(row.session.id)")
         .contextMenu {
             pinButton(for: row.session)
-            deleteButton(for: row.session)
-            renameButton(for: row.session)
-            liveActivityButton(for: row.session)
+            if !snapshot.isReadOnly {
+                deleteButton(for: row.session)
+                renameButton(for: row.session)
+                liveActivityButton(for: row.session)
+            }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             pinButton(for: row.session)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            deleteButton(for: row.session)
-            renameButton(for: row.session)
-            liveActivityButton(for: row.session)
+            if !snapshot.isReadOnly {
+                deleteButton(for: row.session)
+                renameButton(for: row.session)
+                liveActivityButton(for: row.session)
+            }
         }
     }
 

@@ -33,6 +33,18 @@ final class AppViewModel: ObservableObject {
 
     @Published var config = OpenCodeServerConfig()
     let connectionStore = ConnectionStore()
+    let appCustomizationStore = AppCustomizationStore()
+    let appIconStore = AppIconStore()
+    lazy var localCacheRepository: any OpenCodeLocalCacheRepository = OpenCodeLocalCacheRepositoryFactory.makeDefault()
+    var localCacheDirectoryRefreshedAtByKey: [String: Date] = [:]
+    var localCacheMessageRefreshedAtByKey: [String: Date] = [:]
+    var localCacheTodoRefreshedAtByKey: [String: Date] = [:]
+    var localCacheHydratedChatKeys: Set<String> = []
+    var localCacheWriteTasksByKey: [String: Task<Void, Never>] = [:]
+    var localCachePrefetchTasksByKey: [String: Task<OpenCodeCachedChatSnapshot?, Never>] = [:]
+    var localCachePrefetchedChatsByKey: [String: OpenCodeCachedChatSnapshot] = [:]
+    var localCachePrefetchedChatKeys: [String] = []
+    var sessionNavigationGeneration: UInt = 0
     lazy var connectionFacade = ConnectionFacade(viewModel: self)
     lazy var connectionCoordinator = ConnectionCoordinator(connectionStore: connectionStore)
     let eventSyncCoordinator = EventSyncCoordinator()
@@ -737,6 +749,7 @@ final class AppViewModel: ObservableObject {
     var recentProjectSessionsLoadTask: Task<Void, Never>?
     var recentProjectSessionsLoadGeneration = 0
     var connectionAttemptTask: Task<Void, Never>?
+    var hasAttemptedAutomaticConnection = false
     var appleIntelligenceResponseTask: Task<Void, Never>?
     var activeAppleIntelligenceWorkspaceURL: URL?
     var currentAppleIntelligenceWorkspace: AppleIntelligenceWorkspaceRecord?
@@ -812,6 +825,7 @@ final class AppViewModel: ObservableObject {
         recentServerConfigs = recentConfigs
         hasSavedServer = recentConfigs.isEmpty == false
         showSavedServerPrompt = hasSavedServer
+        appCustomizationStore.reconcileAutoConnectServer(in: recentConfigs)
         if let savedConfig = recentConfigs.first {
             config = savedConfig
         }
@@ -848,7 +862,7 @@ final class AppViewModel: ObservableObject {
     }
 
     var hasActiveWorkspace: Bool {
-        isConnected || isUsingAppleIntelligence
+        isConnected || isUsingAppleIntelligence || backendMode == .cachedServer
     }
 
     var activeAppleIntelligenceWorkspace: AppleIntelligenceWorkspaceRecord? {
@@ -871,7 +885,10 @@ final class AppViewModel: ObservableObject {
     }
 
     var pinnedRootSessions: [OpenCodeSession] {
-        let sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        var sessionsByID: [String: OpenCodeSession] = [:]
+        for session in sessions {
+            sessionsByID[session.id] = session
+        }
         return pinnedSessionIDs.compactMap { sessionsByID[$0] }
     }
 

@@ -407,13 +407,35 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
     var sessionDiffsBySessionID: [String: [OpenCodeVCSFileDiff]] = [:]
 
     mutating func replaceMessages(_ envelopes: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
-        messagesBySessionID[sessionID] = envelopes.map(\.info).sorted { $0.id < $1.id }
+        let previousMessageIDs = Set(messagesBySessionID[sessionID]?.map(\.id) ?? [])
+        var envelopeByID: [String: OpenCodeMessageEnvelope] = [:]
         for envelope in envelopes {
-            let parts = envelope.parts
-                .filter { !Self.skippedPartTypes.contains($0.type) }
-            if !parts.isEmpty {
-                partsByMessageID[envelope.info.id] = parts
+            envelopeByID[envelope.info.id] = envelope
+        }
+        let canonicalEnvelopes = envelopeByID.values.sorted { $0.info.id < $1.info.id }
+        let canonicalMessageIDs = Set(canonicalEnvelopes.map(\.id))
+        for messageID in previousMessageIDs.subtracting(canonicalMessageIDs) {
+            partsByMessageID[messageID] = nil
+        }
+
+        messagesBySessionID[sessionID] = canonicalEnvelopes.map(\.info)
+        for envelope in canonicalEnvelopes {
+            let filteredParts = envelope.parts.filter { !Self.skippedPartTypes.contains($0.type) }
+            var parts: [OpenCodePart] = []
+            var partIndexByID: [String: Int] = [:]
+            for part in filteredParts {
+                guard let partID = part.id else {
+                    parts.append(part)
+                    continue
+                }
+                if let index = partIndexByID[partID] {
+                    parts[index] = part
+                } else {
+                    partIndexByID[partID] = parts.count
+                    parts.append(part)
+                }
             }
+            partsByMessageID[envelope.info.id] = parts.isEmpty ? nil : parts
         }
     }
 
@@ -485,6 +507,19 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
         guard count > 0 else { return [] }
         let messages = messagesBySessionID[sessionID] ?? []
         return envelopes(from: messages.suffix(count))
+    }
+
+    func latestUserMessageEnvelope(
+        beforeSuffixCount suffixCount: Int,
+        forSessionID sessionID: String
+    ) -> OpenCodeMessageEnvelope? {
+        let messages = messagesBySessionID[sessionID] ?? []
+        let visibleCount = min(messages.count, max(0, suffixCount))
+        let hiddenMessages = messages.dropLast(visibleCount)
+        guard let message = hiddenMessages.last(where: {
+            ($0.role ?? "").lowercased() == "user"
+        }) else { return nil }
+        return OpenCodeMessageEnvelope(info: message, parts: partsByMessageID[message.id] ?? [])
     }
 
     private func envelopes(from messages: some Sequence<OpenCodeMessage>) -> [OpenCodeMessageEnvelope] {
@@ -1610,6 +1645,7 @@ struct OpenCodeMCPServer: Identifiable, Hashable, Sendable {
 enum AppBackendMode: String, Codable, Sendable {
     case none
     case server
+    case cachedServer
     case appleIntelligence
 }
 

@@ -12,6 +12,7 @@ struct ProjectRow: View {
     var icon: OpenCodeProject.Icon? = nil
     var usesSystemImageFallback = false
     let isSelected: Bool
+    var isPreparing = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -29,6 +30,12 @@ struct ProjectRow: View {
             }
 
             Spacer()
+
+            if isPreparing {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Opening \(title)")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)

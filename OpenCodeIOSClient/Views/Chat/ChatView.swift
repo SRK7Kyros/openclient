@@ -640,12 +640,17 @@ final class OpenCodeLargeMessageChunkCache {
 
         if var entry = entries[message.id], entry.signature == signature {
             let textUTF16Count = text.utf16.count
-            if entry.textUTF16Count == textUTF16Count {
+            if entry.textUTF16Count == textUTF16Count, entry.text == text {
                 return entry.result
             }
 
-            if textUTF16Count > entry.textUTF16Count {
-                let suffixStart = text.index(text.startIndex, offsetBy: entry.textCharacterCount)
+            if textUTF16Count > entry.textUTF16Count,
+               text.hasPrefix(entry.text),
+               let suffixStart = text.index(
+                text.startIndex,
+                offsetBy: entry.textCharacterCount,
+                limitedBy: text.endIndex
+               ) {
                 entry.append(String(text[suffixStart...]))
                 entries[message.id] = entry
                 return entry.result
@@ -741,16 +746,8 @@ private struct LargeMessageChunkDisplayItem: Identifiable {
     var id: String { "message-chunk-\(message.id)-\(chunk.id)" }
 }
 
-private struct ChatTurnDisplayItem: Identifiable {
-    let user: OpenCodeMessageEnvelope
-    let assistants: [OpenCodeMessageEnvelope]
-
-    var id: String { "turn-\(user.id)" }
-}
-
 private enum ChatDisplayItem: Identifiable {
     case message(OpenCodeMessageEnvelope)
-    case turn(ChatTurnDisplayItem)
     case largeMessageChunk(LargeMessageChunkDisplayItem)
     case compaction(CompactionDisplayItem)
     case findPlaceReveal(FindPlaceGameCity)
@@ -760,8 +757,6 @@ private enum ChatDisplayItem: Identifiable {
         switch self {
         case let .message(message):
             return message.id
-        case let .turn(item):
-            return item.id
         case let .largeMessageChunk(item):
             return item.id
         case let .compaction(item):
@@ -776,6 +771,7 @@ private enum ChatDisplayItem: Identifiable {
 
 private enum ChatTranscriptRow: Identifiable {
     case weatherAttribution
+    case previousUserContext(OpenCodeMessageEnvelope)
     case olderMessages(count: Int)
     case displayItem(ChatDisplayItem)
     case thinking(isVisible: Bool)
@@ -785,6 +781,8 @@ private enum ChatTranscriptRow: Identifiable {
         switch self {
         case .weatherAttribution:
             return "chat-weather-attribution"
+        case .previousUserContext:
+            return "chat-previous-user-context"
         case .olderMessages:
             return ChatScrollTarget.olderMessagesButton
         case let .displayItem(item):
@@ -802,6 +800,8 @@ private extension ChatTranscriptRow {
         switch self {
         case .weatherAttribution:
             return id
+        case let .previousUserContext(message):
+            return "\(id):\(message.renderSignature)"
         case let .olderMessages(count):
             return "\(id):\(count)"
         case let .thinking(isVisible):
@@ -819,8 +819,6 @@ private extension ChatDisplayItem {
         switch self {
         case let .message(message):
             return message.renderSignature
-        case let .turn(item):
-            return ([item.id, item.user.renderSignature] + item.assistants.map(\.renderSignature)).joined(separator: ":")
         case let .largeMessageChunk(item):
             return item.renderSignature
         case let .compaction(item):
@@ -1040,13 +1038,6 @@ private extension ChatDisplayItem {
         switch self {
         case let .message(message):
             return .message(messagesByID[message.id] ?? message)
-        case let .turn(item):
-            return .turn(
-                ChatTurnDisplayItem(
-                    user: messagesByID[item.user.id] ?? item.user,
-                    assistants: item.assistants.map { messagesByID[$0.id] ?? $0 }
-                )
-            )
         case let .largeMessageChunk(item):
             return .largeMessageChunk(
                 LargeMessageChunkDisplayItem(message: messagesByID[item.message.id] ?? item.message, chunk: item.chunk)
@@ -1509,10 +1500,6 @@ private struct MessageRowRenderSnapshot {
     let transition: AnyTransition
 }
 
-private struct TurnRowRenderSnapshot {
-    let bubbles: [MessageBubbleSnapshot]
-}
-
 private struct CompactionRowRenderSnapshot {
     let hasSummary: Bool
     let isStreaming: Bool
@@ -1569,10 +1556,23 @@ private struct ComposerOverlayModeSnapshot {
     let mode: ComposerOverlayMode
 }
 
+private struct CachedChatReadOnlyComposerNotice: View {
+    var body: some View {
+        Label("Downloaded chat is read-only while the server is unavailable", systemImage: "externaldrive.fill")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityIdentifier("chat.cache-read-only")
+    }
+}
+
 private struct ChatDisplaySnapshot {
     let messages: [OpenCodeMessageEnvelope]
     let hiddenMessageCount: Int
-    let hiddenRoundCount: Int
+    let previousUserMessage: OpenCodeMessageEnvelope?
     let items: [ChatDisplayItem]
     let showsThinking: Bool
 
@@ -1585,19 +1585,36 @@ private struct TimedChatDisplaySnapshot {
     let snapshot: ChatDisplaySnapshot
 }
 
+enum ChatPreviousUserContextPolicy {
+    static func displayText(for message: OpenCodeMessageEnvelope) -> String {
+        if let text = textPart(in: message, includesSynthetic: false) {
+            return text
+        }
+        if let text = textPart(in: message, includesSynthetic: true) {
+            return text
+        }
+
+        let attachmentCount = message.parts.lazy.filter { $0.type == "file" }.count
+        if attachmentCount == 1 { return "Sent an attachment" }
+        if attachmentCount > 1 { return "Sent \(attachmentCount) attachments" }
+        return "Previous user message"
+    }
+
+    private static func textPart(
+        in message: OpenCodeMessageEnvelope,
+        includesSynthetic: Bool
+    ) -> String? {
+        message.parts.first(where: {
+            $0.type == "text"
+                && (includesSynthetic || $0.synthetic != true)
+                && $0.text?.hasNonWhitespace == true
+        })?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct OpenCodeChatTranscriptWindow: Equatable {
     let messages: [OpenCodeMessageEnvelope]
     let hiddenMessageCount: Int
-}
-
-private extension Collection where Element == OpenCodeMessageEnvelope {
-    var userMessageCount: Int {
-        reduce(into: 0) { count, message in
-            if (message.info.role ?? "").lowercased() == "user" {
-                count += 1
-            }
-        }
-    }
 }
 
 enum OpenCodeChatTranscriptWindowing {
@@ -1647,7 +1664,7 @@ enum OpenCodeChatTranscriptWindowing {
         requestedCount: Int,
         batchSize: Int,
         loadSuffix: (Int) -> [OpenCodeMessageEnvelope],
-        containsMessageID: (String) -> Bool,
+        containsMessageID _: (String) -> Bool,
         hasDisplayableContent: ([OpenCodeMessageEnvelope]) -> Bool
     ) -> OpenCodeChatTranscriptWindow {
         guard totalCount > 0 else {
@@ -1658,8 +1675,7 @@ enum OpenCodeChatTranscriptWindowing {
         var count = min(totalCount, max(requestedCount, minimumBatchSize))
         var window = loadSuffix(count)
 
-        while count < totalCount,
-              !hasDisplayableContent(window) || hasAssistantChildMissingParent(window, containsMessageID: containsMessageID) {
+        while count < totalCount, !hasDisplayableContent(window) {
             count = min(totalCount, count + minimumBatchSize)
             window = loadSuffix(count)
         }
@@ -1670,20 +1686,6 @@ enum OpenCodeChatTranscriptWindowing {
         )
     }
 
-    private static func hasAssistantChildMissingParent(
-        _ window: [OpenCodeMessageEnvelope],
-        containsMessageID: (String) -> Bool
-    ) -> Bool {
-        let windowIDs = Set(window.map(\.id))
-        return window.contains { message in
-            guard (message.info.role ?? "").lowercased() == "assistant",
-                  let parentID = message.info.parentID?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !parentID.isEmpty else {
-                return false
-            }
-            return containsMessageID(parentID) && !windowIDs.contains(parentID)
-        }
-    }
 }
 
 private struct EquatableMessageBubbleHost: View, Equatable {
@@ -1756,6 +1758,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
     let bottomRefreshRenderSnapshot: BottomRefreshRenderSnapshot
     let isRefreshingChatData: Bool
     let isSessionBusy: Bool
+    let isInitialHydration: Bool
     let contentInvalidationToken: String
     let makeDisplaySnapshot: () -> TimedChatDisplaySnapshot
     let makeRows: (ChatDisplaySnapshot) -> [ChatTranscriptRow]
@@ -1789,7 +1792,7 @@ private struct ChatTranscriptPane<RowContent: View>: View {
                 bottomRefreshColorIsActive: bottomRefreshRenderSnapshot.colorIsActive,
                 bottomRefreshHeight: messageBottomPadding + bottomRefreshIndicatorHeight * bottomRefreshRenderSnapshot.progress,
                 isRefreshing: isRefreshingChatData,
-                isStreaming: isSessionBusy,
+                isStreaming: isSessionBusy || isInitialHydration,
                 contentInvalidationToken: contentInvalidationToken,
                 animatedRowIDs: animatedRowIDs,
                 onBottomPullChanged: onBottomPullChanged,
@@ -1956,7 +1959,6 @@ struct ChatView: View {
     @State private var taskSessionDetent: PresentationDetent = .medium
     @State private var showingTodoInspector = false
     @State private var showingContextMetrics = false
-    @State private var visibleRoundCount = 3
     @State private var additionalLeadingMessageCount = 0
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
@@ -2004,7 +2006,7 @@ struct ChatView: View {
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
-    private let roundWindowSize = 3
+    private let initialMessageWindowSize = 12
     private let fallbackMessageWindowSize = 3
     private let olderMessageWindowSize = 12
     private let bottomRefreshThreshold: CGFloat = 72
@@ -2063,6 +2065,10 @@ struct ChatView: View {
 
     private var isSessionBusy: Bool {
         directoryStore.sessionStatuses[liveSession.id] == "busy"
+    }
+
+    private var showsChatActivityShimmer: Bool {
+        isSessionBusy && chatFacade.showsChatActivityShimmer
     }
 
     private var isComposerBusy: Bool {
@@ -2144,6 +2150,7 @@ struct ChatView: View {
                 bottomRefreshRenderSnapshot: bottomRefreshRenderSnapshot,
                 isRefreshingChatData: isRefreshingChatData,
                 isSessionBusy: isSessionBusy,
+                isInitialHydration: chatStore.isLoadingSelectedSession || !hasCompletedInitialHydrationSnap,
                 contentInvalidationToken: transcriptContentInvalidationToken,
                 makeDisplaySnapshot: { timedChatDisplaySnapshot },
                 makeRows: { transcriptRows(for: $0) },
@@ -2185,7 +2192,6 @@ struct ChatView: View {
             )
             .onChange(of: chatStore.messages.count) { _, count in
                 if count == 0 {
-                    visibleRoundCount = roundWindowSize
                     additionalLeadingMessageCount = 0
                 }
 
@@ -2217,24 +2223,23 @@ struct ChatView: View {
             composerOverlay
         }
         .overlay(alignment: .top) {
-            if isSessionBusy {
+            if showsChatActivityShimmer {
                 ChatStatusBarStateShimmer(tint: activeSessionTint)
                     .ignoresSafeArea(.container, edges: .top)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.22), value: isSessionBusy)
+        .animation(.easeOut(duration: 0.22), value: showsChatActivityShimmer)
         .navigationTitle("")
         .opencodeInlineNavigationTitle()
         .onAppear {
-            chatFacade.setActiveChatSessionID(sessionID)
             syncComposerDraftFromViewModel()
             refreshCachedContextMetrics()
             refreshCachedForkableMessages()
             pruneExpandedReasoningParts()
             updateDelayedLoadingIndicator()
-            clearInactiveKeyboardMeasurement(forceBottomReadjustment: true)
+            clearInactiveKeyboardMeasurement()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -2505,38 +2510,44 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
             }
 
-            switch modeSnapshot.mode {
-            case .permissions:
-                PermissionActionStack(
-                    permissions: overlaySnapshot.permissions,
-                    onDismiss: { permission in
-                        chatFacade.dismissPermission(permission)
-                    },
-                    onRespond: { permission, response in
-                        Task { await chatFacade.respondToPermission(permission, response: response) }
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-            case .questions:
-                QuestionPanel(
-                    requests: overlaySnapshot.questions,
-                    answers: $questionAnswers,
-                    customAnswers: $questionCustomAnswers,
-                    onDismiss: { request in
-                        Task { await chatFacade.dismissQuestion(request) }
-                    },
-                    onSubmit: { request, answers in
-                        Task { await chatFacade.respondToQuestion(request, answers: answers) }
-                    }
-                )
-                .padding(.vertical, 8)
-            case .childSessionNotice:
-                childSessionComposerNotice(headerSnapshot: chatHeaderSnapshot)
+            if chatFacade.isReadOnly {
+                CachedChatReadOnlyComposerNotice()
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-            case .activeComposer:
-                activeMessageComposer(isBusy: isComposerBusy)
+            } else {
+                switch modeSnapshot.mode {
+                case .permissions:
+                    PermissionActionStack(
+                        permissions: overlaySnapshot.permissions,
+                        onDismiss: { permission in
+                            chatFacade.dismissPermission(permission)
+                        },
+                        onRespond: { permission, response in
+                            Task { await chatFacade.respondToPermission(permission, response: response) }
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                case .questions:
+                    QuestionPanel(
+                        requests: overlaySnapshot.questions,
+                        answers: $questionAnswers,
+                        customAnswers: $questionCustomAnswers,
+                        onDismiss: { request in
+                            Task { await chatFacade.dismissQuestion(request) }
+                        },
+                        onSubmit: { request, answers in
+                            Task { await chatFacade.respondToQuestion(request, answers: answers) }
+                        }
+                    )
+                    .padding(.vertical, 8)
+                case .childSessionNotice:
+                    childSessionComposerNotice(headerSnapshot: chatHeaderSnapshot)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                case .activeComposer:
+                    activeMessageComposer(isBusy: isComposerBusy)
+                }
             }
 
             if showsChatBrowserAccessory {
@@ -3001,16 +3012,9 @@ struct ChatView: View {
     private func scheduleInitialBottomReadjustments() {
         initialBottomScrollTask?.cancel()
         initialBottomScrollTask = Task { @MainActor in
-            for delayMS in [0, 80, 240, 520] {
-                if delayMS > 0 {
-                    try? await Task.sleep(for: .milliseconds(delayMS))
-                } else {
-                    await Task.yield()
-                }
-                guard !Task.isCancelled else { return }
-                requestBottomReadjustment()
-            }
-            isScrollGeometryAtBottom = true
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            requestBottomReadjustment()
         }
     }
 
@@ -3156,7 +3160,7 @@ struct ChatView: View {
         let snapshot = ChatDisplaySnapshot(
             messages: messages,
             hiddenMessageCount: window.hiddenMessageCount,
-            hiddenRoundCount: max(0, transcriptUserRoundCount - messages.userMessageCount),
+            previousUserMessage: previousUserMessage(before: messages),
             items: items,
             showsThinking: showsThinking
         )
@@ -3180,25 +3184,21 @@ struct ChatView: View {
         let baseCount: Int
         if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
             baseCount = directoryStore.syncStore.messageCountIncludingLatestUserRounds(
-                visibleRoundCount,
+                1,
                 fallbackMessageCount: fallbackMessageWindowSize,
                 forSessionID: sessionID
             )
         } else {
             baseCount = OpenCodeChatTranscriptWindowing.messageCountIncludingLatestUserRounds(
-                visibleRoundCount,
+                1,
                 fallbackMessageCount: fallbackMessageWindowSize,
                 in: sessionScopedFallbackMessages.map(\.info)
             )
         }
-        return min(chatSourceMessageCount, baseCount + additionalLeadingMessageCount)
-    }
-
-    private var transcriptUserRoundCount: Int {
-        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
-            return directoryStore.syncStore.userMessageCount(forSessionID: sessionID)
-        }
-        return sessionScopedFallbackMessages.userMessageCount
+        return min(
+            chatSourceMessageCount,
+            min(baseCount, initialMessageWindowSize) + additionalLeadingMessageCount
+        )
     }
 
     private func transcriptSuffix(_ count: Int) -> [OpenCodeMessageEnvelope] {
@@ -3217,6 +3217,26 @@ struct ChatView: View {
         return sessionScopedFallbackMessages.contains { $0.id == messageID }
     }
 
+    private func previousUserMessage(
+        before visibleMessages: [OpenCodeMessageEnvelope]
+    ) -> OpenCodeMessageEnvelope? {
+        guard !visibleMessages.contains(where: {
+            ($0.info.role ?? "").lowercased() == "user"
+        }) else { return nil }
+
+        if directoryStore.syncStore.messageCount(forSessionID: sessionID) > 0 {
+            return directoryStore.syncStore.latestUserMessageEnvelope(
+                beforeSuffixCount: visibleMessages.count,
+                forSessionID: sessionID
+            )
+        }
+
+        let hiddenCount = max(0, sessionScopedFallbackMessages.count - visibleMessages.count)
+        return sessionScopedFallbackMessages.prefix(hiddenCount).last(where: {
+            ($0.info.role ?? "").lowercased() == "user"
+        })
+    }
+
     private var reasoningPartKeySignature: String {
         visibleChatMessages
             .flatMap(reasoningPartKeys(for:))
@@ -3224,7 +3244,10 @@ struct ChatView: View {
     }
 
     private func displayedChatItems(for messages: [OpenCodeMessageEnvelope]) -> [ChatDisplayItem] {
-        let messagesByID = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+        var messagesByID: [String: OpenCodeMessageEnvelope] = [:]
+        for message in messages {
+            messagesByID[message.id] = message
+        }
         let key = ChatDisplayItemCacheKey(
             messages: messages.map { message in
                 displayItemCacheMessageKey(for: message)
@@ -3240,7 +3263,11 @@ struct ChatView: View {
 
     private func timedDisplayedChatItems(for messages: [OpenCodeMessageEnvelope]) -> (items: [ChatDisplayItem], diagnostics: String) {
         let (messagesByID, dictionaryMS) = chatMeasureMS {
-            Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+            var messagesByID: [String: OpenCodeMessageEnvelope] = [:]
+            for message in messages {
+                messagesByID[message.id] = message
+            }
+            return messagesByID
         }
         let (findPlaceGameID, findPlaceMS) = chatMeasureMS { findPlaceGame(for: sessionID)?.city.id }
         let (findBugGameID, findBugMS) = chatMeasureMS { findBugGame(for: sessionID)?.language.id }
@@ -3358,6 +3385,9 @@ struct ChatView: View {
         if isFindPlaceSession {
             rows.append(.weatherAttribution)
         }
+        if let previousUserMessage = displaySnapshot.previousUserMessage {
+            rows.append(.previousUserContext(previousUserMessage))
+        }
         if displaySnapshot.hiddenMessageCount > 0 {
             rows.append(.olderMessages(count: displaySnapshot.hiddenMessageCount))
         }
@@ -3378,13 +3408,11 @@ struct ChatView: View {
         case .weatherAttribution:
             WeatherAttributionRow()
                 .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
+        case let .previousUserContext(message):
+            previousUserContextRow(for: message)
         case let .olderMessages(count):
             Button {
-                if timedChatDisplaySnapshot.snapshot.hiddenRoundCount > 0 {
-                    visibleRoundCount += roundWindowSize
-                } else {
-                    additionalLeadingMessageCount += olderMessageWindowSize
-                }
+                additionalLeadingMessageCount += olderMessageWindowSize
             } label: {
                 Text("View older messages (\(count))")
                     .font(.subheadline.weight(.medium))
@@ -3394,6 +3422,7 @@ struct ChatView: View {
                     .background(OpenCodePlatformColor.secondaryGroupedBackground, in: Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(ChatScrollTarget.olderMessagesButton)
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
         case let .displayItem(item):
             chatRow(for: item)
@@ -3404,13 +3433,31 @@ struct ChatView: View {
         }
     }
 
+    private func previousUserContextRow(for message: OpenCodeMessageEnvelope) -> some View {
+        VStack(alignment: .trailing, spacing: 5) {
+            Text("Previous prompt")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Text(ChatPreviousUserContextPolicy.displayText(for: message))
+                .font(.subheadline)
+                .foregroundStyle(.white)
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.blue, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityIdentifier("chat.previousPrompt")
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(EdgeInsets(top: 12, leading: 60, bottom: 2, trailing: 16))
+    }
+
     @ViewBuilder
     private func chatRow(for item: ChatDisplayItem) -> some View {
         switch item {
         case let .message(message):
             messageRow(for: message)
-        case let .turn(item):
-            turnRow(for: item)
         case let .largeMessageChunk(item):
             largeMessageChunkRow(for: item)
         case let .compaction(compaction):
@@ -3422,47 +3469,6 @@ struct ChatView: View {
             FindBugSolvedRow()
                 .padding(EdgeInsets(top: 8, leading: 16, bottom: 14, trailing: 16))
         }
-    }
-
-    private func turnRow(for item: ChatTurnDisplayItem) -> some View {
-        let snapshot = turnRowRenderSnapshot(for: item)
-
-        return VStack(alignment: .leading, spacing: 2) {
-            ForEach(snapshot.bubbles, id: \.message.id) { bubble in
-                EquatableMessageBubbleHost(
-                    snapshot: bubble,
-                    imageContent: imageContent,
-                    imageLoadingStore: chatStore.imageLoadingStore,
-                    videoStreams: videoStreams,
-                    videoPlaybackStore: chatStore.videoPlaybackStore,
-                    resolveTaskSessionID: { part, currentSessionID in
-                        chatFacade.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
-                    },
-                    onSelectPart: { part in selectedActivityDetail = ActivityDetail(message: bubble.message, part: part) },
-                    onOpenTaskSession: { taskSessionID in
-                        Task { await presentTaskSession(sessionID: taskSessionID) }
-                    },
-                    onForkMessage: { forkMessage in Task { await chatFacade.forkSelectedSession(from: forkMessage.id) } },
-                    onInspectDebugMessage: { debugMessage in selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage) },
-                    onEntryAnimationStarted: { messageID in outgoingEntryAnimationStartedMessageIDs.insert(messageID) },
-                    onToggleReasoningPart: toggleReasoningPart,
-                    onToggleContextGroup: toggleContextGroup,
-                    onShowEarlierActivity: { expandedEarlierActivityMessageIDs.insert(bubble.message.id) },
-                    onOpenVisualHTML: { payload in
-                        selectedVisualHTML = OpenClientVisualHTMLPresentation(payload: payload)
-                    }
-                )
-                .equatable()
-                .padding(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-            }
-        }
-        .transition(.identity)
-    }
-
-    private func turnRowRenderSnapshot(for item: ChatTurnDisplayItem) -> TurnRowRenderSnapshot {
-        TurnRowRenderSnapshot(
-            bubbles: ([item.user] + item.assistants).map(messageBubbleSnapshot(for:))
-        )
     }
 
     private func largeMessageChunkRow(for item: LargeMessageChunkDisplayItem) -> some View {
@@ -3659,29 +3665,12 @@ struct ChatView: View {
             return nil
         }
 
-        let gameCompletionMessageIDs = Set(messages.compactMap { message in
-            gameCompletionDisplayItem(for: message) == nil ? nil : message.id
-        })
-        let assistantChildrenByParentID = Dictionary(grouping: messages.filter { message in
-            (message.info.role ?? "").lowercased() == "assistant" &&
-                message.info.parentID?.isEmpty == false &&
-                !gameCompletionMessageIDs.contains(message.id) &&
-                !hiddenGameSetupMessageIDs.contains(message.info.parentID ?? "")
-        }) { message in
-            message.info.parentID ?? ""
-        }
-        let assistantChildIDs = Set(assistantChildrenByParentID.values.flatMap { $0.map(\.id) })
-
         func appendUnique(_ item: ChatDisplayItem) {
             guard displayedIDs.insert(item.id).inserted else { return }
             result.append(item)
         }
 
         for (index, message) in messages.enumerated() {
-            if assistantChildIDs.contains(message.id) {
-                continue
-            }
-
             if findPlaceGame != nil || findBugGame != nil {
                 if hiddenGameSetupMessageIDs.contains(message.id) {
                     continue
@@ -3694,12 +3683,6 @@ struct ChatView: View {
             }
 
             if message.info.isCompactionSummary {
-                continue
-            }
-
-            if (message.info.role ?? "").lowercased() == "user" {
-                let assistants = assistantChildrenByParentID[message.id] ?? []
-                appendUnique(.turn(ChatTurnDisplayItem(user: message, assistants: assistants)))
                 continue
             }
 
@@ -4081,6 +4064,7 @@ struct ChatView: View {
         guard let session = await chatFacade.sessionForPresentation(sessionID: sessionID) else { return }
         taskSessionDetent = .medium
         presentedTaskSession = session
+        await chatFacade.hydrateSessionForPresentation(session)
     }
 
     private func restoreActiveSessionAfterTaskSheet() {
@@ -4977,6 +4961,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
     }
 
     func updateUIView(_ collectionView: UICollectionView, context: Context) {
+        context.coordinator.beginViewUpdate()
+        defer { context.coordinator.endViewUpdate() }
         scrollController.attach(collectionView)
         Self.configureSoftScrollEdgeEffects(for: collectionView)
         context.coordinator.rowContent = rowContent
@@ -5061,6 +5047,8 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
         private var lastBottomContentInsetAnimationToken: Int
         private var bottomCorrectionGeneration = 0
         private var isBottomPullTracking = false
+        private var isPerformingViewUpdate = false
+        private var pendingAtBottomValue: Bool?
 
         init(
             rows: [ChatTranscriptRow],
@@ -5101,6 +5089,19 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
             rows.count
+        }
+
+        func beginViewUpdate() {
+            isPerformingViewUpdate = true
+        }
+
+        func endViewUpdate() {
+            isPerformingViewUpdate = false
+            guard let pendingAtBottomValue else { return }
+            self.pendingAtBottomValue = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.setAtBottom(pendingAtBottomValue)
+            }
         }
 
         func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -5383,7 +5384,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
                 interruptsCurrentScroll: animated,
                 performsLayout: performsLayout
             ) else { return }
-            isAtBottom.wrappedValue = true
+            setAtBottomAfterViewUpdate()
         }
 
         private func scrollToBottomItem(in collectionView: UICollectionView, animated: Bool) {
@@ -5391,18 +5392,33 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             let itemCount = collectionView.numberOfItems(inSection: 0)
             guard itemCount > 0 else { return }
             collectionView.scrollToItem(at: IndexPath(item: itemCount - 1, section: 0), at: .bottom, animated: animated)
-            isAtBottom.wrappedValue = true
+            setAtBottomAfterViewUpdate()
+        }
+
+        private func setAtBottomAfterViewUpdate() {
+            DispatchQueue.main.async { [weak self] in
+                self?.setAtBottom(true)
+            }
         }
 
         private func updateBottomState(for scrollView: UIScrollView) {
             let distanceFromBottom = distanceFromBottom(for: scrollView)
             if isAtBottom.wrappedValue {
                 guard distanceFromBottom > 140 else { return }
-                isAtBottom.wrappedValue = false
+                setAtBottom(false)
             } else {
                 guard distanceFromBottom < 24 else { return }
-                isAtBottom.wrappedValue = true
+                setAtBottom(true)
             }
+        }
+
+        private func setAtBottom(_ value: Bool) {
+            guard isAtBottom.wrappedValue != value else { return }
+            if isPerformingViewUpdate {
+                pendingAtBottomValue = value
+                return
+            }
+            isAtBottom.wrappedValue = value
         }
 
         private func distanceFromBottom(for scrollView: UIScrollView) -> CGFloat {

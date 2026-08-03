@@ -53,16 +53,16 @@ struct ProjectListView: View {
                             subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
                             systemImage: project.id == "global" ? "globe" : "folder.fill",
                             icon: project.icon,
-                            isSelected: facade.isSelected(project)
+                            isSelected: facade.isSelected(project),
+                            isPreparing: facade.isPreparingSelection(project)
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let ticket = facade.beginSelection(project)
-                            withAnimation(opencodeSelectionAnimation) {
-                                onProjectChosen()
-                            }
                             Task { @MainActor in
-                                await Task.yield()
+                                guard let ticket = await facade.prepareSelectionForNavigation(project) else { return }
+                                withAnimation(opencodeSelectionAnimation) {
+                                    onProjectChosen()
+                                }
                                 await facade.completeSelection(ticket)
                             }
                         }
@@ -91,6 +91,7 @@ struct ProjectListView: View {
                                 Label("Preferences unavailable", systemImage: "lock")
                             }
                         }
+                        .disabled(facade.isPreparingSelection(project))
                     }
                 } header: {
                     ProjectListSectionHeader(recentSessions: snapshot.recentSessions, isLoadingRecentSessions: snapshot.isLoadingRecentSessions) { recent in
@@ -99,7 +100,7 @@ struct ProjectListView: View {
                     .textCase(nil)
                 }
 
-                if games.showsSection {
+                if games.showsSection, !facade.isReadOnly {
                     Section {
                         ProjectRow(
                             title: "Find the Place",
@@ -147,6 +148,7 @@ struct ProjectListView: View {
                     set: { facade.projectSessionSearchQuery = $0 }
                 ),
                 isSearching: snapshot.isSearching,
+                allowsNewChat: !facade.isReadOnly,
                 onNewChat: {
                     facade.presentNewChat()
                 }
@@ -178,7 +180,7 @@ struct ProjectListView: View {
                 .accessibilityIdentifier("projects.disconnect")
             }
 
-            if let bridge {
+            if let bridge, !facade.isReadOnly {
                 ToolbarItem(placement: .opencodeTrailing) {
                     OpenClientBridgeToolbarButton(bridge: bridge) {
                         isShowingBridgeStatus = true
@@ -186,24 +188,26 @@ struct ProjectListView: View {
                 }
             }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    configurations.present()
-                } label: {
-                    Image(systemName: "gearshape")
+            if !facade.isReadOnly {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        configurations.present()
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Configurations")
+                    .accessibilityIdentifier("projects.configurations")
                 }
-                .accessibilityLabel("Configurations")
-                .accessibilityIdentifier("projects.configurations")
-            }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    facade.presentCreateProject()
-                } label: {
-                    Image(systemName: "plus")
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        facade.presentCreateProject()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create Project")
+                    .accessibilityIdentifier("projects.create")
                 }
-                .accessibilityLabel("Create Project")
-                .accessibilityIdentifier("projects.create")
             }
         }
         .sheet(isPresented: Binding(
@@ -365,6 +369,7 @@ private struct ProjectSessionSearchRow: View {
 private struct ProjectListBottomBar: View {
     @Binding var query: String
     let isSearching: Bool
+    let allowsNewChat: Bool
     let onNewChat: () -> Void
     @FocusState private var isSearchFocused: Bool
 
@@ -424,7 +429,7 @@ private struct ProjectListBottomBar: View {
                 .accessibilityIdentifier("projects.search.dismiss")
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
                 .zIndex(1)
-            } else {
+            } else if allowsNewChat {
                 Button(action: onNewChat) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: ProjectListLayout.newChatIconSize, weight: .semibold))

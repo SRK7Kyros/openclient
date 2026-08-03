@@ -225,6 +225,7 @@ extension AppViewModel {
             if reducedCurrentProject != currentProject {
                 currentProject = reducedCurrentProject
             }
+            persistProjectsToLocalCache()
             switch globalAction {
             case .applied:
                 break
@@ -388,6 +389,12 @@ extension AppViewModel {
         default:
             break
         }
+
+        persistManagedEventToLocalCache(
+            managed,
+            applications: applications,
+            sessionID: eventSessionID
+        )
 
         liveActivityFacade.consumeReducerEvent(
             managed.typed,

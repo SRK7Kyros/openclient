@@ -11,9 +11,10 @@ final class ConnectionFacade: ObservableObject {
         self.viewModel = viewModel
         Publishers.MergeMany([
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
+            viewModel.appCustomizationStore.objectWillChange.eraseToAnyPublisher(),
+            viewModel.appIconStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.$config.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingConnectionOverlay.map { _ in () }.eraseToAnyPublisher(),
-            viewModel.$isShowingAppleIntelligenceFolderPicker.map { _ in () }.eraseToAnyPublisher(),
         ])
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
@@ -37,19 +38,15 @@ final class ConnectionFacade: ObservableObject {
     var isShowingConnectionOverlay: Bool { viewModel.isShowingConnectionOverlay }
     var connectionPhase: OpenClientConnectionPhase { viewModel.connectionPhase }
     var isUsingAppleIntelligence: Bool { viewModel.isUsingAppleIntelligence }
-    var selectedSessionID: String? { viewModel.selectedSession?.id }
     var recentServerConfigs: [OpenCodeServerConfig] { viewModel.recentServerConfigs }
+    var appIconStore: AppIconStore { viewModel.appIconStore }
+    var showsChatActivityShimmer: Bool { viewModel.appCustomizationStore.showsChatActivityShimmer }
+    var autoConnectServerID: String? { viewModel.appCustomizationStore.autoConnectServerID }
+    var isBrowsingLocalCache: Bool { viewModel.backendMode == .cachedServer }
     var errorMessage: String? { viewModel.errorMessage }
     var isLoading: Bool { viewModel.isLoading }
     var isEditingSavedServer: Bool { viewModel.isEditingSavedServer }
     var canSaveEditedServer: Bool { viewModel.canSaveEditedServer }
-    var canTryAppleIntelligence: Bool { viewModel.canTryAppleIntelligence }
-    var appleIntelligenceAvailabilitySummary: String? { viewModel.appleIntelligenceAvailabilitySummary }
-
-    var isShowingAppleIntelligenceFolderPicker: Bool {
-        get { viewModel.isShowingAppleIntelligenceFolderPicker }
-        set { viewModel.isShowingAppleIntelligenceFolderPicker = newValue }
-    }
 
     func startConnection() {
         viewModel.startConnection()
@@ -61,6 +58,18 @@ final class ConnectionFacade: ObservableObject {
 
     func startConnectionFromEditor() {
         viewModel.startConnectionFromEditor()
+    }
+
+    func startAutomaticConnectionIfConfigured() {
+        viewModel.startAutomaticConnectionIfConfigured()
+    }
+
+    func setShowsChatActivityShimmer(_ shows: Bool) {
+        viewModel.appCustomizationStore.setShowsChatActivityShimmer(shows)
+    }
+
+    func setAutoConnectServerID(_ serverID: String?) {
+        viewModel.appCustomizationStore.setAutoConnectServerID(serverID)
     }
 
     func cancelConnectionAttempt() {
@@ -81,18 +90,6 @@ final class ConnectionFacade: ObservableObject {
 
     func saveEditedServer() {
         viewModel.saveEditedServer()
-    }
-
-    func presentAppleIntelligenceFolderPicker() {
-        viewModel.presentAppleIntelligenceFolderPicker()
-    }
-
-    func createAppleIntelligenceWorkspace(from directoryURL: URL) async {
-        await viewModel.createAppleIntelligenceWorkspace(from: directoryURL)
-    }
-
-    func leaveAppleIntelligenceSession() {
-        viewModel.leaveAppleIntelligenceSession()
     }
 
     func disconnect() {

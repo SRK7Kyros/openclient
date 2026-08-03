@@ -103,6 +103,7 @@ extension AppViewModel {
         preservingDraftForSessionID previousSessionID: String?,
         animatesChanges: Bool
     ) {
+        sessionNavigationGeneration &+= 1
         if let previousSessionID {
             preserveCurrentMessageDraftForNavigation(forSessionID: previousSessionID)
         }
@@ -364,13 +365,38 @@ extension AppViewModel {
     func selectDirectory(
         _ directory: String?,
         preservingDraftForSessionID previousSessionID: String?,
-        animatesPreparation: Bool
+        animatesPreparation: Bool,
+        isPreparedForNavigation: Bool = false
     ) async {
-        prepareDirectorySelection(
-            directory,
-            preservingDraftForSessionID: previousSessionID,
-            animatesChanges: animatesPreparation
-        )
+        let cachedDirectory: OpenCodeCachedDirectorySessionsSnapshot?
+        if isPreparedForNavigation {
+            cachedDirectory = nil
+        } else {
+            prepareDirectorySelection(
+                directory,
+                preservingDraftForSessionID: previousSessionID,
+                animatesChanges: animatesPreparation
+            )
+            cachedDirectory = await hydrateDirectoryFromLocalCache(directory)
+        }
+        guard DirectoryStoreRegistry.key(for: effectiveSelectedDirectory) == DirectoryStoreRegistry.key(for: directory) else {
+            return
+        }
+        if isBrowsingLocalCache {
+            isLoadingSessions = false
+            streamDirectory = directory
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingProjectPicker = false
+            }
+            return
+        }
+        if cachedDirectory?.isFresh() == true {
+            isLoadingSessions = false
+            streamDirectory = directory
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingProjectPicker = false
+            }
+        }
         do {
             if let directory, !directory.isEmpty {
                 _ = try await client.listSessions(directory: directory, roots: true, limit: 55)
@@ -412,6 +438,7 @@ extension AppViewModel {
         if currentProject?.id == project.id {
             currentProject = project
         }
+        persistProjectsToLocalCache()
     }
 
     private func isSupportedProjectImagePath(_ path: String) -> Bool {
@@ -451,7 +478,8 @@ extension AppViewModel {
     func selectProject(
         _ project: OpenCodeProject?,
         preservingDraftForSessionID previousSessionID: String?,
-        animatesPreparation: Bool
+        animatesPreparation: Bool,
+        isPreparedForNavigation: Bool = false
     ) async {
         let selection = projectCoordinator.selectionResult(for: project, projects: projects)
         withAnimation(opencodeSelectionAnimation) {
@@ -460,8 +488,17 @@ extension AppViewModel {
         await selectDirectory(
             selection.selectedDirectory,
             preservingDraftForSessionID: previousSessionID,
-            animatesPreparation: animatesPreparation
+            animatesPreparation: animatesPreparation,
+            isPreparedForNavigation: isPreparedForNavigation
         )
+    }
+
+    @discardableResult
+    func prepareProjectNavigation(_ project: OpenCodeProject) async -> String? {
+        let previousSessionID = beginProjectNavigation(project)
+        _ = await hydrateDirectoryFromLocalCache(project.id == "global" ? nil : project.worktree)
+        guard currentProject?.id == project.id else { return nil }
+        return previousSessionID
     }
 
     var projectScopeTitle: String {
@@ -494,9 +531,11 @@ extension AppViewModel {
         )
         projects = result.projects
         currentProject = result.currentProject
+        persistProjectsToLocalCache()
     }
 
     func refreshProjectList() async {
+        guard !isBrowsingLocalCache else { return }
         do {
             try await refreshProjects()
             await loadRecentProjectSessionsAcrossProjects()

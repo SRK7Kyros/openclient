@@ -79,12 +79,21 @@ private enum WorkspaceSessionLoadResult: Sendable {
 extension AppViewModel {
     func beginSessionNavigation(_ session: OpenCodeSession) -> String? {
         let previousSessionID = selectedSession?.id
-        withAnimation(opencodeSelectionAnimation) {
-            selectedProjectContentTab = .sessions
-            selectedSession = session
-            isLoadingSelectedSession = true
-            projectFilesStore.selectedVCSFile = nil
+        sessionNavigationGeneration &+= 1
+        if let previousSessionID,
+           previousSessionID != session.id,
+           let previousStore = directoryStoreRegistry.ownerStore(forSessionID: previousSessionID) {
+            scheduleLocalChatCacheWrite(
+                sessionID: previousSessionID,
+                store: previousStore,
+                includesTodos: previousStore.syncState.todosBySessionID[previousSessionID] != nil,
+                immediate: true
+            )
         }
+        selectedProjectContentTab = .sessions
+        selectedSession = session
+        isLoadingSelectedSession = true
+        projectFilesStore.selectedVCSFile = nil
         streamDirectory = session.directory
         return previousSessionID
     }
@@ -173,23 +182,27 @@ extension AppViewModel {
         let targetStore = directoryStoreRegistry.store(for: directory)
         let targetGeneration = directoryStoreRegistry.generation
         let previousSelectedSession = targetStore.selectedSession
-        let reload = try await sessionCoordinator.reloadDirectory(client: client, directory: directory)
+        let permissionRevision = targetStore.permissionRevision
+        let questionRevision = targetStore.questionRevision
+        let reload = try await sessionCoordinator.reloadDirectory(
+            client: client,
+            directory: directory,
+            sessionLimit: targetStore.sessionLimit
+        )
         guard directoryStoreRegistry.generation == targetGeneration,
               directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
         let bootstrap = reload.bootstrap
         let scopedSessions = sessionListStore.applyDirectoryReloadSessions(bootstrap.sessions, scopedTo: directory)
-        _ = withAnimation(opencodeSelectionAnimation) {
-            targetStore.applyDirectoryReload(
-                bootstrap: bootstrap,
-                statuses: reload.statuses,
-                scopedSessions: scopedSessions
-            )
-        }
+        targetStore.applyDirectoryReload(
+            bootstrap: bootstrap,
+            statuses: reload.statuses,
+            scopedSessions: scopedSessions,
+            permissionRevisionAtRequestStart: permissionRevision,
+            questionRevisionAtRequestStart: questionRevision
+        )
+        persistDirectoryToLocalCache(targetStore, directory: directory)
         guard directoryStoreRegistry.activeStore === targetStore else { return }
-        withAnimation(opencodeSelectionAnimation) {
-            objectWillChange.send()
-            sessionInteractionStore.applyDirectoryBootstrap(bootstrap)
-        }
+        objectWillChange.send()
         let selection = sessionCoordinator.selectionAfterDirectoryReload(
             previousSelectedSession: previousSelectedSession,
             currentSelectedSessionID: selectedSession?.id,
@@ -244,11 +257,28 @@ extension AppViewModel {
     }
 
     func refreshSessionList() async {
+        guard !isBrowsingLocalCache else { return }
         do {
             try await reloadSessions()
             errorMessage = nil
         } catch {
             isLoadingSessions = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMoreSessions() async {
+        guard !isBrowsingLocalCache, directoryStore.hasMoreSessions, !isLoadingSessions else { return }
+        let targetStore = directoryStore
+        let previousLimit = targetStore.sessionLimit
+        targetStore.sessionLimit += 100
+        targetStore.isLoadingSessions = true
+        do {
+            try await reloadSessions()
+            errorMessage = nil
+        } catch {
+            targetStore.sessionLimit = previousLimit
+            targetStore.isLoadingSessions = false
             errorMessage = error.localizedDescription
         }
     }
@@ -655,6 +685,7 @@ extension AppViewModel {
         }
         removeSessionPreview(for: sessionID)
         clearPersistedMessageDraft(forSessionID: sessionID)
+        removeSessionFromLocalCache(sessionID)
     }
 
     private func actionResultPrompt(commandName: String, runID: String) -> String {
@@ -770,6 +801,7 @@ extension AppViewModel {
             sessionListStore.removeSessionFromWorkspaceStates(sessionID: sessionID)
             removeSessionPreview(for: sessionID)
             clearPersistedMessageDraft(forSessionID: sessionID)
+            removeSessionFromLocalCache(sessionID)
         }
         if leavesEmptyWorkspaceState {
             sessionListStore.finishWorkspaceSessionsLoading([], estimatedTotal: 0, limit: sessionListStore.workspaceSessionState(for: directory).limit, directory: directory)
@@ -788,21 +820,78 @@ extension AppViewModel {
 
         let didPrepareSelection = selectedSession?.id == session.id
         if !didPrepareSelection {
+            sessionNavigationGeneration &+= 1
             prepareSessionSelection(session)
         }
+        let navigationGeneration = sessionNavigationGeneration
+        let navigationDirectoryKey = directoryStoreRegistry.activeKey
+        if !hasHydratedLocalChat(sessionID: session.id),
+           await hydrateChatFromLocalCache(
+            session,
+            navigationGeneration: navigationGeneration,
+            expectedDirectoryKey: navigationDirectoryKey
+           ) != nil {
+            guard isSessionNavigationCurrent(
+                sessionID: session.id,
+                generation: navigationGeneration,
+                directoryKey: navigationDirectoryKey
+            ) else { return }
+            prepareSessionSelection(
+                session,
+                preservingDraftForSessionID: nil,
+                animatesChanges: false
+            )
+        }
+        if isBrowsingLocalCache {
+            chatStore.finishLoadingSelectedSession()
+            restoreMessageDraftIfComposerIsEmpty(for: session)
+            return
+        }
+
         do {
-            async let messages: Void = loadMessages(for: session)
+            let messagesAreFresh = areLocalChatMessagesFresh(sessionID: session.id)
+            let todosAreFresh = areLocalChatTodosFresh(sessionID: session.id)
             async let statuses: Void = reloadSessionStatuses()
             async let permissions: Void = loadAllPermissions(for: session)
             async let questions: Void = loadAllQuestions(for: session)
-            _ = try await (messages, statuses, permissions, questions)
+            if messagesAreFresh {
+                _ = try await (statuses, permissions, questions)
+                guard isSessionNavigationCurrent(
+                    sessionID: session.id,
+                    generation: navigationGeneration,
+                    directoryKey: navigationDirectoryKey
+                ) else { return }
+                if !todosAreFresh {
+                    await loadTodos(for: session)
+                }
+                chatStore.finishLoadingSelectedSession()
+            } else {
+                async let messages: Void = loadMessages(for: session)
+                _ = try await (messages, statuses, permissions, questions)
+            }
+            guard isSessionNavigationCurrent(
+                sessionID: session.id,
+                generation: navigationGeneration,
+                directoryKey: navigationDirectoryKey
+            ) else { return }
             restoreMessageDraftIfComposerIsEmpty(for: session)
             await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
+            guard isSessionNavigationCurrent(
+                sessionID: session.id,
+                generation: navigationGeneration,
+                directoryKey: navigationDirectoryKey
+            ) else { return }
             chatStore.finishLoadingSelectedSession()
             errorMessage = error.localizedDescription
         }
+    }
+
+    func isSessionNavigationCurrent(sessionID: String, generation: UInt, directoryKey: String) -> Bool {
+        sessionNavigationGeneration == generation
+            && directoryStoreRegistry.activeKey == directoryKey
+            && selectedSession?.id == sessionID
     }
 
     func sendCurrentMessage(meterPrompt: Bool = true) async {
@@ -1377,8 +1466,9 @@ extension AppViewModel {
               directoryStoreRegistry.key(for: targetStore) != nil else { return }
         refreshSessionPreview(for: session.id, messages: loadedMessages)
         let isActiveSession = selectedSession?.id == session.id
-        chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
         targetStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
+        chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
+        persistLoadedMessagesToLocalCache(loadedMessages, sessionID: session.id)
         inferFunAndGames(from: loadedMessages, forSessionID: session.id)
         guard isActiveSession else { return }
         if isCapturingStreamingDiagnostics {
@@ -1472,6 +1562,13 @@ extension AppViewModel {
     }
 
     func fetchMessageDetails(sessionID: String, messageID: String) async throws -> OpenCodeMessageEnvelope {
+        if isBrowsingLocalCache {
+            let owner = directoryStoreRegistry.ownerStore(forSessionID: sessionID) ?? directoryStore
+            if let cached = owner.syncState.messageEnvelopes(forSessionID: sessionID).first(where: { $0.id == messageID }) {
+                return cached
+            }
+            throw URLError(.notConnectedToInternet)
+        }
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1",
            let detail = toolMessageDetails[messageID] {
             return detail
@@ -1509,6 +1606,10 @@ extension AppViewModel {
             return (todos, nil)
         }
 
+        if isBrowsingLocalCache {
+            return (todos, nil)
+        }
+
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
             let latestTodoMessageID = messages
                 .reversed()
@@ -1524,6 +1625,7 @@ extension AppViewModel {
         objectWillChange.send()
         directoryStore.applyTodos(refreshedTodos, forSessionID: selectedSession.id)
         sessionInteractionStore.applyTodos(refreshedTodos, forSessionID: selectedSession.id, selectedSessionID: selectedSession.id)
+        persistLoadedTodosToLocalCache(refreshedTodos, sessionID: selectedSession.id)
 
         let latestTodoMessageID = messages
             .reversed()
@@ -1547,20 +1649,18 @@ extension AppViewModel {
             let todos = try await client.getTodos(sessionID: session.id)
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.key(for: targetStore) != nil else { return }
-            withAnimation(opencodeSelectionAnimation) {
-                objectWillChange.send()
-                targetStore.applyTodos(todos, forSessionID: session.id)
-                sessionInteractionStore.applyTodos(todos, forSessionID: session.id, selectedSessionID: selectedSession?.id)
-            }
+            objectWillChange.send()
+            targetStore.applyTodos(todos, forSessionID: session.id)
+            sessionInteractionStore.applyTodos(todos, forSessionID: session.id, selectedSessionID: selectedSession?.id)
+            persistLoadedTodosToLocalCache(todos, sessionID: session.id)
             refreshLiveActivityIfNeeded(for: session.id)
         } catch {
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.key(for: targetStore) != nil else { return }
-            withAnimation(opencodeSelectionAnimation) {
-                objectWillChange.send()
-                targetStore.applyTodos([], forSessionID: session.id)
-                sessionInteractionStore.applyTodos([], forSessionID: session.id, selectedSessionID: selectedSession?.id)
-            }
+            guard !usesLocalCache else { return }
+            objectWillChange.send()
+            targetStore.applyTodos([], forSessionID: session.id)
+            sessionInteractionStore.applyTodos([], forSessionID: session.id, selectedSessionID: selectedSession?.id)
             refreshLiveActivityIfNeeded(for: session.id)
         }
     }
@@ -1569,29 +1669,25 @@ extension AppViewModel {
         let targetKey = directoryStoreRegistry.activeKey
         let targetStore = directoryStore
         let targetGeneration = directoryStoreRegistry.generation
+        let permissionRevision = targetStore.permissionRevision
         do {
             let permissions = try await client.listPermissions(directory: directory, workspaceID: workspaceID)
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            withAnimation(opencodeSelectionAnimation) {
+            if targetStore.applyPermissions(permissions, ifUnchangedSince: permissionRevision) {
                 objectWillChange.send()
-                targetStore.applyPermissions(permissions)
-                if directoryStoreRegistry.activeStore === targetStore {
-                    sessionInteractionStore.applyLoadedPermissions(permissions)
+                if directoryStoreRegistry.activeStore === targetStore,
+                   let selectedSessionID = targetStore.selectedSession?.id {
+                    sessionInteractionStore.applySelectedSession(
+                        sessionID: selectedSessionID,
+                        sessions: targetStore.sessions,
+                        syncState: targetStore.syncState
+                    )
                 }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
-            guard directoryStoreRegistry.generation == targetGeneration,
-                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            withAnimation(opencodeSelectionAnimation) {
-                objectWillChange.send()
-                targetStore.clearPermissions()
-                if directoryStoreRegistry.activeStore === targetStore {
-                    sessionInteractionStore.applyLoadedPermissions([])
-                }
-            }
-            refreshLiveActivityIfNeeded(for: selectedSession?.id)
+            return
         }
     }
 
@@ -1603,29 +1699,25 @@ extension AppViewModel {
         let targetKey = directoryStoreRegistry.activeKey
         let targetStore = directoryStore
         let targetGeneration = directoryStoreRegistry.generation
+        let questionRevision = targetStore.questionRevision
         do {
             let questions = try await client.listQuestions(directory: directory, workspaceID: workspaceID)
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            withAnimation(opencodeSelectionAnimation) {
+            if targetStore.applyQuestions(questions, ifUnchangedSince: questionRevision) {
                 objectWillChange.send()
-                targetStore.applyQuestions(questions)
-                if directoryStoreRegistry.activeStore === targetStore {
-                    sessionInteractionStore.applyLoadedQuestions(questions)
+                if directoryStoreRegistry.activeStore === targetStore,
+                   let selectedSessionID = targetStore.selectedSession?.id {
+                    sessionInteractionStore.applySelectedSession(
+                        sessionID: selectedSessionID,
+                        sessions: targetStore.sessions,
+                        syncState: targetStore.syncState
+                    )
                 }
             }
             refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
-            guard directoryStoreRegistry.generation == targetGeneration,
-                  directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            withAnimation(opencodeSelectionAnimation) {
-                objectWillChange.send()
-                targetStore.clearQuestions()
-                if directoryStoreRegistry.activeStore === targetStore {
-                    sessionInteractionStore.applyLoadedQuestions([])
-                }
-            }
-            refreshLiveActivityIfNeeded(for: selectedSession?.id)
+            return
         }
     }
 
@@ -1777,6 +1869,7 @@ extension AppViewModel {
                 }
             }
             clearPersistedMessageDraft(forSessionID: session.id)
+            removeSessionFromLocalCache(session.id)
             try await reloadSessions()
         } catch {
             errorMessage = error.localizedDescription
@@ -1798,6 +1891,12 @@ extension AppViewModel {
                     selectedSession = updatedSession
                 }
             }
+            let owner = directoryStoreRegistry.ownerStore(forSessionID: updatedSession.id) ?? directoryStore
+            persistDirectoryToLocalCache(
+                owner,
+                directory: updatedSession.directory,
+                marksValidated: false
+            )
             publishWidgetSnapshots()
         } catch {
             errorMessage = error.localizedDescription
@@ -1833,6 +1932,7 @@ extension AppViewModel {
     }
 
     func ensureAllSessionsLoaded() async {
+        guard !isBrowsingLocalCache else { return }
         do {
             let sessions = try await client.listSessions(directory: effectiveSelectedDirectory)
             withAnimation(opencodeSelectionAnimation) {
@@ -1849,11 +1949,19 @@ extension AppViewModel {
     }
 
     func sessionForPresentation(sessionID: String) async -> OpenCodeSession? {
-        if session(matching: sessionID) == nil {
-            await ensureAllSessionsLoaded()
+        if let session = session(matching: sessionID) {
+            return session
         }
 
-        return session(matching: sessionID)
+        guard !isBrowsingLocalCache else { return nil }
+        let directory = selectedSession?.directory ?? streamDirectory ?? effectiveSelectedDirectory
+        do {
+            let loaded = try await client.getSession(sessionID: sessionID, directory: directory)
+            mergeSessions([loaded])
+            return session(matching: sessionID) ?? loaded
+        } catch {
+            return nil
+        }
     }
 
     func resolveTaskSessionID(from part: OpenCodePart, currentSessionID: String) -> String? {

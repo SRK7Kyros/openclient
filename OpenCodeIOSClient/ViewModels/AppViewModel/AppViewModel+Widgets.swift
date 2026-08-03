@@ -4,6 +4,14 @@ extension AppViewModel {
     func widgetSnapshotInput(includeModelOptions: Bool = false) -> WidgetSnapshotInput {
         let sessions = allSessions
         let providers = includeModelOptions ? modelConfigurationStore.sortedProviders : []
+        var sessionTitlesByID: [String: String] = [:]
+        var permissionsBySessionID: [String: [OpenCodePermission]] = [:]
+        var questionsBySessionID: [String: [OpenCodeQuestionRequest]] = [:]
+        for session in sessions {
+            sessionTitlesByID[session.id] = childSessionTitle(for: session)
+            permissionsBySessionID[session.id] = permissions(for: session.id)
+            questionsBySessionID[session.id] = questions(for: session.id)
+        }
         return WidgetSnapshotInput(
             backendMode: backendMode,
             config: config,
@@ -11,12 +19,12 @@ extension AppViewModel {
             currentProject: currentProject,
             effectiveDirectory: effectiveSelectedDirectory,
             sessions: sessions,
-            sessionTitlesByID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, childSessionTitle(for: $0)) }),
+            sessionTitlesByID: sessionTitlesByID,
             statuses: sessionStatuses,
             previews: sessionPreviews,
             pinnedSessionIDs: pinnedSessionIDs,
-            permissionsBySessionID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, permissions(for: $0.id)) }),
-            questionsBySessionID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, questions(for: $0.id)) }),
+            permissionsBySessionID: permissionsBySessionID,
+            questionsBySessionID: questionsBySessionID,
             commands: directoryCommands,
             providers: providers,
             visibleModelsByProviderID: Dictionary(uniqueKeysWithValues: providers.map {

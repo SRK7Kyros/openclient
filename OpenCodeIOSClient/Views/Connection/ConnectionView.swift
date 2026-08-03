@@ -1,10 +1,6 @@
 import SwiftUI
 import Combine
 
-#if canImport(UniformTypeIdentifiers)
-import UniformTypeIdentifiers
-#endif
-
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -12,18 +8,17 @@ import UIKit
 enum ConnectionSheetRoute: Hashable {
     case addServer
     case editServer(String)
+    case configurations
     case help
-    case appleIntelligenceChat(String)
 }
 
 private let connectionSheetHomeDetent: PresentationDetent = .fraction(0.98)
 
-struct ConnectionSheetView<ChatDestination: View>: View {
+struct ConnectionSheetView: View {
     @ObservedObject var facade: ConnectionFacade
     @ObservedObject var commerce: CommerceFacade
     @ObservedObject var whatsNew: OpenClientWhatsNewStore
     let onSelectPluginSetupConnection: (OpenCodeServerConfig) -> Void
-    let chatDestination: (String) -> ChatDestination
 
     @State private var path: [ConnectionSheetRoute] = []
     @State private var selectedDetent: PresentationDetent = connectionSheetHomeDetent
@@ -66,27 +61,9 @@ struct ConnectionSheetView<ChatDestination: View>: View {
         .animation(.snappy(duration: 0.34, extraBounce: 0.02), value: facade.isShowingConnectionOverlay)
         .onAppear {
             updateDetent(for: currentRoute)
-            syncAppleIntelligenceRoute()
         }
-        .onChange(of: path) { oldPath, newPath in
-            if case .appleIntelligenceChat = oldPath.last,
-               case .appleIntelligenceChat = newPath.last {
-                updateDetent(for: currentRoute)
-                return
-            }
-
-            if case .appleIntelligenceChat = oldPath.last,
-               facade.isUsingAppleIntelligence {
-                facade.leaveAppleIntelligenceSession()
-            }
-
+        .onChange(of: path) { _, _ in
             updateDetent(for: currentRoute)
-        }
-        .onChange(of: facade.selectedSessionID) { _, _ in
-            syncAppleIntelligenceRoute()
-        }
-        .onChange(of: facade.isUsingAppleIntelligence) { _, _ in
-            syncAppleIntelligenceRoute()
         }
     }
 
@@ -94,7 +71,7 @@ struct ConnectionSheetView<ChatDestination: View>: View {
         switch currentRoute {
         case .addServer, .editServer, .none:
             [connectionSheetHomeDetent]
-        case .help, .appleIntelligenceChat:
+        case .configurations, .help:
             [.large]
         }
     }
@@ -104,32 +81,20 @@ struct ConnectionSheetView<ChatDestination: View>: View {
         switch route {
         case .addServer, .editServer:
             ServerConnectionEditorView(facade: facade)
+        case .configurations:
+            RootConfigurationsView(facade: facade)
         case .help:
             HelpView()
-        case let .appleIntelligenceChat(sessionID):
-            chatDestination(sessionID)
         }
     }
 
     private func updateDetent(for route: ConnectionSheetRoute?) {
         switch route {
-        case .help, .appleIntelligenceChat:
+        case .configurations, .help:
             selectedDetent = .large
         case .addServer, .editServer, .none:
             selectedDetent = connectionSheetHomeDetent
         }
-    }
-
-    private func syncAppleIntelligenceRoute() {
-        guard facade.isUsingAppleIntelligence, let sessionID = facade.selectedSessionID else {
-            if case .appleIntelligenceChat = currentRoute {
-                path.removeLast()
-            }
-            return
-        }
-
-        guard currentRoute != .appleIntelligenceChat(sessionID) else { return }
-        path = [.appleIntelligenceChat(sessionID)]
     }
 }
 
@@ -153,6 +118,16 @@ struct ConnectionView: View {
         .navigationTitle("OpenClient")
         .opencodeLargeNavigationTitle()
         .toolbar {
+            ToolbarItem(placement: .opencodeLeading) {
+                Button {
+                    navigate?(.configurations)
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel("Configurations")
+                .accessibilityIdentifier("connection.configurations")
+            }
+
             if hasRecentServers {
                 ToolbarItem(placement: .opencodeTrailing) {
                     Button {
@@ -164,21 +139,6 @@ struct ConnectionView: View {
                     .accessibilityLabel("Add Server")
                 }
             }
-        }
-        .sheet(isPresented: Binding(
-            get: { facade.isShowingAppleIntelligenceFolderPicker },
-            set: { facade.isShowingAppleIntelligenceFolderPicker = $0 }
-        )) {
-#if canImport(UIKit) && canImport(UniformTypeIdentifiers)
-            AppleIntelligenceFolderPicker { url in
-                facade.isShowingAppleIntelligenceFolderPicker = false
-                guard let url else { return }
-                Task { await facade.createAppleIntelligenceWorkspace(from: url) }
-            }
-#else
-            Text("Folder picking is unavailable on this platform.")
-                .presentationDetents([.medium])
-#endif
         }
         .sheet(item: Binding(
             get: { whatsNew.presentedRelease },
@@ -231,7 +191,6 @@ struct ConnectionView: View {
             }
 #endif
 
-            appleIntelligenceSection
             helpSection
         }
         .connectionListStyle(hasRecentServers: hasRecentServers)
@@ -286,30 +245,6 @@ struct ConnectionView: View {
         .padding(.vertical, 0)
     }
 
-    private var appleIntelligenceSection: some View {
-        Section("Apple Intelligence") {
-            Button {
-                facade.presentAppleIntelligenceFolderPicker()
-            } label: {
-                AppleIntelligenceConnectionCard()
-            }
-            .buttonStyle(.plain)
-            .disabled(!facade.canTryAppleIntelligence)
-            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            if let summary = facade.appleIntelligenceAvailabilitySummary, !facade.canTryAppleIntelligence {
-                Text(summary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-        }
-    }
-
     private var helpSection: some View {
         Section("Help") {
             Button {
@@ -335,6 +270,157 @@ struct ConnectionView: View {
             .listRowSeparator(.hidden)
         }
     }
+}
+
+private struct RootConfigurationsView: View {
+    @ObservedObject var facade: ConnectionFacade
+
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink {
+                    AppIconSelectionView(store: facade.appIconStore)
+                } label: {
+                    LabeledContent("App Icon", value: facade.appIconStore.selectedIcon.displayName)
+                }
+                .accessibilityIdentifier("configurations.app-icon")
+
+                Toggle("Show Chat Activity Shimmer", isOn: Binding(
+                    get: { facade.showsChatActivityShimmer },
+                    set: { facade.setShowsChatActivityShimmer($0) }
+                ))
+                .accessibilityIdentifier("configurations.chat-activity-shimmer")
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Shows an animated highlight at the top of a chat while the AI is active.")
+            }
+
+            Section {
+                if facade.recentServerConfigs.isEmpty {
+                    Text("No saved servers")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Auto-Connect Server", selection: Binding(
+                        get: { facade.autoConnectServerID },
+                        set: { facade.setAutoConnectServerID($0) }
+                    )) {
+                        Text("Off").tag(nil as String?)
+                        ForEach(facade.recentServerConfigs, id: \.recentServerID) { server in
+                            Text(server.displayName).tag(server.recentServerID as String?)
+                        }
+                    }
+                    .accessibilityIdentifier("configurations.auto-connect-server")
+                }
+            } header: {
+                Text("Connection")
+            } footer: {
+                Text("OpenClient will connect to the selected server when the app opens. Server passwords remain in Keychain.")
+            }
+
+        }
+        .navigationTitle("Configurations")
+        .opencodeInlineNavigationTitle()
+    }
+}
+
+private struct AppIconSelectionView: View {
+    @ObservedObject var store: AppIconStore
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(store.icons) { icon in
+                    Button {
+                        Task { await store.select(icon) }
+                    } label: {
+                        HStack(spacing: 14) {
+                            AppIconThumbnail(icon: icon)
+
+                            Text(icon.displayName)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            if icon.alternateIconName == store.selectedAlternateIconName {
+                                Image(systemName: "checkmark")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.isChangingIcon || icon.alternateIconName == store.selectedAlternateIconName)
+                    .accessibilityIdentifier("configurations.app-icon.\(icon.id)")
+                }
+            } footer: {
+                if store.icons.count == 1 {
+                    Text("Additional icons appear here after their Icon Composer files are added to the app target.")
+                } else if !store.supportsAlternateIcons {
+                    Text("This build does not support changing its app icon.")
+                }
+            }
+        }
+        .navigationTitle("App Icon")
+        .opencodeInlineNavigationTitle()
+        .onAppear { store.refresh() }
+        .alert("Couldn't Change App Icon", isPresented: Binding(
+            get: { store.errorMessage != nil },
+            set: { isPresented in
+                if !isPresented { store.clearError() }
+            }
+        )) {
+            Button("OK", role: .cancel) { store.clearError() }
+        } message: {
+            Text(store.errorMessage ?? "Please try again.")
+        }
+    }
+}
+
+private struct AppIconThumbnail: View {
+    let icon: OpenClientAppIcon
+
+    var body: some View {
+        Group {
+            #if canImport(UIKit)
+            if let image = uiImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                fallback
+            }
+            #else
+            fallback
+            #endif
+        }
+        .frame(width: 52, height: 52)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    private var fallback: some View {
+        Image(systemName: "app.fill")
+            .font(.title2)
+            .foregroundStyle(.tint)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.quaternary)
+    }
+
+    #if canImport(UIKit)
+    private var uiImage: UIImage? {
+        for file in icon.iconFiles.reversed() {
+            if let image = UIImage(named: file) {
+                return image
+            }
+        }
+        return nil
+    }
+    #endif
 }
 
 private struct ServerConnectionEditorView: View {
@@ -811,92 +897,6 @@ private struct LatestUpdatesNavigationRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
-private struct AppleIntelligenceConnectionCard: View {
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple.opacity(0.22), Color.blue.opacity(0.10)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.purple)
-            }
-            .frame(width: 48, height: 48)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Try with Apple Intelligence")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
-                Text("Try a local workspace with on-device Apple Intelligence")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 16)
-
-            Image(systemName: "arrow.up.right.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(OpenCodePlatformColor.secondaryGroupedBackground)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-}
-
-#if canImport(UIKit) && canImport(UniformTypeIdentifiers)
-private struct AppleIntelligenceFolderPicker: UIViewControllerRepresentable {
-    let onPick: (URL?) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
-    }
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.folder], asCopy: false)
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        picker.shouldShowFileExtensions = true
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: (URL?) -> Void
-
-        init(onPick: @escaping (URL?) -> Void) {
-            self.onPick = onPick
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            onPick(urls.first)
-        }
-
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            onPick(nil)
-        }
-    }
-}
-#endif
 
 private struct RecentServerCard: View {
     let serverConfig: OpenCodeServerConfig

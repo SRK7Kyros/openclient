@@ -38,14 +38,16 @@ struct ProjectContentView: View {
                 }
             }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    shell.presentProjectSettings()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
+            if !snapshot.isReadOnly {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        shell.presentProjectSettings()
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("Project Settings")
+                    .accessibilityIdentifier("project.settings")
                 }
-                .accessibilityLabel("Project Settings")
-                .accessibilityIdentifier("project.settings")
             }
 
             if showsTopToolbarAction {
@@ -124,7 +126,7 @@ struct ProjectContentView: View {
                 }
                 .tag(OpenClientProjectContentTab.sessions)
 
-            if snapshot.hasGitProject {
+            if snapshot.availableTabs.contains(.git) {
                 GitStatusView(facade: shell.projectFiles, onFileChosen: onDetailChosen)
                     .tabItem {
                         Label(OpenClientProjectContentTab.git.title, systemImage: OpenClientProjectContentTab.git.systemImage)
@@ -140,11 +142,13 @@ struct ProjectContentView: View {
                     .tag(OpenClientProjectContentTab.terminal)
             }
 
-            MCPListView(facade: shell.mcp)
-                .tabItem {
-                    Label(OpenClientProjectContentTab.mcp.title, systemImage: OpenClientProjectContentTab.mcp.systemImage)
-                }
-                .tag(OpenClientProjectContentTab.mcp)
+            if snapshot.availableTabs.contains(.mcp) {
+                MCPListView(facade: shell.mcp)
+                    .tabItem {
+                        Label(OpenClientProjectContentTab.mcp.title, systemImage: OpenClientProjectContentTab.mcp.systemImage)
+                    }
+                    .tag(OpenClientProjectContentTab.mcp)
+            }
         }
     }
 
@@ -160,7 +164,7 @@ struct ProjectContentView: View {
                 SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
             }
 
-            if snapshot.hasGitProject {
+            if snapshot.availableTabs.contains(.git) {
                 Tab(
                     OpenClientProjectContentTab.git.title,
                     systemImage: OpenClientProjectContentTab.git.systemImage,
@@ -181,20 +185,24 @@ struct ProjectContentView: View {
                 }
             }
 
-            Tab(
-                OpenClientProjectContentTab.mcp.title,
-                systemImage: OpenClientProjectContentTab.mcp.systemImage,
-                value: ProjectNativeTab.mcp
-            ) {
-                MCPListView(facade: shell.mcp)
+            if snapshot.availableTabs.contains(.mcp) {
+                Tab(
+                    OpenClientProjectContentTab.mcp.title,
+                    systemImage: OpenClientProjectContentTab.mcp.systemImage,
+                    value: ProjectNativeTab.mcp
+                ) {
+                    MCPListView(facade: shell.mcp)
+                }
             }
 
-            Tab(value: ProjectNativeTab.compose, role: .search) {
-                EmptyView()
-            } label: {
-                Label("New", systemImage: "square.and.pencil")
-                    .accessibilityLabel("Create Session")
-                    .accessibilityIdentifier("sessions.create")
+            if !snapshot.isReadOnly {
+                Tab(value: ProjectNativeTab.compose, role: .search) {
+                    EmptyView()
+                } label: {
+                    Label("New", systemImage: "square.and.pencil")
+                        .accessibilityLabel("Create Session")
+                        .accessibilityIdentifier("sessions.create")
+                }
             }
         }
         .opencodeSearchTabSelectionActivation()

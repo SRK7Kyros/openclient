@@ -129,6 +129,15 @@ struct OpenCodeAPIClient: Sendable {
         return response.mapValues { $0.type }
     }
 
+    func getSession(sessionID: String, directory: String? = nil, workspaceID: String? = nil) async throws -> OpenCodeSession {
+        try await send(
+            path: "/session/\(sessionID)",
+            method: "GET",
+            queryItems: scopedQueryItems(directory: directory, workspaceID: workspaceID),
+            directoryHeader: directory
+        )
+    }
+
     func deleteSession(sessionID: String, directory: String? = nil, workspaceID: String? = nil) async throws {
         try await sendNoContent(
             path: "/session/\(sessionID)",
