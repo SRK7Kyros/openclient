@@ -5,7 +5,7 @@ import FoundationModels
 #endif
 
 extension AppViewModel {
-    private static let maxRecentServerCount = 4
+    private static let maxRecentAppleIntelligenceWorkspaceCount = 4
     private static let minimumConnectionOverlayDuration: TimeInterval = 2.0
 
     var canTryAppleIntelligence: Bool {
@@ -401,8 +401,8 @@ extension AppViewModel {
     func upsertAppleIntelligenceWorkspace(_ workspace: AppleIntelligenceWorkspaceRecord) {
         appleIntelligenceRecentWorkspaces.removeAll { $0.id == workspace.id }
         appleIntelligenceRecentWorkspaces.insert(workspace, at: 0)
-        if appleIntelligenceRecentWorkspaces.count > Self.maxRecentServerCount {
-            appleIntelligenceRecentWorkspaces = Array(appleIntelligenceRecentWorkspaces.prefix(Self.maxRecentServerCount))
+        if appleIntelligenceRecentWorkspaces.count > Self.maxRecentAppleIntelligenceWorkspaceCount {
+            appleIntelligenceRecentWorkspaces = Array(appleIntelligenceRecentWorkspaces.prefix(Self.maxRecentAppleIntelligenceWorkspaceCount))
         }
         persistAppleIntelligenceWorkspaces()
     }
@@ -446,7 +446,7 @@ extension AppViewModel {
         if let data = UserDefaults.standard.data(forKey: StorageKey.recentServerConfigs),
            let savedServers = loadSavedServers(from: data) {
             OpenClientSharePayloadStore.mirrorRecentServersData(data)
-            return Array(savedServers.prefix(Self.maxRecentServerCount)).map { savedServer in
+            return savedServers.map { savedServer in
                 let password = passwordStore.loadPassword(for: savedServer.recentServerID) ?? ""
                 return savedServer.serverConfig(password: password)
             }
@@ -531,8 +531,7 @@ extension AppViewModel {
         let updatedID = updatedConfig.recentServerID
         let replacedConfig = connectionStore.upsertRecentServerConfig(
             updatedConfig,
-            replacingServerID: originalServerID,
-            maxCount: Self.maxRecentServerCount
+            replacingServerID: originalServerID
         )
         let migratedPassword: String?
         if let replacedConfig, replacedConfig.recentServerID != updatedID, updatedConfig.password.isEmpty {

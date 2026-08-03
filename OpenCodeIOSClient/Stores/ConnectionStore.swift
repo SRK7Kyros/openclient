@@ -166,16 +166,15 @@ final class ConnectionStore: ObservableObject {
         showSavedServerPrompt = false
     }
 
-    func setRecentServerConfigs(_ configs: [OpenCodeServerConfig], maxCount: Int) {
-        recentServerConfigs = Array(configs.prefix(maxCount))
+    func setRecentServerConfigs(_ configs: [OpenCodeServerConfig]) {
+        recentServerConfigs = configs
         hasSavedServer = recentServerConfigs.isEmpty == false
     }
 
     @discardableResult
     func upsertRecentServerConfig(
         _ updatedConfig: OpenCodeServerConfig,
-        replacingServerID originalServerID: String?,
-        maxCount: Int
+        replacingServerID originalServerID: String?
     ) -> OpenCodeServerConfig? {
         let updatedID = updatedConfig.recentServerID
         let replacedConfig = originalServerID.flatMap { originalID in
@@ -195,7 +194,7 @@ final class ConnectionStore: ObservableObject {
             return true
         })
 
-        setRecentServerConfigs(orderedConfigs, maxCount: maxCount)
+        setRecentServerConfigs(orderedConfigs)
         return replacedConfig
     }
 
