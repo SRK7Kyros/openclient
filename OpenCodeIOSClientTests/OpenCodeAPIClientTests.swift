@@ -152,6 +152,41 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testGetSessionUsesExactScopedEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/session/ses_child")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+                URLQueryItem(name: "workspace", value: "workspace-1"),
+            ])
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
+            expectation.fulfill()
+            let data = #"{"id":"ses_child","title":"Child","workspaceID":"workspace-1","directory":"/tmp/project","projectID":"proj_1","parentID":"ses_parent"}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let loaded = try await client.getSession(
+            sessionID: "ses_child",
+            directory: "/tmp/project",
+            workspaceID: "workspace-1"
+        )
+
+        XCTAssertEqual(loaded.id, "ses_child")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     func testUpdateProjectEncodesIconPreferences() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral

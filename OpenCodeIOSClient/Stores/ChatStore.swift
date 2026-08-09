@@ -83,9 +83,15 @@ final class ChatStore: ObservableObject {
     }
 
     func beginSelectingSession(sessionID: String, cachedMessages: [OpenCodeMessageEnvelope]) {
-        isLoadingSelectedSession = true
-        messages = cachedMessages
-        preparedSessionID = sessionID
+        if !isLoadingSelectedSession {
+            isLoadingSelectedSession = true
+        }
+        if messages != cachedMessages {
+            messages = cachedMessages
+        }
+        if preparedSessionID != sessionID {
+            preparedSessionID = sessionID
+        }
     }
 
     func clearActiveTranscript() {
@@ -95,7 +101,9 @@ final class ChatStore: ObservableObject {
     }
 
     func finishLoadingSelectedSession() {
-        isLoadingSelectedSession = false
+        if isLoadingSelectedSession {
+            isLoadingSelectedSession = false
+        }
     }
 
     func appendMessage(_ message: OpenCodeMessageEnvelope) {
@@ -164,13 +172,17 @@ final class ChatStore: ObservableObject {
     }
 
     func replaceActiveMessagesWithCanonical(_ loadedMessages: [OpenCodeMessageEnvelope]) {
-        messages = loadedMessages
+        let canonicalMessages = Self.deduplicatedMessages(loadedMessages)
+        if messages != canonicalMessages {
+            messages = canonicalMessages
+        }
     }
 
     func applyCanonicalMessages(_ loadedMessages: [OpenCodeMessageEnvelope], forSessionID sessionID: String, isActiveSession: Bool) {
+        let deduplicatedMessages = Self.deduplicatedMessages(loadedMessages)
         let canonicalMessages = isActiveSession
-            ? mergingCanonicalMessages(loadedMessages, withExistingMessages: messages)
-            : loadedMessages
+            ? mergingCanonicalMessages(deduplicatedMessages, withExistingMessages: messages)
+            : deduplicatedMessages
 
         cacheMessages(canonicalMessages, forSessionID: sessionID)
         guard isActiveSession else { return }
@@ -182,7 +194,10 @@ final class ChatStore: ObservableObject {
         _ canonicalMessages: [OpenCodeMessageEnvelope],
         withExistingMessages existingMessages: [OpenCodeMessageEnvelope]
     ) -> [OpenCodeMessageEnvelope] {
-        let existingByID = Dictionary(uniqueKeysWithValues: existingMessages.map { ($0.id, $0) })
+        var existingByID: [String: OpenCodeMessageEnvelope] = [:]
+        for message in existingMessages {
+            existingByID[message.id] = message
+        }
 
         return canonicalMessages.map { canonical in
             guard let existing = existingByID[canonical.id] else { return canonical }
@@ -222,7 +237,40 @@ final class ChatStore: ObservableObject {
     }
 
     func cacheMessages(_ messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
-        cachedMessagesBySessionID[sessionID] = messages
+        let canonicalMessages = Self.deduplicatedMessages(messages)
+        if cachedMessagesBySessionID[sessionID] != canonicalMessages {
+            cachedMessagesBySessionID[sessionID] = canonicalMessages
+        }
+    }
+
+    private static func deduplicatedMessages(_ messages: [OpenCodeMessageEnvelope]) -> [OpenCodeMessageEnvelope] {
+        var result: [OpenCodeMessageEnvelope] = []
+        var messageIndexByID: [String: Int] = [:]
+        for var message in messages {
+            var parts: [OpenCodePart] = []
+            var partIndexByID: [String: Int] = [:]
+            for part in message.parts {
+                guard let partID = part.id else {
+                    parts.append(part)
+                    continue
+                }
+                if let index = partIndexByID[partID] {
+                    parts[index] = part
+                } else {
+                    partIndexByID[partID] = parts.count
+                    parts.append(part)
+                }
+            }
+            message.parts = parts
+
+            if let index = messageIndexByID[message.id] {
+                result[index] = message
+            } else {
+                messageIndexByID[message.id] = result.count
+                result.append(message)
+            }
+        }
+        return result
     }
 
     func clearCachedMessages(forSessionID sessionID: String) {

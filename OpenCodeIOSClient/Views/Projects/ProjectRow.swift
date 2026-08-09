@@ -12,6 +12,8 @@ struct ProjectRow: View {
     var icon: OpenCodeProject.Icon? = nil
     var usesSystemImageFallback = false
     let isSelected: Bool
+    var isPreparing = false
+    var subtitleLineLimit = 1
 
     var body: some View {
         HStack(spacing: 12) {
@@ -25,10 +27,16 @@ struct ProjectRow: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(subtitleLineLimit)
             }
 
             Spacer()
+
+            if isPreparing {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Opening \(title)")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)

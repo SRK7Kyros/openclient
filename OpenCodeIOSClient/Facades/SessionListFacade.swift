@@ -45,26 +45,32 @@ final class SessionListFacade: ObservableObject {
     struct Snapshot: Equatable {
         static let empty = Snapshot(
             isLoadingEmpty: false,
+            isLoadingMoreSessions: false,
             isEmpty: true,
             selectedSessionID: nil,
             pinnedRows: [],
             unpinnedRows: [],
             showsWorkspaces: false,
             workspaceSections: [],
+            hasMoreSessions: false,
             errorMessage: nil,
             hasProUnlock: true,
+            isReadOnly: false,
             currentProjectActions: []
         )
 
         let isLoadingEmpty: Bool
+        let isLoadingMoreSessions: Bool
         let isEmpty: Bool
         let selectedSessionID: String?
         let pinnedRows: [RowSnapshot]
         let unpinnedRows: [RowSnapshot]
         let showsWorkspaces: Bool
         let workspaceSections: [WorkspaceSection]
+        let hasMoreSessions: Bool
         let errorMessage: String?
         let hasProUnlock: Bool
+        let isReadOnly: Bool
         let currentProjectActions: [ProjectActionSnapshot]
 
         var hasBusySession: Bool {
@@ -81,6 +87,8 @@ final class SessionListFacade: ObservableObject {
     struct SelectionTicket {
         fileprivate let session: OpenCodeSession
         fileprivate let previousSessionID: String?
+        fileprivate let navigationGeneration: UInt
+        fileprivate let directoryKey: String
     }
 
     struct CreateSessionSnapshot: Equatable {
@@ -120,6 +128,7 @@ final class SessionListFacade: ObservableObject {
             viewModel.$newWorkspaceName.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingCreateSessionSheet.map { _ in () }.eraseToAnyPublisher(),
         ])
+        .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in
             self?.objectWillChange.send()
             self?.scheduleSnapshotRefresh()
@@ -129,47 +138,70 @@ final class SessionListFacade: ObservableObject {
         bindActiveDirectoryStore(viewModel.directoryStoreRegistry.activeStore)
         viewModel.directoryStoreRegistry.$activeStore
             .dropFirst()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] store in
                 self?.bindActiveDirectoryStore(store)
-                self?.objectWillChange.send()
                 self?.scheduleSnapshotRefresh()
             }
             .store(in: &observations)
     }
 
     private func makeSnapshot() -> Snapshot {
-        let sessions = viewModel.sessions
+        var sessions: [OpenCodeSession] = []
+        var sessionIndexByID: [String: Int] = [:]
+        for session in viewModel.sessions {
+            if let index = sessionIndexByID[session.id] {
+                sessions[index] = sessions[index].merged(with: session)
+            } else {
+                sessionIndexByID[session.id] = sessions.count
+                sessions.append(session)
+            }
+        }
         let pinnedIDs = viewModel.pinnedSessionIDs
-        let showsWorkspaces = viewModel.isProjectWorkspacesEnabled && viewModel.hasGitProject
+        let isReadOnly = viewModel.isBrowsingLocalCache
+        let showsWorkspaces = !isReadOnly && viewModel.isProjectWorkspacesEnabled && viewModel.hasGitProject
         let workspaceDirectories = showsWorkspaces ? viewModel.workspaceDirectories() : []
-        var sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        var sessionsByID: [String: OpenCodeSession] = [:]
+        for session in sessions {
+            sessionsByID[session.id] = session
+        }
         for directory in workspaceDirectories {
             for session in viewModel.workspaceSessionsByDirectory[directory]?.rootSessions ?? [] where !viewModel.isActionSession(session) {
                 sessionsByID[session.id] = session
             }
         }
+        let permissionRootIDs = SessionInteractionStore.sessionTreeRootIDsWithRequests(
+            sessions: viewModel.allSessions,
+            requestsBySessionID: viewModel.directoryStore.syncState.permissionsBySessionID
+        )
         let pinnedSessions = pinnedIDs.compactMap { sessionsByID[$0] }
         let pinnedIDSet = Set(pinnedIDs)
         let unpinnedSessions = showsWorkspaces ? [] : sessions.filter { !pinnedIDSet.contains($0.id) }
 
         return Snapshot(
             isLoadingEmpty: viewModel.isLoadingSessions && sessions.isEmpty,
+            isLoadingMoreSessions: viewModel.isLoadingSessions && !sessions.isEmpty,
             isEmpty: sessions.isEmpty,
             selectedSessionID: viewModel.selectedSession?.id,
             pinnedRows: pinnedSessions.map {
                 rowSnapshot(
                     for: $0,
                     showsPinnedBadge: true,
-                    workspaceOverline: showsWorkspaces ? viewModel.workspaceDisplayName(for: $0.directory) : nil
+                    workspaceOverline: showsWorkspaces ? viewModel.workspaceDisplayName(for: $0.directory) : nil,
+                    hasPermissionRequest: showsWorkspaces ? nil : permissionRootIDs.contains($0.id)
                 )
             },
-            unpinnedRows: unpinnedSessions.map { rowSnapshot(for: $0) },
+            unpinnedRows: unpinnedSessions.map {
+                rowSnapshot(for: $0, hasPermissionRequest: permissionRootIDs.contains($0.id))
+            },
             showsWorkspaces: showsWorkspaces,
             workspaceSections: showsWorkspaces
                 ? workspaceSections(directories: workspaceDirectories, excluding: pinnedIDSet)
                 : [],
+            hasMoreSessions: !showsWorkspaces && viewModel.directoryStore.hasMoreSessions,
             errorMessage: isScreenshotScene ? nil : viewModel.errorMessage,
             hasProUnlock: viewModel.commerceFacade.hasProUnlock,
+            isReadOnly: isReadOnly,
             currentProjectActions: viewModel.currentProjectActions.map { action in
                 ProjectActionSnapshot(
                     action: action,
@@ -231,7 +263,10 @@ final class SessionListFacade: ObservableObject {
     func workspaceTitle(for selection: NewSessionWorkspaceSelection) -> String {
         viewModel.newSessionWorkspaceTitle(for: selection)
     }
-    func createSession() async { await viewModel.createSession() }
+    func createSession() async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.createSession()
+    }
     func presentSessionLimitPaywall() {
         dismissCreateSession()
         viewModel.commerceFacade.presentPaywall(reason: .sessionLimit)
@@ -242,28 +277,60 @@ final class SessionListFacade: ObservableObject {
     }
 
     func refresh() async {
+        guard !viewModel.isBrowsingLocalCache else { return }
         await viewModel.refreshSessionList()
     }
 
+    func loadMoreSessions() async {
+        await viewModel.loadMoreSessions()
+    }
+
     func beginSelection(_ session: OpenCodeSession) -> SelectionTicket {
-        SelectionTicket(session: session, previousSessionID: viewModel.beginSessionNavigation(session))
+        let previousSessionID = viewModel.beginSessionNavigation(session)
+        return SelectionTicket(
+            session: session,
+            previousSessionID: previousSessionID,
+            navigationGeneration: viewModel.sessionNavigationGeneration,
+            directoryKey: viewModel.directoryStoreRegistry.activeKey
+        )
     }
 
     func completeSelection(_ ticket: SelectionTicket) async {
-        await Task.yield()
-        guard prepareSelectionIfCurrent(ticket) else { return }
+        guard selectionIsCurrent(ticket) else { return }
         await viewModel.selectSession(ticket.session)
+    }
+
+    func prepareSelectionForNavigation(_ ticket: SelectionTicket) async -> Bool {
+        guard prepareSelectionIfCurrent(ticket) else { return false }
+        guard !viewModel.hasHydratedLocalChat(sessionID: ticket.session.id) else { return true }
+
+        if await viewModel.hydrateChatFromLocalCache(
+            ticket.session,
+            navigationGeneration: ticket.navigationGeneration,
+            expectedDirectoryKey: ticket.directoryKey
+        ) != nil {
+            guard prepareSelectionIfCurrent(ticket) else { return false }
+        }
+        return selectionIsCurrent(ticket)
     }
 
     @discardableResult
     func prepareSelectionIfCurrent(_ ticket: SelectionTicket) -> Bool {
-        guard viewModel.selectedSession?.id == ticket.session.id else { return false }
+        guard selectionIsCurrent(ticket) else { return false }
         viewModel.prepareSessionSelection(
             ticket.session,
             preservingDraftForSessionID: ticket.previousSessionID,
             animatesChanges: false
         )
-        return viewModel.selectedSession?.id == ticket.session.id
+        return selectionIsCurrent(ticket)
+    }
+
+    private func selectionIsCurrent(_ ticket: SelectionTicket) -> Bool {
+        viewModel.isSessionNavigationCurrent(
+            sessionID: ticket.session.id,
+            generation: ticket.navigationGeneration,
+            directoryKey: ticket.directoryKey
+        )
     }
 
     func isPinned(_ session: OpenCodeSession) -> Bool { viewModel.isSessionPinned(session) }
@@ -274,12 +341,27 @@ final class SessionListFacade: ObservableObject {
         viewModel.movePinnedSessions(fromOffsets: offsets, toOffset: destination)
     }
 
-    func rename(_ session: OpenCodeSession, title: String) async { await viewModel.renameSession(session, title: title) }
-    func delete(_ session: OpenCodeSession) async { await viewModel.deleteSession(session) }
-    func toggleLiveActivity(for session: OpenCodeSession) async { await viewModel.liveActivityFacade.toggle(session: session) }
+    func rename(_ session: OpenCodeSession, title: String) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.renameSession(session, title: title)
+    }
+    func delete(_ session: OpenCodeSession) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.deleteSession(session)
+    }
+    func toggleLiveActivity(for session: OpenCodeSession) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.liveActivityFacade.toggle(session: session)
+    }
     func isLiveActivityActive(for session: OpenCodeSession) -> Bool { viewModel.liveActivityFacade.isActive(sessionID: session.id) }
-    func runAction(_ action: OpenCodeAction) async { await viewModel.runAction(action) }
-    func createWorkspace(name: String) async { await viewModel.createWorkspace(name: name) }
+    func runAction(_ action: OpenCodeAction) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.runAction(action)
+    }
+    func createWorkspace(name: String) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.createWorkspace(name: name)
+    }
     func loadWorkspaceSessionsIfNeeded() async { await viewModel.loadWorkspaceSessionsIfNeeded() }
     func loadMoreWorkspaceSessions(directory: String) async { await viewModel.loadMoreWorkspaceSessions(directory: directory) }
     func presentNewSession(inWorkspace directory: String) { viewModel.presentNewSession(inWorkspace: directory) }
@@ -309,21 +391,24 @@ final class SessionListFacade: ObservableObject {
     private func rowSnapshot(
         for session: OpenCodeSession,
         showsPinnedBadge: Bool = false,
-        workspaceOverline: String? = nil
+        workspaceOverline: String? = nil,
+        hasPermissionRequest: Bool? = nil
     ) -> RowSnapshot {
-        RowSnapshot(
+        let generatedTitle = session.defaultGeneratedTitleDisplayName
+        let isBusy = viewModel.sessionStatuses[session.id] == "busy"
+        return RowSnapshot(
             session: session,
             isSelected: viewModel.selectedSession?.id == session.id,
             showsPinnedBadge: showsPinnedBadge,
             workspaceOverline: workspaceOverline,
             style: .regular,
             preview: viewModel.sessionPreviews[session.id],
-            isBusy: viewModel.sessionStatuses[session.id] == "busy",
+            isBusy: isBusy,
             hasLiveActivity: viewModel.isLiveActivityActive(for: session),
             hasDraft: viewModel.hasMessageDraft(for: session),
-            hasPermissionRequest: viewModel.hasPermissionRequest(for: session),
-            displayTitle: session.displayTitle(),
-            shimmersTitle: session.isDefaultGeneratedTitle
+            hasPermissionRequest: hasPermissionRequest ?? viewModel.hasPermissionRequest(for: session),
+            displayTitle: generatedTitle ?? session.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled Session",
+            shimmersTitle: generatedTitle != nil && isBusy
         )
     }
 
@@ -334,8 +419,8 @@ final class SessionListFacade: ObservableObject {
     private func bindActiveDirectoryStore(_ store: DirectoryStore) {
         activeDirectoryObservations.removeAll()
         store.objectWillChange
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
                 self?.scheduleSnapshotRefresh()
             }
             .store(in: &activeDirectoryObservations)

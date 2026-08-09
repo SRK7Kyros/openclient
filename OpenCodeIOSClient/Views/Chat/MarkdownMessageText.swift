@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(LinkPresentation)
+@preconcurrency import LinkPresentation
+#endif
 
 struct MarkdownMessageText: View {
     enum Style {
@@ -885,6 +888,296 @@ struct MarkdownMessageText: View {
         }
     }
 }
+
+@MainActor
+enum MessageLinkExtractor {
+    private static let detector = try? NSDataDetector(
+        types: NSTextCheckingResult.CheckingType.link.rawValue
+    )
+
+    static func urls(in text: String, limit: Int = 3) -> [URL] {
+        guard limit > 0, let detector else { return [] }
+
+        let searchableText = removingCode(from: text)
+        let range = NSRange(searchableText.startIndex..<searchableText.endIndex, in: searchableText)
+        var seen: Set<String> = []
+        var urls: [URL] = []
+
+        detector.enumerateMatches(in: searchableText, range: range) { result, _, stop in
+            guard let url = normalizedWebURL(result?.url) else { return }
+            guard seen.insert(url.absoluteString).inserted else { return }
+
+            urls.append(url)
+            if urls.count == limit {
+                stop.pointee = true
+            }
+        }
+
+        return urls
+    }
+
+    private static func normalizedWebURL(_ url: URL?) -> URL? {
+        guard let url,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host != nil else {
+            return nil
+        }
+
+        components.scheme = scheme
+        components.fragment = nil
+        return components.url
+    }
+
+    private static func removingCode(from text: String) -> String {
+        var lines: [String] = []
+        var activeFence: String?
+
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let marker = fenceMarker(in: trimmed) {
+                if activeFence == nil {
+                    activeFence = marker
+                } else if activeFence == marker {
+                    activeFence = nil
+                }
+                lines.append("")
+                continue
+            }
+
+            lines.append(activeFence == nil ? removingInlineCode(from: line) : "")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func fenceMarker(in line: String) -> String? {
+        if line.hasPrefix("```") { return "```" }
+        if line.hasPrefix("~~~") { return "~~~" }
+        return nil
+    }
+
+    private static func removingInlineCode(from line: String) -> String {
+        var result = ""
+        var index = line.startIndex
+
+        while index < line.endIndex {
+            guard line[index] == "`" else {
+                result.append(line[index])
+                index = line.index(after: index)
+                continue
+            }
+
+            let markerEnd = line[index...].firstIndex { $0 != "`" } ?? line.endIndex
+            let marker = String(line[index..<markerEnd])
+            guard let closingRange = line.range(of: marker, range: markerEnd..<line.endIndex) else {
+                result.append(contentsOf: marker)
+                index = markerEnd
+                continue
+            }
+
+            result.append(" ")
+            index = closingRange.upperBound
+        }
+
+        return result
+    }
+}
+
+#if canImport(LinkPresentation)
+struct OpenClientMessageLinkPreviews: View {
+    let urls: [URL]
+    let alignment: HorizontalAlignment
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 8) {
+            ForEach(urls, id: \.absoluteString) { url in
+                OpenClientMessageLinkPreview(url: url)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment == .trailing ? .trailing : .leading)
+    }
+}
+
+private struct OpenClientMessageLinkPreview: View {
+    let url: URL
+
+    @Environment(\.openURL) private var openURL
+    @State private var metadata: LPLinkMetadata?
+    @State private var didRequestMetadata = false
+    @State private var didFinishLoading = false
+
+    var body: some View {
+        Button {
+            openURL(url)
+        } label: {
+            Group {
+                if let metadata {
+                    OpenClientNativeLinkView(metadata: metadata)
+                } else {
+                    placeholder
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(3.0 / 2.0, contentMode: .fit)
+            .background(.background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(.secondary.opacity(0.25), lineWidth: 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 360)
+        .accessibilityLabel(metadata?.title ?? "Open link to \(hostLabel)")
+        .accessibilityHint("Opens in your browser")
+        .onAppear {
+            fetchMetadataIfNeeded()
+        }
+    }
+
+    private var placeholder: some View {
+        HStack(spacing: 14) {
+            Image(systemName: didFinishLoading ? "globe" : "link")
+                .font(.title2.weight(.medium))
+                .foregroundStyle(.tint)
+                .frame(width: 42, height: 42)
+                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(hostLabel)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(didFinishLoading ? url.absoluteString : "Loading preview...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            if !didFinishLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+
+    private var hostLabel: String {
+        url.host(percentEncoded: false) ?? url.absoluteString
+    }
+
+    private func fetchMetadataIfNeeded() {
+        guard !didRequestMetadata else { return }
+        didRequestMetadata = true
+
+        OpenClientLinkMetadataCache.shared.metadata(for: url) { fetchedMetadata in
+            metadata = fetchedMetadata
+            didFinishLoading = true
+        }
+    }
+}
+
+@MainActor
+private final class OpenClientLinkMetadataCache {
+    static let shared = OpenClientLinkMetadataCache()
+
+    private let cache = NSCache<NSURL, LPLinkMetadata>()
+    private var failedURLs: Set<URL> = []
+    private var providers: [URL: LPMetadataProvider] = [:]
+    private var completions: [URL: [(LPLinkMetadata?) -> Void]] = [:]
+
+    private init() {
+        cache.countLimit = 100
+    }
+
+    func metadata(for url: URL, completion: @escaping (LPLinkMetadata?) -> Void) {
+        if let metadata = cache.object(forKey: url as NSURL) {
+            completion(metadata)
+            return
+        }
+        if failedURLs.contains(url) {
+            completion(nil)
+            return
+        }
+
+        completions[url, default: []].append(completion)
+        guard providers[url] == nil else { return }
+
+        let provider = LPMetadataProvider()
+        provider.timeout = 12
+        providers[url] = provider
+        provider.startFetchingMetadata(for: url) { [weak self] metadata, _ in
+            let transfer = OpenClientLinkMetadataTransfer(metadata)
+            Task { @MainActor in
+                self?.finish(url: url, metadata: transfer.metadata)
+            }
+        }
+    }
+
+    private func finish(url: URL, metadata: LPLinkMetadata?) {
+        providers.removeValue(forKey: url)
+        let callbacks = completions.removeValue(forKey: url) ?? []
+
+        if let metadata {
+            cache.setObject(metadata, forKey: url as NSURL)
+        } else {
+            if failedURLs.count >= 200 {
+                failedURLs.removeAll(keepingCapacity: true)
+            }
+            failedURLs.insert(url)
+        }
+
+        callbacks.forEach { $0(metadata) }
+    }
+}
+
+// Link Presentation completes off the main actor, but its metadata objects aren't Sendable.
+private final class OpenClientLinkMetadataTransfer: @unchecked Sendable {
+    let metadata: LPLinkMetadata?
+
+    init(_ metadata: LPLinkMetadata?) {
+        self.metadata = metadata
+    }
+}
+
+#if canImport(UIKit)
+private struct OpenClientNativeLinkView: UIViewRepresentable {
+    let metadata: LPLinkMetadata
+
+    func makeUIView(context: Context) -> LPLinkView {
+        let view = LPLinkView(metadata: metadata)
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: LPLinkView, context: Context) {
+        if view.metadata !== metadata {
+            view.metadata = metadata
+        }
+    }
+}
+#elseif canImport(AppKit)
+private struct OpenClientNativeLinkView: NSViewRepresentable {
+    let metadata: LPLinkMetadata
+
+    func makeNSView(context: Context) -> LPLinkView {
+        LPLinkView(metadata: metadata)
+    }
+
+    func updateNSView(_ view: LPLinkView, context: Context) {
+        if view.metadata !== metadata {
+            view.metadata = metadata
+        }
+    }
+}
+#endif
+#endif
 
 @MainActor
 fileprivate final class OpenCodeMarkdownRenderCache {

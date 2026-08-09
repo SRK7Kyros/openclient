@@ -474,6 +474,44 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testLargeSessionBackgroundLifecycleAgainstLocalBackend() {
+        let app = XCUIApplication()
+        let hasExplicitBackend = nonEmptyEnvironmentValue("SNAPSHOT_OPENCODE_PASSWORD") != nil
+            || nonEmptyEnvironmentValue("OPENCODE_UI_TEST_PASSWORD") != nil
+        if hasExplicitBackend {
+            app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
+            app.launchEnvironment["OPENCODE_UI_TEST_BASE_URL"] = baseURL.absoluteString
+            app.launchEnvironment["OPENCODE_UI_TEST_USERNAME"] = username
+            app.launchEnvironment["OPENCODE_UI_TEST_PASSWORD"] = password
+            app.launchEnvironment["OPENCODE_UI_TEST_DIRECTORY"] = projectDirectory
+            app.launchEnvironment["OPENCODE_UI_TEST_AUTO_CONNECT"] = "1"
+        }
+        app.launch()
+
+        let projectCell = hasExplicitBackend
+            ? app.staticTexts[projectDirectory]
+            : app.staticTexts["opencode-ios-client"]
+        XCTAssertTrue(projectCell.waitForExistence(timeout: 30), "Expected local project after auto-connect")
+        projectCell.tap()
+
+        let sessionCell = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Local chat cache with SwiftData"))
+            .firstMatch
+        XCTAssertTrue(sessionCell.waitForExistence(timeout: 30), "Expected the large cache reference session")
+        sessionCell.tap()
+
+        let chatMarker = app.buttons["chat.composer.menu"]
+        XCTAssertTrue(chatMarker.waitForExistence(timeout: 30), "Expected the large chat composer")
+
+        for _ in 0 ..< 3 {
+            XCUIDevice.shared.press(.home)
+            XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10), "Expected OpenClient to enter the background")
+            app.activate()
+            XCTAssertTrue(chatMarker.waitForExistence(timeout: 15), "Expected the large chat after returning to the foreground")
+        }
+    }
+
+    @MainActor
     func testSecondMessageRendersSecondAssistantReplyAgainstLocalBackend() async throws {
         let app = XCUIApplication()
         let sessionTitle = "UI Followup \(UUID().uuidString.prefix(8))"

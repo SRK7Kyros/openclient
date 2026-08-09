@@ -57,6 +57,18 @@ final class OpenClientWhatsNewStoreTests: XCTestCase {
         XCTAssertNil(reopenedStore.presentedRelease)
     }
 
+    func testCurrentCatalogDescribesVersionOnePointZeroPointFifteen() {
+        let release = OpenClientReleaseNotesCatalog.releases.first { $0.version == "1.0.15" }
+
+        XCTAssertEqual(release?.title, "Make it yours")
+        XCTAssertEqual(release?.features.map(\.title), [
+            "Rich link previews",
+            "Projects, your way",
+            "Make it yours",
+            "Connect on launch",
+        ])
+    }
+
     private var release: OpenClientReleaseNotes {
         OpenClientReleaseNotes(
             version: "2.0",

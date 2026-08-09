@@ -156,6 +156,16 @@ final class DirectorySyncStore: ObservableObject {
         state.userMessageCount(forSessionID: sessionID)
     }
 
+    func latestUserMessageEnvelope(
+        beforeSuffixCount suffixCount: Int,
+        forSessionID sessionID: String
+    ) -> OpenCodeMessageEnvelope? {
+        state.latestUserMessageEnvelope(
+            beforeSuffixCount: suffixCount,
+            forSessionID: sessionID
+        )
+    }
+
     func messageCountIncludingLatestUserRounds(
         _ roundCount: Int,
         fallbackMessageCount: Int,
@@ -175,15 +185,19 @@ final class DirectorySyncStore: ObservableObject {
 
 @MainActor
 final class DirectoryStore: ObservableObject {
-    private static let immediateTranscriptRoundLimit = 3
-    private static let immediateTranscriptFallbackLimit = 3
+    private static let immediateTranscriptRoundLimit = 1
+    private static let immediateTranscriptMessageLimit = 12
 
     @Published var isLoadingSessions: Bool
     @Published var sessions: [OpenCodeSession]
+    @Published var sessionTotal: Int
+    @Published var sessionLimit: Int
     @Published var selectedSession: OpenCodeSession?
     @Published var commands: [OpenCodeCommand]
     @Published var sessionStatuses: [String: String]
     let syncStore: DirectorySyncStore
+    private(set) var permissionRevision: UInt = 0
+    private(set) var questionRevision: UInt = 0
 
     var syncState: OpenCodeDirectorySyncState {
         get { syncStore.state }
@@ -193,6 +207,8 @@ final class DirectoryStore: ObservableObject {
     init(
         isLoadingSessions: Bool = false,
         sessions: [OpenCodeSession] = [],
+        sessionTotal: Int = 0,
+        sessionLimit: Int = 100,
         selectedSession: OpenCodeSession? = nil,
         commands: [OpenCodeCommand] = [],
         sessionStatuses: [String: String] = [:],
@@ -200,6 +216,8 @@ final class DirectoryStore: ObservableObject {
     ) {
         self.isLoadingSessions = isLoadingSessions
         self.sessions = sessions
+        self.sessionTotal = sessionTotal
+        self.sessionLimit = sessionLimit
         self.selectedSession = selectedSession
         self.commands = commands
         self.sessionStatuses = sessionStatuses
@@ -209,26 +227,42 @@ final class DirectoryStore: ObservableObject {
     func reset() {
         isLoadingSessions = false
         sessions = []
+        sessionTotal = 0
+        sessionLimit = 100
         selectedSession = nil
         commands = []
         sessionStatuses = [:]
         syncStore.state = OpenCodeDirectorySyncState()
+        permissionRevision = 0
+        questionRevision = 0
     }
 
     @discardableResult
     func applyDirectoryReload(
         bootstrap: OpenCodeDirectoryBootstrap,
         statuses: [String: String],
-        scopedSessions: [OpenCodeSession]
+        scopedSessions: [OpenCodeSession],
+        permissionRevisionAtRequestStart: UInt? = nil,
+        questionRevisionAtRequestStart: UInt? = nil
     ) -> Bool {
         var changed = false
+        let knownChildren = sessions.filter { !$0.isRootSession && !$0.isArchived }
+        let reconciledSessions = Self.deduplicatedSessions(scopedSessions + knownChildren)
 
         if isLoadingSessions {
             isLoadingSessions = false
             changed = true
         }
-        if sessions != scopedSessions {
-            sessions = scopedSessions
+        if sessions != reconciledSessions {
+            sessions = reconciledSessions
+            changed = true
+        }
+        if sessionTotal != bootstrap.sessionTotal {
+            sessionTotal = bootstrap.sessionTotal
+            changed = true
+        }
+        if sessionLimit != bootstrap.sessionLimit {
+            sessionLimit = bootstrap.sessionLimit
             changed = true
         }
         if commands != bootstrap.commands {
@@ -242,8 +276,12 @@ final class DirectoryStore: ObservableObject {
 
         var nextSyncState = syncStore.state
         nextSyncState.sessionStatusesBySessionID = statuses
-        nextSyncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)
-        nextSyncState.questionsBySessionID = Dictionary(grouping: bootstrap.questions, by: \.sessionID)
+        if permissionRevisionAtRequestStart == nil || permissionRevisionAtRequestStart == permissionRevision {
+            nextSyncState.permissionsBySessionID = Dictionary(grouping: bootstrap.permissions, by: \.sessionID)
+        }
+        if questionRevisionAtRequestStart == nil || questionRevisionAtRequestStart == questionRevision {
+            nextSyncState.questionsBySessionID = Dictionary(grouping: bootstrap.questions, by: \.sessionID)
+        }
         if nextSyncState != syncStore.state {
             syncStore.state = nextSyncState
             changed = true
@@ -260,18 +298,18 @@ final class DirectoryStore: ObservableObject {
         let syncedMessageCount = syncStore.messageCount(forSessionID: session.id)
         let syncedVisibleMessageCount = syncStore.messageCountIncludingLatestUserRounds(
             Self.immediateTranscriptRoundLimit,
-            fallbackMessageCount: Self.immediateTranscriptFallbackLimit,
+            fallbackMessageCount: Self.immediateTranscriptMessageLimit,
             forSessionID: session.id
         )
         let syncedMessages = syncStore.messageEnvelopes(
             forSessionID: session.id,
-            suffix: syncedVisibleMessageCount
+            suffix: min(syncedVisibleMessageCount, Self.immediateTranscriptMessageLimit)
         )
         let cachedTail = Self.immediateTranscript(in: cachedMessages)
         let visibleMessages = syncedMessages.isEmpty ? cachedTail : syncedMessages
 
-        if syncedMessageCount == 0, !cachedTail.isEmpty {
-            syncStore.state.replaceMessages(cachedTail, forSessionID: session.id)
+        if syncedMessageCount == 0, !cachedMessages.isEmpty {
+            syncStore.state.replaceMessages(cachedMessages, forSessionID: session.id)
         }
         selectedSession = session
 
@@ -288,26 +326,76 @@ final class DirectoryStore: ObservableObject {
             oldestUserIndex = index
             remainingRounds -= 1
             if remainingRounds == 0 {
-                return Array(messages[index...])
+                return Array(messages[index...].suffix(immediateTranscriptMessageLimit))
             }
         }
         if let oldestUserIndex {
-            return Array(messages[oldestUserIndex...])
+            return Array(messages[oldestUserIndex...].suffix(immediateTranscriptMessageLimit))
         }
-        return Array(messages.suffix(immediateTranscriptFallbackLimit))
+        return Array(messages.suffix(immediateTranscriptMessageLimit))
     }
 
     func applyTodos(_ todos: [OpenCodeTodo], forSessionID sessionID: String) {
+        guard syncStore.state.todosBySessionID[sessionID] != todos else { return }
         syncStore.state.todosBySessionID[sessionID] = todos
     }
 
-    func applySessionStatuses(_ statuses: [String: String]) {
-        sessionStatuses = statuses
-        syncStore.state.sessionStatusesBySessionID = statuses
+    @discardableResult
+    func applySessionStatuses(_ statuses: [String: String]) -> Bool {
+        var changed = false
+        if sessionStatuses != statuses {
+            sessionStatuses = statuses
+            changed = true
+        }
+        if syncStore.state.sessionStatusesBySessionID != statuses {
+            syncStore.state.sessionStatusesBySessionID = statuses
+            changed = true
+        }
+        return changed
     }
 
     func applyCanonicalMessages(_ messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {
-        syncStore.state.replaceMessages(messages, forSessionID: sessionID)
+        var nextState = syncStore.state
+        nextState.replaceMessages(messages, forSessionID: sessionID)
+        guard nextState != syncStore.state else { return }
+        syncStore.state = nextState
+    }
+
+    func applyCachedMessageState(_ cached: OpenCodeCachedMessageState, forSessionID sessionID: String) {
+        var nextState = syncStore.state
+        let previousMessageIDs = Set(nextState.messagesBySessionID[sessionID]?.map(\.id) ?? [])
+        let nextMessageIDs = Set(cached.messages.map(\.id))
+        for messageID in previousMessageIDs.subtracting(nextMessageIDs) {
+            nextState.partsByMessageID[messageID] = nil
+        }
+        nextState.messagesBySessionID[sessionID] = cached.messages
+        for (messageID, parts) in cached.partsByMessageID {
+            nextState.partsByMessageID[messageID] = parts
+        }
+        syncStore.state = nextState
+    }
+
+    @discardableResult
+    func applyCachedSessions(_ cachedSessions: [OpenCodeSession]) -> Bool {
+        var changed = false
+        if isLoadingSessions {
+            isLoadingSessions = false
+            changed = true
+        }
+        if sessions != cachedSessions {
+            sessions = cachedSessions
+            changed = true
+        }
+        let cachedRootCount = cachedSessions.lazy.filter(\.isRootSession).count
+        if sessionTotal < cachedRootCount {
+            sessionTotal = cachedRootCount
+            changed = true
+        }
+        return changed
+    }
+
+    var hasMoreSessions: Bool {
+        sessionTotal > sessions.lazy.filter(\.isRootSession).count
     }
 
     func appendMessage(_ message: OpenCodeMessageEnvelope, forSessionID sessionID: String) {
@@ -319,20 +407,43 @@ final class DirectoryStore: ObservableObject {
         syncStore.state.removeMessage(sessionID: sessionID, messageID: messageID)
     }
 
-    func applyPermissions(_ permissions: [OpenCodePermission]) {
-        syncStore.state.permissionsBySessionID = Dictionary(grouping: permissions, by: \.sessionID)
+    @discardableResult
+    func applyPermissions(_ permissions: [OpenCodePermission], ifUnchangedSince revision: UInt) -> Bool {
+        guard permissionRevision == revision else { return false }
+        let grouped = Dictionary(grouping: permissions, by: \.sessionID)
+        guard syncStore.state.permissionsBySessionID != grouped else { return true }
+        syncStore.state.permissionsBySessionID = grouped
+        return true
     }
 
     func clearPermissions() {
+        guard !syncStore.state.permissionsBySessionID.isEmpty else { return }
         syncStore.state.permissionsBySessionID = [:]
     }
 
-    func applyQuestions(_ questions: [OpenCodeQuestionRequest]) {
-        syncStore.state.questionsBySessionID = Dictionary(grouping: questions, by: \.sessionID)
+    @discardableResult
+    func applyQuestions(_ questions: [OpenCodeQuestionRequest], ifUnchangedSince revision: UInt) -> Bool {
+        guard questionRevision == revision else { return false }
+        let grouped = Dictionary(grouping: questions, by: \.sessionID)
+        guard syncStore.state.questionsBySessionID != grouped else { return true }
+        syncStore.state.questionsBySessionID = grouped
+        return true
     }
 
     func clearQuestions() {
+        guard !syncStore.state.questionsBySessionID.isEmpty else { return }
         syncStore.state.questionsBySessionID = [:]
+    }
+
+    func recordInteractionEvent(_ event: OpenCodeTypedEvent) {
+        switch event {
+        case .permissionAsked, .permissionReplied:
+            permissionRevision &+= 1
+        case .questionAsked, .questionReplied, .questionRejected:
+            questionRevision &+= 1
+        default:
+            break
+        }
     }
 
     @discardableResult
@@ -349,8 +460,9 @@ final class DirectoryStore: ObservableObject {
     ) -> Bool {
         var changed = false
 
-        if scopedSessions != sessions {
-            sessions = scopedSessions
+        let deduplicatedSessions = Self.deduplicatedSessions(scopedSessions)
+        if deduplicatedSessions != sessions {
+            sessions = deduplicatedSessions
             changed = true
         }
         if state.selectedSession != selectedSession {
@@ -367,5 +479,19 @@ final class DirectoryStore: ObservableObject {
         }
 
         return changed
+    }
+
+    private static func deduplicatedSessions(_ sessions: [OpenCodeSession]) -> [OpenCodeSession] {
+        var result: [OpenCodeSession] = []
+        var indexByID: [String: Int] = [:]
+        for session in sessions {
+            if let index = indexByID[session.id] {
+                result[index] = result[index].merged(with: session)
+            } else {
+                indexByID[session.id] = result.count
+                result.append(session)
+            }
+        }
+        return result
     }
 }

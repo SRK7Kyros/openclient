@@ -70,15 +70,9 @@ final class WidgetSnapshotPublisher {
         self.timelineReloader = timelineReloader
     }
 
-    func observe(
-        contentChanges: [AnyPublisher<Void, Never>],
-        modelChanges: AnyPublisher<Void, Never>
-    ) {
+    func observe(contentChanges: [AnyPublisher<Void, Never>]) {
         Publishers.MergeMany(contentChanges)
             .sink { [weak self] _ in self?.invalidate() }
-            .store(in: &observations)
-        modelChanges
-            .sink { [weak self] _ in self?.invalidate(includeModelOptions: true) }
             .store(in: &observations)
     }
 

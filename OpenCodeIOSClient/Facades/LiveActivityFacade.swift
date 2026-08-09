@@ -69,7 +69,9 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func autoStartIfEnabled(session: OpenCodeSession) async {
-        guard !viewModel.isUsingAppleIntelligence, viewModel.isLiveActivityAutoStartEnabled else { return }
+        guard viewModel.isConnected,
+              !viewModel.isUsingAppleIntelligence,
+              viewModel.isLiveActivityAutoStartEnabled else { return }
         guard !isActive(sessionID: session.id) else { return }
         await start(session: session, userVisibleErrors: false)
     }
@@ -94,6 +96,12 @@ final class LiveActivityFacade: ObservableObject {
         viewModel.activeLiveActivitySessionIDs.remove(sessionID)
         viewModel.liveActivityStore.setLastState(nil, for: sessionID)
         #endif
+    }
+
+    func stopAll(immediate: Bool = true) async {
+        for sessionID in activeSessionIDs {
+            await stop(sessionID: sessionID, immediate: immediate)
+        }
     }
 
     func refresh(sessionID: String? = nil, endIfIdle: Bool = false, immediate: Bool = false) {
@@ -181,7 +189,9 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func scheduleCanonicalHydrationIfNeeded(sessionID: String?) {
-        guard let sessionID,
+        guard viewModel.isConnected,
+              viewModel.backendMode == .server,
+              let sessionID,
               isActive(sessionID: sessionID),
               viewModel.selectedSession?.id != sessionID,
               let session = sessionSnapshot(for: sessionID) else { return }

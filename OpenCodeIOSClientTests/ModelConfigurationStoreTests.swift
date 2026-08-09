@@ -91,6 +91,40 @@ final class ModelConfigurationStoreTests: XCTestCase {
         XCTAssertEqual(visibleModels.last?.id, "model-079")
     }
 
+    func testSyncingUnchangedComposerSelectionDoesNotPublish() {
+        let store = ModelConfigurationStore(
+            availableAgents: [
+                OpenCodeAgent(
+                    name: "build",
+                    description: nil,
+                    mode: "primary",
+                    hidden: false,
+                    model: nil,
+                    variant: nil
+                ),
+            ],
+            allProviders: [provider(id: "openai", name: "OpenAI")],
+            availableProviders: [provider(id: "openai", name: "OpenAI")]
+        )
+        let model = OpenCodeMessageModelReference(providerID: "openai", modelID: "gpt-5", variant: nil)
+        _ = store.syncSelections(forSessionID: "session", agent: "build", model: model)
+        var publicationCount = 0
+        let observation = store.objectWillChange.sink { publicationCount += 1 }
+
+        _ = store.syncSelections(forSessionID: "session", agent: "build", model: model)
+
+        XCTAssertEqual(publicationCount, 0)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testTimestampReleaseDateUsesDefaultVisibilityRules() {
+        let store = ModelConfigurationStore()
+        let oldProvider = provider(id: "openai", name: "OpenAI", releaseDate: "2020-01-01T00:00:00.000Z")
+        store.applyProviderState(OpenCodeProviderListResponse(all: [oldProvider], connected: ["openai"], default: [:]))
+
+        XCTAssertFalse(store.isModelVisible(OpenCodeModelReference(providerID: "openai", modelID: "gpt-5")))
+    }
+
     func testPluginStorePreservesResolvedConfigOrder() throws {
         let config = try JSONDecoder().decode(
             OpenCodeResolvedConfig.self,

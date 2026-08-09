@@ -50,7 +50,7 @@ private struct QuestionRequestCarousel: View {
                     .padding(.horizontal, 16)
             } else {
                 ScrollView(.horizontal) {
-                    HStack(alignment: .center, spacing: 12) {
+                    HStack(alignment: .bottom, spacing: 12) {
                         ForEach(request.questions.indices, id: \.self) { index in
                             let question = request.questions[index]
                             let key = storageKey(index: index)
@@ -265,10 +265,12 @@ private struct QuestionOptionButton: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label)
                         .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !option.description.isEmpty {
                         Text(option.description)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

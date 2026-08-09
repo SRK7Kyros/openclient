@@ -63,11 +63,13 @@ extension AppViewModel {
     func setModelVisibility(provider: OpenCodeProvider, model: OpenCodeModel, isVisible: Bool) {
         objectWillChange.send()
         modelConfigurationStore.setModelVisibility(OpenCodeModelReference(providerID: provider.id, modelID: model.id), isVisible: isVisible)
+        scheduleWidgetSnapshotPublication(includeModelOptions: true)
     }
 
     func setModelVisibility(_ reference: OpenCodeModelReference, isVisible: Bool) {
         objectWillChange.send()
         modelConfigurationStore.setModelVisibility(reference, isVisible: isVisible)
+        scheduleWidgetSnapshotPublication(includeModelOptions: true)
     }
 
     func isProviderFullyVisible(_ provider: OpenCodeProvider) -> Bool {
@@ -77,6 +79,7 @@ extension AppViewModel {
     func setProviderVisibility(_ provider: OpenCodeProvider, isVisible: Bool) {
         objectWillChange.send()
         modelConfigurationStore.setProviderVisibility(provider, isVisible: isVisible)
+        scheduleWidgetSnapshotPublication(includeModelOptions: true)
     }
 
     func providerConfigurationScope(directory: String?) -> String {

@@ -174,6 +174,8 @@ struct SessionRow: View, Equatable {
 }
 
 private struct ShimmeringSessionTitle: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     let text: String
     let active: Bool
     let font: Font
@@ -182,14 +184,18 @@ private struct ShimmeringSessionTitle: View {
 
     @State private var phase: CGFloat = -1
 
+    private var isAnimating: Bool {
+        active && scenePhase == .active
+    }
+
     var body: some View {
         Text(text)
             .font(font)
-            .foregroundStyle(active ? Color.primary.opacity(0.72) : Color.primary)
+            .foregroundStyle(isAnimating ? Color.primary.opacity(0.72) : Color.primary)
             .lineLimit(lineLimit)
             .multilineTextAlignment(alignment)
             .overlay {
-                if active {
+                if isAnimating {
                     GeometryReader { geometry in
                         LinearGradient(
                             colors: [Color.clear, Color.white.opacity(0.85), Color.clear],
@@ -209,8 +215,9 @@ private struct ShimmeringSessionTitle: View {
                     .allowsHitTesting(false)
                 }
             }
-            .onAppear { updateAnimation(active: active) }
-            .onChange(of: active) { _, isActive in updateAnimation(active: isActive) }
+            .onAppear { updateAnimation(active: isAnimating) }
+            .onChange(of: active) { _, _ in updateAnimation(active: isAnimating) }
+            .onChange(of: scenePhase) { _, _ in updateAnimation(active: isAnimating) }
     }
 
     private func updateAnimation(active: Bool) {

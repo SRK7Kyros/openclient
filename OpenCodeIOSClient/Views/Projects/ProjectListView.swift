@@ -15,6 +15,7 @@ struct ProjectListView: View {
     @State private var projectForColorPicker: OpenCodeProject?
     @State private var projectForImagePicker: OpenCodeProject?
     @State private var isShowingBridgeStatus = false
+    @State private var isEditingProjects = false
 
     init(
         facade: ProjectFacade,
@@ -34,7 +35,8 @@ struct ProjectListView: View {
 
     var body: some View {
         let snapshot = facade.listSnapshot
-        let projectIDs = snapshot.projects.map { $0.id }.joined(separator: "|")
+        let displayedProjects = isEditingProjects ? snapshot.allProjects : snapshot.projects
+        let projectIDs = displayedProjects.map { $0.id }.joined(separator: "|")
 
         List {
             if snapshot.isShowingSearchResults {
@@ -46,28 +48,56 @@ struct ProjectListView: View {
                 )
             } else {
                 Section {
-                    ForEach(snapshot.projects) { project in
+                    if displayedProjects.isEmpty, !isEditingProjects {
+                        Text("No projects are visible. Use the project settings button to show projects.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ForEach(displayedProjects) { project in
                         let title = projectTitle(project)
-                        ProjectRow(
-                            title: title,
-                            subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
-                            systemImage: project.id == "global" ? "globe" : "folder.fill",
-                            icon: project.icon,
-                            isSelected: facade.isSelected(project)
-                        )
+                        let isVisible = facade.isVisible(project)
+                        HStack(spacing: 8) {
+                            ProjectRow(
+                                title: title,
+                                subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
+                                systemImage: project.id == "global" ? "globe" : "folder.fill",
+                                icon: project.icon,
+                                isSelected: facade.isSelected(project),
+                                isPreparing: facade.isPreparingSelection(project),
+                                subtitleLineLimit: isEditingProjects ? 2 : 1
+                            )
+
+                            if isEditingProjects {
+                                Button {
+                                    facade.setVisibility(!isVisible, for: project)
+                                } label: {
+                                    Image(systemName: isVisible ? "eye.fill" : "eye.slash")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(isVisible ? Color.accentColor : .secondary)
+                                        .frame(width: 44, height: 44)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Show \(title)")
+                                .accessibilityValue(isVisible ? "On" : "Off")
+                                .accessibilityIdentifier("projects.visibility.\(project.id)")
+                            }
+                        }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let ticket = facade.beginSelection(project)
-                            withAnimation(opencodeSelectionAnimation) {
-                                onProjectChosen()
-                            }
+                            guard !isEditingProjects else { return }
                             Task { @MainActor in
-                                await Task.yield()
+                                guard let ticket = await facade.prepareSelectionForNavigation(project) else { return }
+                                withAnimation(opencodeSelectionAnimation) {
+                                    onProjectChosen()
+                                }
                                 await facade.completeSelection(ticket)
                             }
                         }
                         .contextMenu {
-                            if facade.canEditPreferences(for: project) {
+                            if isEditingProjects {
+                                EmptyView()
+                            } else if facade.canEditPreferences(for: project) {
                                 Button {
                                     projectForColorPicker = project
                                 } label: {
@@ -91,15 +121,21 @@ struct ProjectListView: View {
                                 Label("Preferences unavailable", systemImage: "lock")
                             }
                         }
+                        .disabled(facade.isPreparingSelection(project))
                     }
+                    .onMove(perform: facade.moveProjects)
                 } header: {
-                    ProjectListSectionHeader(recentSessions: snapshot.recentSessions, isLoadingRecentSessions: snapshot.isLoadingRecentSessions) { recent in
-                        openProjectSession(recent)
-                    }
+                    ProjectListSectionHeader(
+                        recentSessions: snapshot.recentSessions,
+                        isLoadingRecentSessions: snapshot.isLoadingRecentSessions,
+                        isEditingProjects: isEditingProjects,
+                        onToggleEditing: toggleProjectEditing,
+                        onSelectRecentSession: openProjectSession
+                    )
                     .textCase(nil)
                 }
 
-                if games.showsSection {
+                if games.showsSection, !facade.isReadOnly {
                     Section {
                         ProjectRow(
                             title: "Find the Place",
@@ -125,16 +161,17 @@ struct ProjectListView: View {
                             games.presentFindBugLanguageSheet()
                         }
                     } header: {
-                        Text("Fun & Games")
-                            .font(ProjectListLayout.roundedSectionTitleFont)
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
+                        Label("Fun & Games", systemImage: "gamecontroller.fill")
+                            .font(.headline)
+                            .textCase(nil)
+                            .padding(.leading, -16)
                     }
                 }
             }
 
         }
         .listStyle(.sidebar)
+        .environment(\.editMode, projectEditMode)
         .scrollClipDisabled()
         .refreshable {
             guard !isScreenshotScene else { return }
@@ -147,6 +184,7 @@ struct ProjectListView: View {
                     set: { facade.projectSessionSearchQuery = $0 }
                 ),
                 isSearching: snapshot.isSearching,
+                allowsNewChat: !facade.isReadOnly,
                 onNewChat: {
                     facade.presentNewChat()
                 }
@@ -178,7 +216,7 @@ struct ProjectListView: View {
                 .accessibilityIdentifier("projects.disconnect")
             }
 
-            if let bridge {
+            if let bridge, !facade.isReadOnly {
                 ToolbarItem(placement: .opencodeTrailing) {
                     OpenClientBridgeToolbarButton(bridge: bridge) {
                         isShowingBridgeStatus = true
@@ -186,24 +224,26 @@ struct ProjectListView: View {
                 }
             }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    configurations.present()
-                } label: {
-                    Image(systemName: "gearshape")
+            if !facade.isReadOnly {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        configurations.present()
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Configurations")
+                    .accessibilityIdentifier("projects.configurations")
                 }
-                .accessibilityLabel("Configurations")
-                .accessibilityIdentifier("projects.configurations")
-            }
 
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    facade.presentCreateProject()
-                } label: {
-                    Image(systemName: "plus")
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        facade.presentCreateProject()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create Project")
+                    .accessibilityIdentifier("projects.create")
                 }
-                .accessibilityLabel("Create Project")
-                .accessibilityIdentifier("projects.create")
             }
         }
         .sheet(isPresented: Binding(
@@ -252,6 +292,24 @@ struct ProjectListView: View {
         }
         .animation(opencodeSelectionAnimation, value: snapshot.selectedDirectory)
         .animation(opencodeSelectionAnimation, value: projectIDs)
+        .onChange(of: snapshot.isShowingSearchResults) { _, isShowingSearchResults in
+            if isShowingSearchResults {
+                isEditingProjects = false
+            }
+        }
+    }
+
+    private var projectEditMode: Binding<EditMode> {
+        Binding(
+            get: { isEditingProjects ? .active : .inactive },
+            set: { isEditingProjects = $0.isEditing }
+        )
+    }
+
+    private func toggleProjectEditing() {
+        withAnimation(opencodeSelectionAnimation) {
+            isEditingProjects.toggle()
+        }
     }
 
     private func projectTitle(_ project: OpenCodeProject) -> String {
@@ -365,6 +423,7 @@ private struct ProjectSessionSearchRow: View {
 private struct ProjectListBottomBar: View {
     @Binding var query: String
     let isSearching: Bool
+    let allowsNewChat: Bool
     let onNewChat: () -> Void
     @FocusState private var isSearchFocused: Bool
 
@@ -424,7 +483,7 @@ private struct ProjectListBottomBar: View {
                 .accessibilityIdentifier("projects.search.dismiss")
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
                 .zIndex(1)
-            } else {
+            } else if allowsNewChat {
                 Button(action: onNewChat) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: ProjectListLayout.newChatIconSize, weight: .semibold))
@@ -1429,6 +1488,8 @@ private struct NewChatInputBar: View {
 private struct ProjectListSectionHeader: View {
     let recentSessions: [RecentProjectSession]
     let isLoadingRecentSessions: Bool
+    let isEditingProjects: Bool
+    let onToggleEditing: () -> Void
     let onSelectRecentSession: (RecentProjectSession) -> Void
 
     var body: some View {
@@ -1441,10 +1502,25 @@ private struct ProjectListSectionHeader: View {
                 )
             }
 
-            Text("Projects")
-                .font(ProjectListLayout.sectionTitleFont)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            HStack {
+                Label("Projects", systemImage: "folder.fill")
+                    .font(.headline)
+
+                Spacer(minLength: 8)
+
+                Button(action: onToggleEditing) {
+                    Image(systemName: isEditingProjects ? "checkmark" : "ellipsis")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                }
+                .opencodeGlassButton(clear: false)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel(isEditingProjects ? "Finish Editing Projects" : "Manage Projects")
+                .accessibilityIdentifier("projects.manage")
+            }
+            .padding(.leading, -16)
+            .padding(.trailing, -29)
         }
         .padding(.top, isLoadingRecentSessions || !recentSessions.isEmpty ? 8 : 0)
         .scrollClipDisabled()
@@ -1458,10 +1534,9 @@ private struct RecentProjectSessionSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Sessions")
-                .font(ProjectListLayout.sectionTitleFont)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            Label("Recent Sessions", systemImage: "clock.arrow.circlepath")
+                .font(.headline)
+                .padding(.leading, -16)
 
             RecentProjectSessionRail(sessions: sessions, isLoading: isLoading, onSelect: onSelect)
         }

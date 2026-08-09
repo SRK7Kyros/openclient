@@ -50,6 +50,20 @@ final class ChatStoreTests: XCTestCase {
         )
     }
 
+    func testCanonicalCacheDeduplicatesMessageAndPartIDs() {
+        let first = message(id: "msg_duplicate", role: "assistant", text: "First", sessionID: "ses_test")
+        var replacement = message(id: "msg_duplicate", role: "assistant", text: "Replacement", sessionID: "ses_test")
+        replacement.parts.append(replacement.parts[0])
+        let store = ChatStore()
+
+        store.applyCanonicalMessages([first, replacement], forSessionID: "ses_test", isActiveSession: false)
+
+        let cached = store.cachedMessagesBySessionID["ses_test"]
+        XCTAssertEqual(cached?.count, 1)
+        XCTAssertEqual(cached?.first?.parts.count, 1)
+        XCTAssertEqual(cached?.first?.parts.first?.text, "Replacement")
+    }
+
     func testActivityBudgetKeepsProtectedContentAndNewestSettledActivity() {
         let projection = MessageBubbleActivityBudget.project(
             protectedEntries: Array(repeating: false, count: 20) + [true],
@@ -122,6 +136,42 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertTrue(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "```json\n{\"ok\": true}\n```"))
         XCTAssertFalse(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "```json\n{\"ok\": true}\n```\nFollowing text"))
         XCTAssertFalse(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "A normal streaming paragraph"))
+    }
+
+    func testMessageLinkExtractorFindsBareAndMarkdownLinks() {
+        let urls = MessageLinkExtractor.urls(
+            in: "Visit https://example.com/docs, then [Apple](https://apple.com/swift#overview)."
+        )
+
+        XCTAssertEqual(urls.map(\.absoluteString), [
+            "https://example.com/docs",
+            "https://apple.com/swift"
+        ])
+    }
+
+    func testMessageLinkExtractorIgnoresCodeAndDeduplicatesFragments() {
+        let text = """
+        Open https://example.com/page#first and https://example.com/page#second.
+        `https://inline.example.com`
+        ```swift
+        let url = "https://code.example.com"
+        ```
+        """
+
+        XCTAssertEqual(
+            MessageLinkExtractor.urls(in: text).map(\.absoluteString),
+            ["https://example.com/page"]
+        )
+    }
+
+    func testMessageLinkExtractorLimitsPreviewsToThreeWebLinks() {
+        let text = "mailto:hello@example.com https://one.example https://two.example https://three.example https://four.example"
+
+        XCTAssertEqual(MessageLinkExtractor.urls(in: text).map(\.host), [
+            "one.example",
+            "two.example",
+            "three.example"
+        ])
     }
 
     func testContextIdentitySurvivesPartIndexChanges() {
@@ -235,6 +285,18 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(synthetic.synthetic, true)
     }
 
+    func testPreviousUserContextUsesSyntheticTextInsteadOfPlaceholder() throws {
+        let prompt = "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
+        let synthetic = try JSONDecoder().decode(
+            OpenCodePart.self,
+            from: Data(#"{"id":"part_synthetic","messageID":"msg_1","sessionID":"ses_1","type":"text","text":"Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.","synthetic":true}"#.utf8)
+        )
+        var userMessage = message(id: "msg_1", role: "user", text: "", sessionID: "ses_1")
+        userMessage.parts = [synthetic]
+
+        XCTAssertEqual(ChatPreviousUserContextPolicy.displayText(for: userMessage), prompt)
+    }
+
     func testTranscriptWindowLoadsOnlyRequestedSuffixForLongSession() {
         let messages = (0..<1_500).map { index in
             message(
@@ -308,7 +370,7 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(window.hiddenMessageCount, 0)
     }
 
-    func testTranscriptWindowExpandsToIncludeParentForAssistantChildren() {
+    func testTranscriptWindowKeepsAssistantChildrenLazyWithoutTheirParent() {
         let sessionID = "ses_test"
         let parent = message(id: "msg_parent", role: "user", text: "Start", sessionID: sessionID)
         let children = (0..<60).map { index in
@@ -334,9 +396,31 @@ final class ChatStoreTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(window.messages.first?.id, parent.id)
-        XCTAssertEqual(window.messages.count, 61)
-        XCTAssertEqual(window.hiddenMessageCount, 0)
+        XCTAssertEqual(window.messages.first?.id, "msg_child_10")
+        XCTAssertEqual(window.messages.count, 50)
+        XCTAssertEqual(window.hiddenMessageCount, 11)
+    }
+
+    func testSyncStateFindsLatestHiddenUserMessageBeforeVisibleSuffix() {
+        let sessionID = "ses_test"
+        let messages = [
+            message(id: "msg_01", role: "user", text: "First prompt", sessionID: sessionID),
+            message(id: "msg_02", role: "assistant", text: "First answer", sessionID: sessionID),
+            message(id: "msg_03", role: "user", text: "Latest prompt", sessionID: sessionID),
+            message(id: "msg_04", role: "assistant", text: "Working", sessionID: sessionID),
+            message(id: "msg_05", role: "assistant", text: "Done", sessionID: sessionID),
+        ]
+        var state = OpenCodeDirectorySyncState()
+        state.replaceMessages(messages, forSessionID: sessionID)
+
+        let hiddenUser = state.latestUserMessageEnvelope(
+            beforeSuffixCount: 2,
+            forSessionID: sessionID
+        )
+
+        XCTAssertEqual(hiddenUser?.id, "msg_03")
+        XCTAssertEqual(hiddenUser?.parts.first?.text, "Latest prompt")
+        XCTAssertNil(state.latestUserMessageEnvelope(beforeSuffixCount: 5, forSessionID: sessionID))
     }
 
     func testDirectorySnapshotUsesReducerAppliedOffscreenTranscript() {

@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ProjectFacade: ObservableObject {
     struct ListSnapshot: Equatable {
+        let allProjects: [OpenCodeProject]
         let projects: [OpenCodeProject]
         let currentProjectID: String?
         let selectedDirectory: String?
@@ -53,6 +54,9 @@ final class ProjectFacade: ObservableObject {
         fileprivate let previousSessionID: String?
     }
 
+    @Published private(set) var preparingProjectID: String?
+    private var projectSelectionGeneration = 0
+
     private unowned let viewModel: AppViewModel
     private var observations: Set<AnyCancellable> = []
     private var activeDirectoryObservations: Set<AnyCancellable> = []
@@ -69,12 +73,14 @@ final class ProjectFacade: ObservableObject {
             viewModel.$config.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingProjectSettingsSheet.map { _ in () }.eraseToAnyPublisher(),
         ])
+        .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
 
         bindActiveDirectoryStore(viewModel.directoryStoreRegistry.activeStore)
         viewModel.directoryStoreRegistry.$activeStore
             .dropFirst()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] store in
                 self?.bindActiveDirectoryStore(store)
                 self?.objectWillChange.send()
@@ -83,9 +89,13 @@ final class ProjectFacade: ObservableObject {
     }
 
     var listSnapshot: ListSnapshot {
-        let projectIDs = viewModel.projects.map(\.id).joined(separator: "|")
+        let scopeKey = viewModel.config.recentServerID
+        let allProjects = viewModel.projectStore.orderedProjects(scopeKey: scopeKey)
+        let visibleProjects = viewModel.projectStore.visibleProjects(scopeKey: scopeKey)
+        let projectIDs = allProjects.map(\.id).sorted().joined(separator: "|")
         return ListSnapshot(
-            projects: viewModel.projects,
+            allProjects: allProjects,
+            projects: visibleProjects,
             currentProjectID: viewModel.currentProject?.id,
             selectedDirectory: viewModel.selectedDirectory,
             recentSessions: viewModel.recentProjectSessions,
@@ -129,6 +139,7 @@ final class ProjectFacade: ObservableObject {
     }
 
     var projects: [OpenCodeProject] { viewModel.projects }
+    var isReadOnly: Bool { viewModel.isBrowsingLocalCache }
     var currentProject: OpenCodeProject? { viewModel.currentProject }
     var isLoading: Bool { viewModel.isLoading }
     var paywallReason: OpenClientPaywallReason? { viewModel.commerceFacade.paywallReason }
@@ -157,10 +168,44 @@ final class ProjectFacade: ObservableObject {
     }
 
     func isSelected(_ project: OpenCodeProject) -> Bool { viewModel.isProjectSelected(project) }
-    func canEditPreferences(for project: OpenCodeProject) -> Bool { viewModel.canEditProjectPreferences(project) }
+    func isVisible(_ project: OpenCodeProject) -> Bool {
+        viewModel.projectStore.isProjectVisible(project, scopeKey: viewModel.config.recentServerID)
+    }
+
+    func setVisibility(_ isVisible: Bool, for project: OpenCodeProject) {
+        viewModel.projectStore.setProjectVisibility(project, isVisible: isVisible, scopeKey: viewModel.config.recentServerID)
+    }
+
+    func moveProjects(fromOffsets source: IndexSet, toOffset destination: Int) {
+        viewModel.projectStore.moveProjects(
+            fromOffsets: source,
+            toOffset: destination,
+            scopeKey: viewModel.config.recentServerID
+        )
+    }
+
+    func canEditPreferences(for project: OpenCodeProject) -> Bool {
+        !isReadOnly && viewModel.canEditProjectPreferences(project)
+    }
 
     func beginSelection(_ project: OpenCodeProject) -> SelectionTicket {
         SelectionTicket(project: project, previousSessionID: viewModel.beginProjectNavigation(project))
+    }
+
+    func prepareSelectionForNavigation(_ project: OpenCodeProject) async -> SelectionTicket? {
+        projectSelectionGeneration &+= 1
+        let generation = projectSelectionGeneration
+        let progressTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, self?.projectSelectionGeneration == generation else { return }
+            self?.preparingProjectID = project.id
+        }
+        let previousSessionID = await viewModel.prepareProjectNavigation(project)
+        progressTask.cancel()
+        guard projectSelectionGeneration == generation,
+              viewModel.currentProject?.id == project.id else { return nil }
+        preparingProjectID = nil
+        return SelectionTicket(project: project, previousSessionID: previousSessionID)
     }
 
     func completeSelection(_ ticket: SelectionTicket) async {
@@ -169,8 +214,13 @@ final class ProjectFacade: ObservableObject {
         await viewModel.selectProject(
             ticket.project,
             preservingDraftForSessionID: ticket.previousSessionID,
-            animatesPreparation: false
+            animatesPreparation: false,
+            isPreparedForNavigation: true
         )
+    }
+
+    func isPreparingSelection(_ project: OpenCodeProject) -> Bool {
+        preparingProjectID == project.id
     }
 
     func refreshList() async { await viewModel.refreshProjectList() }
@@ -183,21 +233,40 @@ final class ProjectFacade: ObservableObject {
 
     func openRecentSession(_ recent: RecentProjectSession) async { await viewModel.openRecentProjectSession(recent) }
 
-    func presentCreateProject() { viewModel.presentCreateProjectSheet() }
+    func presentCreateProject() {
+        guard !isReadOnly else { return }
+        viewModel.presentCreateProjectSheet()
+    }
     func dismissCreateProject() { viewModel.isShowingCreateProjectSheet = false }
-    func searchCreateProjectDirectories() async { await viewModel.searchCreateProjectDirectories() }
-    func selectCreateProjectDirectory(_ directory: String) async { await viewModel.selectCreateProjectDirectory(directory) }
+    func searchCreateProjectDirectories() async {
+        guard !isReadOnly else { return }
+        await viewModel.searchCreateProjectDirectories()
+    }
+    func selectCreateProjectDirectory(_ directory: String) async {
+        guard !isReadOnly else { return }
+        await viewModel.selectCreateProjectDirectory(directory)
+    }
     func createProjectResultPath(_ directory: String) -> String { viewModel.createProjectResultPath(directory) }
-    func createProject(from directory: String) async { await viewModel.createProject(from: directory) }
+    func createProject(from directory: String) async {
+        guard !isReadOnly else { return }
+        await viewModel.createProject(from: directory)
+    }
 
-    func presentNewChat() { viewModel.presentNewProjectChatSheet() }
+    func presentNewChat() {
+        guard !isReadOnly else { return }
+        viewModel.presentNewProjectChatSheet()
+    }
     func dismissNewChat() { viewModel.dismissNewProjectChatSheet() }
 
-    func presentSettings() { viewModel.presentProjectSettingsSheet() }
+    func presentSettings() {
+        guard !isReadOnly else { return }
+        viewModel.presentProjectSettingsSheet()
+    }
     func dismissSettings() { viewModel.isShowingProjectSettingsSheet = false }
     func setLiveActivityAutoStartEnabled(_ isEnabled: Bool) { viewModel.setLiveActivityAutoStartEnabled(isEnabled) }
 
     func setWorkspacesEnabled(_ isEnabled: Bool) async {
+        guard !isReadOnly else { return }
         viewModel.setProjectWorkspacesEnabled(isEnabled)
         if isEnabled {
             await viewModel.loadWorkspaceSessionsIfNeeded()
@@ -218,19 +287,23 @@ final class ProjectFacade: ObservableObject {
     func presentActionsPaywall() { viewModel.commerceFacade.presentPaywall(reason: .actions) }
 
     func setColor(_ color: String, for project: OpenCodeProject) async {
+        guard !isReadOnly else { return }
         await viewModel.setProjectColor(color, for: project)
     }
 
     func setImageOverride(_ dataURL: String?, for project: OpenCodeProject) async {
+        guard !isReadOnly else { return }
         await viewModel.setProjectImageOverride(dataURL, for: project)
     }
 
     func discoverImageCandidates(for project: OpenCodeProject) async -> [ProjectImageCandidate] {
-        await viewModel.discoverProjectImageCandidates(for: project)
+        guard !isReadOnly else { return [] }
+        return await viewModel.discoverProjectImageCandidates(for: project)
     }
 
     func imageDataURL(for candidate: ProjectImageCandidate, project: OpenCodeProject) async -> String? {
-        await viewModel.projectImageDataURL(for: candidate, project: project)
+        guard !isReadOnly else { return nil }
+        return await viewModel.projectImageDataURL(for: candidate, project: project)
     }
 
     func visibleModels(for provider: OpenCodeProvider) -> [OpenCodeModel] {
@@ -281,6 +354,7 @@ final class ProjectFacade: ObservableObject {
     private func bindActiveDirectoryStore(_ store: DirectoryStore) {
         activeDirectoryObservations.removeAll()
         store.objectWillChange
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &activeDirectoryObservations)
     }

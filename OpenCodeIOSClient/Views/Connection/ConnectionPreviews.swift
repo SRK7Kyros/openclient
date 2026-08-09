@@ -63,8 +63,7 @@ private struct ConnectionPreview: View {
         ConnectionView(
             facade: viewModel.connectionFacade,
             commerce: viewModel.commerceFacade,
-            whatsNew: OpenClientWhatsNewStore(checksForUpdates: false),
-            onSelectPluginSetupConnection: nil
+            whatsNew: OpenClientWhatsNewStore(checksForUpdates: false)
         )
     }
 }

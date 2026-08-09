@@ -35,6 +35,7 @@ final class DirectorySyncFacade {
             let state = store === registry.activeStore ? activeState : directoryState(for: store)
             let application = coordinator.applyDirectoryEvent(managed, to: state)
             let directory = registry.key(for: store).flatMap(DirectoryStoreRegistry.directory(forKey:))
+            store.recordInteractionEvent(managed.typed)
             let changed = store.applyReducedEventState(
                 application.state,
                 scopedSessions: scopedSessions(application.state.sessions, directory)

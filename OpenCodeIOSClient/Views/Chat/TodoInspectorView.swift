@@ -47,7 +47,7 @@ struct TodoInspectorView: View {
             }
 
             Section("Todos") {
-                ForEach(refreshState.visibleTodos(fallback: snapshot.todos)) { todo in
+                ForEach(Array(refreshState.visibleTodos(fallback: snapshot.todos).enumerated()), id: \.offset) { _, todo in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: todo.isComplete ? "checkmark.circle.fill" : (todo.isInProgress ? "clock.badge" : "circle"))
                             .foregroundStyle(todo.isComplete ? .green : (todo.isInProgress ? .blue : .secondary))

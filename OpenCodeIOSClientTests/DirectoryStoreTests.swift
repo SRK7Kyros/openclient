@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import OpenClient
 
@@ -19,6 +20,8 @@ final class DirectoryStoreTests: XCTestCase {
         )
         let bootstrap = OpenCodeDirectoryBootstrap(
             sessions: [selected],
+            sessionTotal: 2,
+            sessionLimit: 100,
             commands: [command],
             permissions: [permission],
             questions: [question]
@@ -34,11 +37,90 @@ final class DirectoryStoreTests: XCTestCase {
         XCTAssertTrue(changed)
         XCTAssertFalse(store.isLoadingSessions)
         XCTAssertEqual(store.sessions, [selected])
+        XCTAssertEqual(store.sessionTotal, 2)
+        XCTAssertEqual(store.sessionLimit, 100)
+        XCTAssertTrue(store.hasMoreSessions)
         XCTAssertEqual(store.commands, [command])
         XCTAssertEqual(store.sessionStatuses, [selected.id: "busy"])
         XCTAssertEqual(store.syncState.sessionStatusesBySessionID, [selected.id: "busy"])
         XCTAssertEqual(store.syncState.permissionsBySessionID[selected.id], [permission])
         XCTAssertEqual(store.syncState.questionsBySessionID[selected.id], [question])
+    }
+
+    func testRootReloadPreservesKnownChildSessions() {
+        let root = session(id: "ses_root", directory: "/tmp/project")
+        let child = OpenCodeSession(
+            id: "ses_child",
+            title: "Child",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: nil,
+            parentID: root.id
+        )
+        let store = DirectoryStore(sessions: [root, child])
+        let bootstrap = OpenCodeDirectoryBootstrap(
+            sessions: [root],
+            sessionTotal: 1,
+            sessionLimit: 100,
+            commands: [],
+            permissions: [],
+            questions: []
+        )
+
+        store.applyDirectoryReload(bootstrap: bootstrap, statuses: [:], scopedSessions: [root])
+
+        XCTAssertEqual(store.sessions.map(\.id), [root.id, child.id])
+        XCTAssertEqual(store.sessionTotal, 1)
+        XCTAssertFalse(store.hasMoreSessions)
+    }
+
+    func testStaleDirectoryBootstrapDoesNotEraseNewerPermissionOrQuestionEvents() {
+        let selected = session(id: "ses_selected", directory: "/tmp/project")
+        let permission = permission(id: "perm_live", sessionID: selected.id)
+        let question = questionRequest(id: "q_live", sessionID: selected.id)
+        let store = DirectoryStore(sessions: [selected], selectedSession: selected)
+        let permissionRevision = store.permissionRevision
+        let questionRevision = store.questionRevision
+
+        store.recordInteractionEvent(.permissionAsked(permission))
+        XCTAssertTrue(store.applyPermissions([permission], ifUnchangedSince: store.permissionRevision))
+        store.recordInteractionEvent(.questionAsked(question))
+        XCTAssertTrue(store.applyQuestions([question], ifUnchangedSince: store.questionRevision))
+
+        let staleBootstrap = OpenCodeDirectoryBootstrap(
+            sessions: [selected],
+            sessionTotal: 1,
+            sessionLimit: 100,
+            commands: [],
+            permissions: [],
+            questions: []
+        )
+        store.applyDirectoryReload(
+            bootstrap: staleBootstrap,
+            statuses: [:],
+            scopedSessions: [selected],
+            permissionRevisionAtRequestStart: permissionRevision,
+            questionRevisionAtRequestStart: questionRevision
+        )
+
+        XCTAssertEqual(store.syncState.permissionsBySessionID[selected.id], [permission])
+        XCTAssertEqual(store.syncState.questionsBySessionID[selected.id], [question])
+    }
+
+    func testCanonicalMessagesDeduplicateMessageAndPartIDs() {
+        let selectedID = "ses_selected"
+        let first = message(id: "msg_duplicate", role: "assistant", text: "First", sessionID: selectedID)
+        let replacement = message(id: "msg_duplicate", role: "assistant", text: "Replacement", sessionID: selectedID)
+        var duplicatePartReplacement = replacement
+        duplicatePartReplacement.parts.append(replacement.parts[0])
+        let store = DirectoryStore()
+
+        store.applyCanonicalMessages([first, duplicatePartReplacement], forSessionID: selectedID)
+
+        let messages = store.syncState.messageEnvelopes(forSessionID: selectedID)
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages[0].parts.count, 1)
+        XCTAssertEqual(messages[0].parts[0].text, "Replacement")
     }
 
     func testApplySelectedSessionAfterReloadUpdatesOnlyWhenSelectionChanges() {
@@ -76,7 +158,23 @@ final class DirectoryStoreTests: XCTestCase {
         XCTAssertEqual(store.syncState.messageEnvelopes(forSessionID: selected.id).map(\.id), ["msg_cached"])
     }
 
-    func testApplySessionSelectionPreparesOnlyLatestThreeUserRounds() {
+    func testApplySessionSelectionSeedsFullSyncStateWhileShowingOnlyLatestCachedRound() {
+        let selected = session(id: "ses_selected", directory: "/tmp/project")
+        let cached = (0..<8).flatMap { round in
+            [
+                message(id: "msg_\(round)_user", role: "user", text: "Prompt \(round)", sessionID: selected.id),
+                message(id: "msg_\(round)_assistant", role: "assistant", text: "Answer \(round)", sessionID: selected.id),
+            ]
+        }
+        let store = DirectoryStore()
+
+        let visible = store.applySessionSelection(selected, cachedMessages: cached)
+
+        XCTAssertEqual(visible.count, 2)
+        XCTAssertEqual(store.syncState.messageCount(forSessionID: selected.id), cached.count)
+    }
+
+    func testApplySessionSelectionPreparesOnlyLatestUserRound() {
         let selected = session(id: "ses_selected", directory: "/tmp/project")
         var messages: [OpenCodeMessageEnvelope] = []
         for round in 0..<20 {
@@ -89,11 +187,31 @@ final class DirectoryStoreTests: XCTestCase {
         let visible = store.applySessionSelection(selected, cachedMessages: [])
 
         XCTAssertEqual(visible.map(\.id), [
-            "msg_034_user", "msg_035_assistant",
-            "msg_036_user", "msg_037_assistant",
             "msg_038_user", "msg_039_assistant",
         ])
         XCTAssertEqual(store.syncState.messageCount(forSessionID: selected.id), 40)
+    }
+
+    func testApplySessionSelectionCapsAnOversizedLatestRound() {
+        let selected = session(id: "ses_selected", directory: "/tmp/project")
+        let messages = [
+            message(id: "msg_000_user", role: "user", text: "Prompt", sessionID: selected.id),
+        ] + (1...20).map { index in
+            message(
+                id: String(format: "msg_%03d_assistant", index),
+                role: "assistant",
+                text: "Step \(index)",
+                sessionID: selected.id
+            )
+        }
+        let store = DirectoryStore()
+        store.syncState.replaceMessages(messages, forSessionID: selected.id)
+
+        let visible = store.applySessionSelection(selected, cachedMessages: [])
+
+        XCTAssertEqual(visible.count, 12)
+        XCTAssertEqual(visible.last?.id, "msg_020_assistant")
+        XCTAssertEqual(store.syncState.messageCount(forSessionID: selected.id), 21)
     }
 
     func testApplyInteractionHydrationResultsUpdatesSyncState() {
@@ -107,8 +225,8 @@ final class DirectoryStoreTests: XCTestCase {
         let store = DirectoryStore()
 
         store.applyTodos([selectedTodo], forSessionID: selectedID)
-        store.applyPermissions([selectedPermission, otherPermission])
-        store.applyQuestions([selectedQuestion, otherQuestion])
+        store.applyPermissions([selectedPermission, otherPermission], ifUnchangedSince: store.permissionRevision)
+        store.applyQuestions([selectedQuestion, otherQuestion], ifUnchangedSince: store.questionRevision)
 
         XCTAssertEqual(store.syncState.todosBySessionID[selectedID], [selectedTodo])
         XCTAssertEqual(store.syncState.permissionsBySessionID[selectedID], [selectedPermission])
@@ -126,10 +244,22 @@ final class DirectoryStoreTests: XCTestCase {
     func testApplySessionStatusesMirrorsDirectoryAndSyncState() {
         let store = DirectoryStore(sessionStatuses: ["ses_stale": "busy"])
 
-        store.applySessionStatuses(["ses_selected": "idle"])
+        XCTAssertTrue(store.applySessionStatuses(["ses_selected": "idle"]))
 
         XCTAssertEqual(store.sessionStatuses, ["ses_selected": "idle"])
         XCTAssertEqual(store.syncState.sessionStatusesBySessionID, ["ses_selected": "idle"])
+    }
+
+    func testApplySessionStatusesDoesNotPublishWhenStateIsUnchanged() {
+        let store = DirectoryStore()
+        XCTAssertTrue(store.applySessionStatuses(["ses_selected": "idle"]))
+        var publicationCount = 0
+        let observation = store.objectWillChange.sink { publicationCount += 1 }
+
+        XCTAssertFalse(store.applySessionStatuses(["ses_selected": "idle"]))
+
+        XCTAssertEqual(publicationCount, 0)
+        withExtendedLifetime(observation) {}
     }
 
     func testApplyCanonicalMessagesReplacesSessionTranscriptInSyncState() {

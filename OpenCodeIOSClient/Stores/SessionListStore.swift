@@ -198,7 +198,10 @@ final class SessionListStore: ObservableObject {
     }
 
     func reconcileWorkspaceSessions(with canonicalSessions: [OpenCodeSession]) -> Bool {
-        let sessionsByID = Dictionary(uniqueKeysWithValues: canonicalSessions.map { ($0.id, $0) })
+        var sessionsByID: [String: OpenCodeSession] = [:]
+        for session in canonicalSessions {
+            sessionsByID[session.id] = session
+        }
         var changed = false
 
         for (directory, var state) in workspaceSessionsByDirectory {
@@ -244,8 +247,18 @@ final class SessionListStore: ObservableObject {
     }
 
     func applyDirectoryReloadSessions(_ sessions: [OpenCodeSession], scopedTo directory: String?) -> [OpenCodeSession] {
-        setRecentSessions(sessions, for: directory)
-        return self.sessions(sessions, scopedTo: directory)
+        var deduplicated: [OpenCodeSession] = []
+        var indexByID: [String: Int] = [:]
+        for session in sessions {
+            if let index = indexByID[session.id] {
+                deduplicated[index] = deduplicated[index].merged(with: session)
+            } else {
+                indexByID[session.id] = deduplicated.count
+                deduplicated.append(session)
+            }
+        }
+        setRecentSessions(deduplicated, for: directory)
+        return self.sessions(deduplicated, scopedTo: directory)
     }
 
     func mergeSessions(_ sessions: [OpenCodeSession], into visibleSessions: inout [OpenCodeSession]) {
@@ -289,7 +302,10 @@ final class SessionListStore: ObservableObject {
         statuses: [String: String],
         limit: Int = 15
     ) -> [RecentProjectSession] {
-        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        var projectsByID: [String: OpenCodeProject] = [:]
+        for project in projects {
+            projectsByID[project.id] = project
+        }
         var seen = Set<String>()
 
         return recentSessionsByDirectory.values
@@ -332,7 +348,10 @@ final class SessionListStore: ObservableObject {
             .map(String.init)
         guard !terms.isEmpty else { return [] }
 
-        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        var projectsByID: [String: OpenCodeProject] = [:]
+        for project in projects {
+            projectsByID[project.id] = project
+        }
         var seen = Set<String>()
 
         return recentSessionsByDirectory.values

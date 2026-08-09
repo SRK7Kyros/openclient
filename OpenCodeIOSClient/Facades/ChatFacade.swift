@@ -114,6 +114,7 @@ final class ChatFacade: ObservableObject {
     }
 
     let connectionStore: ConnectionStore
+    let appCustomizationStore: AppCustomizationStore
     let projectStore: ProjectStore
     let sessionListStore: SessionListStore
     let chatStore: ChatStore
@@ -132,6 +133,7 @@ final class ChatFacade: ObservableObject {
     init(viewModel: AppViewModel) {
         self.viewModel = viewModel
         connectionStore = viewModel.connectionStore
+        appCustomizationStore = viewModel.appCustomizationStore
         projectStore = viewModel.projectStore
         sessionListStore = viewModel.sessionListStore
         chatStore = viewModel.chatStore
@@ -144,18 +146,21 @@ final class ChatFacade: ObservableObject {
         mcpFacade = viewModel.mcpFacade
         Publishers.MergeMany([
             viewModel.objectWillChange.eraseToAnyPublisher(),
+            viewModel.appCustomizationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.modelConfigurationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.chatStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.funAndGamesStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.sessionInteractionStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.chatPresentationStore.objectWillChange.eraseToAnyPublisher(),
         ])
+        .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
 
         bindActiveDirectoryStore(viewModel.directoryStoreRegistry.activeStore)
         viewModel.directoryStoreRegistry.$activeStore
             .dropFirst()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] store in
                 self?.bindActiveDirectoryStore(store)
                 self?.objectWillChange.send()
@@ -170,6 +175,14 @@ final class ChatFacade: ObservableObject {
 
     var activeChatSessionID: String? {
         viewModel.activeChatSessionID
+    }
+
+    var showsChatActivityShimmer: Bool {
+        appCustomizationStore.showsChatActivityShimmer
+    }
+
+    var isReadOnly: Bool {
+        connectionStore.backendMode == .cachedServer
     }
 
     func setActiveChatSessionID(_ sessionID: String) {
@@ -383,18 +396,22 @@ final class ChatFacade: ObservableObject {
     }
 
     func dismissPermission(_ permission: OpenCodePermission) {
+        guard !isReadOnly else { return }
         viewModel.dismissPermission(permission)
     }
 
     func respondToPermission(_ permission: OpenCodePermission, response: String) async {
+        guard !isReadOnly else { return }
         await viewModel.respondToPermission(permission, response: response)
     }
 
     func dismissQuestion(_ request: OpenCodeQuestionRequest) async {
+        guard !isReadOnly else { return }
         await viewModel.dismissQuestion(request)
     }
 
     func respondToQuestion(_ request: OpenCodeQuestionRequest, answers: [[String]]) async {
+        guard !isReadOnly else { return }
         await viewModel.respondToQuestion(request, answers: answers)
     }
 
@@ -415,6 +432,7 @@ final class ChatFacade: ObservableObject {
     }
 
     func presentForkSessionSheet() {
+        guard !isReadOnly else { return }
         viewModel.presentForkSessionSheet()
     }
 
@@ -432,6 +450,7 @@ final class ChatFacade: ObservableObject {
         meterPrompt: Bool = true,
         restoreDraftOnFailure: Bool = true
     ) async {
+        guard !isReadOnly else { return }
         await viewModel.compactSession(
             sessionID: sessionID,
             userVisible: userVisible,
@@ -447,6 +466,7 @@ final class ChatFacade: ObservableObject {
         meterPrompt: Bool = true,
         restoreDraftOnFailure: Bool = true
     ) async {
+        guard !isReadOnly else { return }
         await viewModel.sendCommand(
             command,
             sessionID: sessionID,
@@ -461,6 +481,7 @@ final class ChatFacade: ObservableObject {
     }
 
     func toggleMCPServer(name: String) async {
+        guard !isReadOnly else { return }
         await mcpFacade.toggleServer(name: name)
     }
 
@@ -473,6 +494,7 @@ final class ChatFacade: ObservableObject {
     }
 
     func refreshChatData(for sessionID: String) async {
+        guard !isReadOnly else { return }
         await viewModel.refreshChatData(for: sessionID)
     }
 
@@ -486,6 +508,15 @@ final class ChatFacade: ObservableObject {
 
     func sessionForPresentation(sessionID: String) async -> OpenCodeSession? {
         await viewModel.sessionForPresentation(sessionID: sessionID)
+    }
+
+    func hydrateSessionForPresentation(_ session: OpenCodeSession) async {
+        guard !isReadOnly else { return }
+        try? await viewModel.loadMessages(
+            for: session,
+            prefetchToolDetails: false,
+            refreshTodos: false
+        )
     }
 
     @discardableResult
@@ -521,7 +552,8 @@ final class ChatFacade: ObservableObject {
         appendOptimisticMessage: Bool = true,
         meterPrompt: Bool = true
     ) async -> Bool {
-        await viewModel.sendMessage(
+        guard !isReadOnly else { return false }
+        return await viewModel.sendMessage(
             text,
             agentMentions: agentMentions,
             attachments: attachments,
@@ -539,6 +571,7 @@ final class ChatFacade: ObservableObject {
     }
 
     func stopCurrentSession() async {
+        guard !isReadOnly else { return }
         await viewModel.stopCurrentSession()
     }
 
@@ -574,6 +607,7 @@ final class ChatFacade: ObservableObject {
     }
 
     func forkSelectedSession(from messageID: String) async {
+        guard !isReadOnly else { return }
         await viewModel.forkSelectedSession(from: messageID)
     }
 
@@ -772,6 +806,7 @@ final class ChatFacade: ObservableObject {
             store.objectWillChange.eraseToAnyPublisher(),
             store.syncStore.objectWillChange.eraseToAnyPublisher()
         )
+        .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &activeDirectoryObservations)
     }

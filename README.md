@@ -126,6 +126,10 @@ If `xcodegen` is installed only in the local user path on this machine, use:
 /Users/mininic/.local/bin/xcodegen generate
 ```
 
+## App Icon Customization
+
+OpenClient supports user-selectable alternate icons created with Icon Composer. See [App Icon Customization](APP_ICON_CUSTOMIZATION.md) for the complete process to add, configure, verify, rename, or remove icon designs.
+
 ## Device Install Notes
 
 When installing manually, do not install from a stale repo-local `DerivedData/Build/Products/...` path unless that folder was the explicit `-derivedDataPath` for the build you just ran.

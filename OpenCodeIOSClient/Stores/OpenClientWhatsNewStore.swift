@@ -21,24 +21,29 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
 enum OpenClientReleaseNotesCatalog {
     static let releases = [
         OpenClientReleaseNotes(
-            version: "1.0.13",
-            title: "Build, browse, and run",
-            summary: "A project browser OpenCode can control, richer visual tools, and terminals inside every workspace.",
+            version: "1.0.15",
+            title: "Make it yours",
+            summary: "A tidier workspace, richer conversations, fresh app icons, and a smoother return to your projects.",
             features: [
                 OpenClientReleaseNotes.Feature(
-                    title: "Browse alongside OpenCode",
-                    detail: "Keep websites and your conversation together while you build and verify changes.",
-                    systemImage: "safari"
+                    title: "Rich link previews",
+                    detail: "Shared links now expand into rich, tappable previews after a message finishes streaming.",
+                    systemImage: "link"
                 ),
                 OpenClientReleaseNotes.Feature(
-                    title: "OpenClient plugin",
-                    detail: "Add browser automation plus charts, images, video, and other visual tools that render directly in your conversation.",
-                    systemImage: "puzzlepiece.extension"
+                    title: "Projects, your way",
+                    detail: "Use Manage Projects to drag workspaces into order or hide the ones you do not need.",
+                    systemImage: "line.3.horizontal"
                 ),
                 OpenClientReleaseNotes.Feature(
-                    title: "A terminal for every project",
-                    detail: "Open and manage terminal sessions without switching away from your workspace.",
-                    systemImage: "terminal"
+                    title: "Make it yours",
+                    detail: "Choose a new icon and decide whether chat activity gets a subtle shimmer.",
+                    systemImage: "paintpalette.fill"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Connect on launch",
+                    detail: "Choose a trusted saved server and OpenClient can reconnect when you open the app.",
+                    systemImage: "bolt.horizontal.circle.fill"
                 ),
             ]
         ),

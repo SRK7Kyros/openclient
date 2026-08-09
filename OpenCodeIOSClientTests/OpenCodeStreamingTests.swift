@@ -2060,6 +2060,20 @@ This appended section simulates more streamed text arriving after some chunks ha
         XCTAssertEqual(rewrittenChunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(rewrittenText))
     }
 
+    func testLargeMessageChunkCacheFallsBackForLongerNonPrefixRewrite() throws {
+        let cache = OpenCodeLargeMessageChunkCache()
+        let initialText = Self.capturedPerformanceSessionText
+        let rewrittenText = "Completely replaced prefix\n\n" + initialText + "\n\nAdditional canonical text"
+        let initialMessage = Self.performanceSessionMessage(text: initialText)
+        let rewrittenMessage = Self.performanceSessionMessage(text: rewrittenText)
+
+        _ = try XCTUnwrap(cache.chunks(for: initialMessage))
+        let rewrittenChunks = try XCTUnwrap(cache.chunks(for: rewrittenMessage))
+
+        XCTAssertEqual(rewrittenChunks, OpenCodeLargeMessageChunker.chunks(for: rewrittenMessage))
+        XCTAssertEqual(rewrittenChunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(rewrittenText))
+    }
+
     func testLargeMessageChunkCacheKeepsCompletedMessagesChunked() throws {
         let cache = OpenCodeLargeMessageChunkCache()
         let message = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)

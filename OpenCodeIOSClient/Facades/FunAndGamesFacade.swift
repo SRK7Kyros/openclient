@@ -20,7 +20,9 @@ final class FunAndGamesFacade: ObservableObject {
         .store(in: &observations)
     }
 
-    var showsSection: Bool { viewModel.funAndGamesPreferences.showsSection }
+    var showsSection: Bool {
+        !viewModel.isBrowsingLocalCache && viewModel.funAndGamesPreferences.showsSection
+    }
     var sortedProviders: [OpenCodeProvider] { viewModel.sortedProviders }
     var isLoading: Bool { viewModel.isLoading }
     var pendingFindBugLanguage: FindBugGameLanguage? { viewModel.pendingFindBugLanguage }
@@ -43,8 +45,14 @@ final class FunAndGamesFacade: ObservableObject {
     func presentFindPlaceModelSheet() { viewModel.presentFindPlaceModelSheet() }
     func presentFindBugLanguageSheet() { viewModel.presentFindBugLanguageSheet() }
     func selectFindBugLanguage(_ language: FindBugGameLanguage) { viewModel.selectFindBugLanguage(language) }
-    func startFindPlaceGame(model: OpenCodeModelReference) async { await viewModel.startFindPlaceGame(model: model) }
-    func startFindBugGame(model: OpenCodeModelReference) async { await viewModel.startFindBugGame(model: model) }
+    func startFindPlaceGame(model: OpenCodeModelReference) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.startFindPlaceGame(model: model)
+    }
+    func startFindBugGame(model: OpenCodeModelReference) async {
+        guard !viewModel.isBrowsingLocalCache else { return }
+        await viewModel.startFindBugGame(model: model)
+    }
     func cancelFindBugModelSelection() {
         viewModel.isShowingFindBugModelSheet = false
         viewModel.pendingFindBugLanguage = nil

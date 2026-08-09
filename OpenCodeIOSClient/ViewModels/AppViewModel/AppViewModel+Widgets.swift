@@ -2,8 +2,31 @@ import Foundation
 
 extension AppViewModel {
     func widgetSnapshotInput(includeModelOptions: Bool = false) -> WidgetSnapshotInput {
-        let sessions = allSessions
-        let providers = includeModelOptions ? modelConfigurationStore.sortedProviders : []
+        let sessions = allSessions.filter(\.isRootSession)
+        var providers: [OpenCodeProvider] = []
+        var visibleModelsByProviderID: [String: [OpenCodeModel]] = [:]
+        if includeModelOptions {
+            var modelCount = 0
+            for provider in modelConfigurationStore.sortedProviders {
+                let models = Array(
+                    modelConfigurationStore.visibleModels(for: provider)
+                        .prefix(WidgetSnapshotBuilder.modelPerProviderLimit)
+                )
+                guard !models.isEmpty else { continue }
+                providers.append(provider)
+                visibleModelsByProviderID[provider.id] = models
+                modelCount += models.count
+                if modelCount >= WidgetSnapshotBuilder.modelLimit { break }
+            }
+        }
+        var sessionTitlesByID: [String: String] = [:]
+        var permissionsBySessionID: [String: [OpenCodePermission]] = [:]
+        var questionsBySessionID: [String: [OpenCodeQuestionRequest]] = [:]
+        for session in sessions {
+            sessionTitlesByID[session.id] = childSessionTitle(for: session)
+            permissionsBySessionID[session.id] = permissions(for: session.id)
+            questionsBySessionID[session.id] = questions(for: session.id)
+        }
         return WidgetSnapshotInput(
             backendMode: backendMode,
             config: config,
@@ -11,17 +34,15 @@ extension AppViewModel {
             currentProject: currentProject,
             effectiveDirectory: effectiveSelectedDirectory,
             sessions: sessions,
-            sessionTitlesByID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, childSessionTitle(for: $0)) }),
+            sessionTitlesByID: sessionTitlesByID,
             statuses: sessionStatuses,
             previews: sessionPreviews,
             pinnedSessionIDs: pinnedSessionIDs,
-            permissionsBySessionID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, permissions(for: $0.id)) }),
-            questionsBySessionID: Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, questions(for: $0.id)) }),
+            permissionsBySessionID: permissionsBySessionID,
+            questionsBySessionID: questionsBySessionID,
             commands: directoryCommands,
             providers: providers,
-            visibleModelsByProviderID: Dictionary(uniqueKeysWithValues: providers.map {
-                ($0.id, modelConfigurationStore.visibleModels(for: $0))
-            })
+            visibleModelsByProviderID: visibleModelsByProviderID
         )
     }
 

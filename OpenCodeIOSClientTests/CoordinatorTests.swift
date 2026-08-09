@@ -1731,14 +1731,17 @@ final class CoordinatorTests: XCTestCase {
 
             switch path {
             case "/session":
-                XCTAssertFalse(URLComponents(
+                XCTAssertEqual(URLComponents(
                     url: try XCTUnwrap(request.url),
                     resolvingAgainstBaseURL: false
-                )?.queryItems?.contains(URLQueryItem(name: "roots", value: "true")) == true)
+                )?.queryItems, [
+                    URLQueryItem(name: "directory", value: "/tmp/project"),
+                    URLQueryItem(name: "roots", value: "true"),
+                    URLQueryItem(name: "limit", value: "100"),
+                ])
                 return try jsonResponse(for: request, body: """
                 [
-                  {"id":"ses_root","title":"Root","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":null},
-                  {"id":"ses_child","title":"Child","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":"ses_root"}
+                  {"id":"ses_root","title":"Root","workspaceID":null,"directory":"/tmp/project","projectID":"proj_1","parentID":null}
                 ]
                 """)
             case "/command", "/permission", "/question":
@@ -1752,9 +1755,15 @@ final class CoordinatorTests: XCTestCase {
             return try jsonResponse(for: request, statusCode: 404, body: #"{"error":"unexpected"}"#)
         }
 
-        let result = try await coordinator.reloadDirectory(client: client, directory: "/tmp/project")
+        let result = try await coordinator.reloadDirectory(
+            client: client,
+            directory: "/tmp/project",
+            sessionLimit: 100
+        )
 
-        XCTAssertEqual(result.bootstrap.sessions.map(\.id), ["ses_root", "ses_child"])
+        XCTAssertEqual(result.bootstrap.sessions.map(\.id), ["ses_root"])
+        XCTAssertEqual(result.bootstrap.sessionTotal, 1)
+        XCTAssertEqual(result.bootstrap.sessionLimit, 100)
         XCTAssertEqual(result.bootstrap.commands, [])
         XCTAssertEqual(result.bootstrap.permissions, [])
         XCTAssertEqual(result.bootstrap.questions, [])

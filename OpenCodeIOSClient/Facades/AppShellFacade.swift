@@ -62,6 +62,7 @@ final class AppShellFacade: ObservableObject {
         let isLoadingFileTree: Bool
         let isLoadingMCP: Bool
         let isTerminalAvailable: Bool
+        let isReadOnly: Bool
         let currentProjectID: String?
         let effectiveSelectedDirectory: String?
 
@@ -103,6 +104,7 @@ final class AppShellFacade: ObservableObject {
         }
 
         var isToolbarDisabled: Bool {
+            if isReadOnly { return true }
             switch selectedTab {
             case .sessions:
                 return false
@@ -167,6 +169,7 @@ final class AppShellFacade: ObservableObject {
             viewModel.$openURLNavigationMessage.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$chatDetailPresentationRequest.map { _ in () }.eraseToAnyPublisher(),
         ])
+        .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
 
@@ -181,6 +184,7 @@ final class AppShellFacade: ObservableObject {
         bindActiveDirectoryStore(viewModel.directoryStoreRegistry.activeStore)
         viewModel.directoryStoreRegistry.$activeStore
             .dropFirst()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] store in
                 self?.bindActiveDirectoryStore(store)
                 self?.objectWillChange.send()
@@ -199,35 +203,46 @@ final class AppShellFacade: ObservableObject {
     }
 
     var showsConnectionSheetContent: Bool {
-        !connection.isConnected || connection.isUsingAppleIntelligence || connection.isShowingConnectionOverlay
+        (!connection.isConnected && !connection.isBrowsingLocalCache)
+            || connection.isUsingAppleIntelligence
+            || connection.isShowingConnectionOverlay
     }
 
     var hidesShellForConnectionExperience: Bool {
-        !connection.isConnected || connection.isShowingConnectionOverlay
+        (!connection.isConnected && !connection.isBrowsingLocalCache) || connection.isShowingConnectionOverlay
     }
 
     var openURLNavigationMessage: String? { viewModel.openURLNavigationMessage }
     var isConnected: Bool { connection.isConnected }
     var isShowingConnectionOverlay: Bool { connection.isShowingConnectionOverlay }
     var hasActiveWorkspace: Bool { viewModel.hasActiveWorkspace }
+    var isBrowsingLocalCache: Bool { connection.isBrowsingLocalCache }
     var currentProjectID: String? { projects.currentProject?.id }
     var hasCurrentProject: Bool { projects.currentProject != nil }
     var selectedSessionID: String? { viewModel.directoryStoreRegistry.activeStore.selectedSession?.id }
+    var isSelectedSessionPrepared: Bool {
+        guard let selectedSessionID else { return false }
+        return viewModel.chatStore.preparedSessionID == selectedSessionID
+    }
     var chatDetailPresentationRequest: Int { viewModel.chatDetailPresentationRequest }
 
     var projectContentSnapshot: ProjectContentSnapshot {
         let files = projectFiles.snapshot
-        let selectedTab = viewModel.projectStore.selectedContentTab
+        let selectedTab: OpenClientProjectContentTab = connection.isBrowsingLocalCache
+            ? .sessions
+            : viewModel.projectStore.selectedContentTab
         let scopeTitle = viewModel.projectScopeTitle
         return ProjectContentSnapshot(
             selectedTab: selectedTab,
             availableTabs: OpenClientProjectContentTab.allCases.filter { tab in
                 switch tab {
                 case .git:
-                    return projectFiles.hasGitProject
+                    return !connection.isBrowsingLocalCache && projectFiles.hasGitProject
                 case .terminal:
                     return connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil
-                case .sessions, .mcp:
+                case .mcp:
+                    return !connection.isBrowsingLocalCache
+                case .sessions:
                     return true
                 }
             },
@@ -239,6 +254,7 @@ final class AppShellFacade: ObservableObject {
             isLoadingFileTree: files.isLoadingFileTree,
             isLoadingMCP: mcp.snapshot.isLoading,
             isTerminalAvailable: connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil,
+            isReadOnly: connection.isBrowsingLocalCache,
             currentProjectID: projects.currentProject?.id,
             effectiveSelectedDirectory: viewModel.effectiveSelectedDirectory
         )
@@ -293,10 +309,16 @@ final class AppShellFacade: ObservableObject {
     }
 
     func presentProjectSettings() {
+        guard !connection.isBrowsingLocalCache else { return }
         projects.presentSettings()
     }
 
+    func retryCachedServerConnection() {
+        connection.startConnection()
+    }
+
     func selectProjectContentTab(_ tab: OpenClientProjectContentTab) {
+        guard !connection.isBrowsingLocalCache || tab == .sessions else { return }
         if viewModel.selectedProjectContentTab == .terminal, tab != .terminal {
             terminal.detachRenderer()
         }
@@ -340,6 +362,11 @@ final class AppShellFacade: ObservableObject {
     }
 
     func reconcileInvalidGitSelection() {
+        if connection.isBrowsingLocalCache {
+            terminal.detachRenderer()
+            viewModel.selectedProjectContentTab = .sessions
+            return
+        }
         if !projectFiles.hasGitProject, viewModel.selectedProjectContentTab == .git {
             viewModel.selectedProjectContentTab = .sessions
         }
@@ -354,6 +381,7 @@ final class AppShellFacade: ObservableObject {
         workspaceDirectory: String?,
         locksProject: Bool
     ) {
+        guard !connection.isBrowsingLocalCache else { return }
         viewModel.presentNewProjectChatSheet(
             projectID: projectID,
             workspaceDirectory: workspaceDirectory,
@@ -414,7 +442,8 @@ final class AppShellFacade: ObservableObject {
     private func bindActiveDirectoryStore(_ store: DirectoryStore) {
         activeDirectoryObservations.removeAll()
         store.objectWillChange
-        .sink { [weak self] _ in self?.objectWillChange.send() }
-        .store(in: &activeDirectoryObservations)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &activeDirectoryObservations)
     }
 }

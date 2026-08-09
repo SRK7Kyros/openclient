@@ -174,7 +174,11 @@ extension LiveActivityCoordinator {
     }
 
     static func currentStatesBySessionID() -> [String: OpenCodeChatActivityAttributes.ContentState] {
-        Dictionary(uniqueKeysWithValues: Activity<OpenCodeChatActivityAttributes>.activities.map { ($0.attributes.sessionID, $0.content.state) })
+        var states: [String: OpenCodeChatActivityAttributes.ContentState] = [:]
+        for activity in Activity<OpenCodeChatActivityAttributes>.activities {
+            states[activity.attributes.sessionID] = activity.content.state
+        }
+        return states
     }
 
     static func sessionSnapshot(for sessionID: String) -> LiveActivitySessionSnapshot? {

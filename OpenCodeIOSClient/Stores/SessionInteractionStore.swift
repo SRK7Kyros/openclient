@@ -18,26 +18,32 @@ final class SessionInteractionStore: ObservableObject {
     }
 
     func reset() {
-        todos = []
-        permissions = []
-        questions = []
+        replaceTodos([])
+        replacePermissions([])
+        replaceQuestions([])
     }
 
     func replaceTodos(_ nextTodos: [OpenCodeTodo]) {
-        todos = nextTodos
+        if todos != nextTodos {
+            todos = nextTodos
+        }
     }
 
     func replacePermissions(_ nextPermissions: [OpenCodePermission]) {
-        permissions = nextPermissions
+        if permissions != nextPermissions {
+            permissions = nextPermissions
+        }
     }
 
     func replaceQuestions(_ nextQuestions: [OpenCodeQuestionRequest]) {
-        questions = nextQuestions
+        if questions != nextQuestions {
+            questions = nextQuestions
+        }
     }
 
     func applyDirectoryBootstrap(_ bootstrap: OpenCodeDirectoryBootstrap) {
-        permissions = bootstrap.permissions
-        questions = bootstrap.questions
+        replacePermissions(bootstrap.permissions)
+        replaceQuestions(bootstrap.questions)
     }
 
     func applySelectedSession(
@@ -45,30 +51,30 @@ final class SessionInteractionStore: ObservableObject {
         sessions: [OpenCodeSession],
         syncState: OpenCodeDirectorySyncState
     ) {
-        todos = syncState.todosBySessionID[sessionID] ?? []
-        permissions = Self.permissions(
+        replaceTodos(syncState.todosBySessionID[sessionID] ?? [])
+        replacePermissions(Self.permissions(
             forSessionTreeRootID: sessionID,
             sessions: sessions,
             permissionsBySessionID: syncState.permissionsBySessionID
-        )
-        questions = Self.questions(
+        ))
+        replaceQuestions(Self.questions(
             forSessionTreeRootID: sessionID,
             sessions: sessions,
             questionsBySessionID: syncState.questionsBySessionID
-        )
+        ))
     }
 
     func applyTodos(_ nextTodos: [OpenCodeTodo], forSessionID sessionID: String, selectedSessionID: String?) {
         guard selectedSessionID == sessionID else { return }
-        todos = nextTodos
+        replaceTodos(nextTodos)
     }
 
     func applyLoadedPermissions(_ nextPermissions: [OpenCodePermission]) {
-        permissions = nextPermissions
+        replacePermissions(nextPermissions)
     }
 
     func applyLoadedQuestions(_ nextQuestions: [OpenCodeQuestionRequest]) {
-        questions = nextQuestions
+        replaceQuestions(nextQuestions)
     }
 
     @discardableResult
@@ -143,6 +149,29 @@ final class SessionInteractionStore: ObservableObject {
             sessions: sessions,
             requestsBySessionID: questionsBySessionID
         )
+    }
+
+    static func sessionTreeRootIDsWithRequests<Request>(
+        sessions: [OpenCodeSession],
+        requestsBySessionID: [String: [Request]]
+    ) -> Set<String> {
+        var parentBySessionID: [String: String] = [:]
+        for session in sessions {
+            if let parentID = session.parentID {
+                parentBySessionID[session.id] = parentID
+            }
+        }
+
+        var roots: Set<String> = []
+        for sessionID in requestsBySessionID.keys where requestsBySessionID[sessionID]?.isEmpty == false {
+            var current = sessionID
+            var visited: Set<String> = []
+            while visited.insert(current).inserted, let parentID = parentBySessionID[current] {
+                current = parentID
+            }
+            roots.insert(current)
+        }
+        return roots
     }
 
     private static func requests<Request>(

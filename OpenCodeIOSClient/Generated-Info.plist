@@ -48,6 +48,13 @@
 	<string>OpenClient uses speech recognition to transcribe dictated chat messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>OpenClientAlternateIconPreviewFiles</key>
+	<dict>
+		<key>Liquidy</key>
+		<string>Liquidy.png</string>
+		<key>Trees</key>
+		<string>Trees.png</string>
+	</dict>
 	<key>OpenCodeSharedKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.ntoporcov.openclient.shared</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
