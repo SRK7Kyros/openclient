@@ -60,7 +60,8 @@ final class ConnectionFacade: ObservableObject {
         viewModel.startConnectionFromEditor()
     }
 
-    func startAutomaticConnectionIfConfigured() {
+    @discardableResult
+    func startAutomaticConnectionIfConfigured() -> Bool {
         viewModel.startAutomaticConnectionIfConfigured()
     }
 

@@ -374,3 +374,57 @@ final class AppShellFacadeTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class ProjectStoreTests: XCTestCase {
+    func testProjectsDefaultToVisibleAndServerOrder() {
+        let (userDefaults, suiteName) = makeUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = makeStore(ids: ["a", "b", "c"], userDefaults: userDefaults)
+
+        XCTAssertEqual(store.orderedProjects(scopeKey: "server").map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(store.visibleProjects(scopeKey: "server").map(\.id), ["a", "b", "c"])
+    }
+
+    func testVisibilityIsScopedAndPersisted() {
+        let (userDefaults, suiteName) = makeUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = makeStore(ids: ["a", "b"], userDefaults: userDefaults)
+        let hiddenProject = store.projects[1]
+
+        store.setProjectVisibility(hiddenProject, isVisible: false, scopeKey: "server-a")
+
+        XCTAssertEqual(store.visibleProjects(scopeKey: "server-a").map(\.id), ["a"])
+        XCTAssertEqual(store.visibleProjects(scopeKey: "server-b").map(\.id), ["a", "b"])
+
+        let reloaded = ProjectStore(projects: store.projects, userDefaults: userDefaults)
+        XCTAssertEqual(reloaded.visibleProjects(scopeKey: "server-a").map(\.id), ["a"])
+    }
+
+    func testReorderingPersistsAndAppendsNewProjects() {
+        let (userDefaults, suiteName) = makeUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = makeStore(ids: ["a", "b", "c"], userDefaults: userDefaults)
+
+        store.moveProjects(fromOffsets: IndexSet(integer: 0), toOffset: 3, scopeKey: "server")
+        XCTAssertEqual(store.orderedProjects(scopeKey: "server").map(\.id), ["b", "c", "a"])
+
+        let reloaded = ProjectStore(projects: makeProjects(ids: ["a", "b", "c", "d"]), userDefaults: userDefaults)
+        XCTAssertEqual(reloaded.orderedProjects(scopeKey: "server").map(\.id), ["b", "c", "a", "d"])
+    }
+
+    private func makeStore(ids: [String], userDefaults: UserDefaults) -> ProjectStore {
+        ProjectStore(projects: makeProjects(ids: ids), userDefaults: userDefaults)
+    }
+
+    private func makeUserDefaults() -> (UserDefaults, String) {
+        let suiteName = "ProjectStoreTests.\(UUID().uuidString)"
+        return (UserDefaults(suiteName: suiteName)!, suiteName)
+    }
+
+    private func makeProjects(ids: [String]) -> [OpenCodeProject] {
+        ids.map {
+            OpenCodeProject(id: $0, worktree: "/tmp/\($0)", vcs: "git", name: $0, sandboxes: nil, icon: nil, time: nil)
+        }
+    }
+}

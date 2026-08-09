@@ -18,7 +18,6 @@ struct ConnectionSheetView: View {
     @ObservedObject var facade: ConnectionFacade
     @ObservedObject var commerce: CommerceFacade
     @ObservedObject var whatsNew: OpenClientWhatsNewStore
-    let onSelectPluginSetupConnection: (OpenCodeServerConfig) -> Void
 
     @State private var path: [ConnectionSheetRoute] = []
     @State private var selectedDetent: PresentationDetent = connectionSheetHomeDetent
@@ -33,8 +32,7 @@ struct ConnectionSheetView: View {
                 ConnectionView(
                     facade: facade,
                     commerce: commerce,
-                    whatsNew: whatsNew,
-                    onSelectPluginSetupConnection: onSelectPluginSetupConnection
+                    whatsNew: whatsNew
                 ) { route in
                     path.append(route)
                 }
@@ -102,8 +100,8 @@ struct ConnectionView: View {
     @ObservedObject var facade: ConnectionFacade
     @ObservedObject var commerce: CommerceFacade
     @ObservedObject var whatsNew: OpenClientWhatsNewStore
-    var onSelectPluginSetupConnection: ((OpenCodeServerConfig) -> Void)?
     var navigate: ((ConnectionSheetRoute) -> Void)? = nil
+    @State private var isShowingLatestUpdates = false
 
     private var hasRecentServers: Bool {
         facade.recentServerConfigs.isEmpty == false
@@ -141,24 +139,16 @@ struct ConnectionView: View {
             }
         }
         .sheet(item: Binding(
-            get: { whatsNew.presentedRelease },
+            get: { isShowingLatestUpdates ? whatsNew.presentedRelease : nil },
             set: { release in
                 guard release == nil else { return }
+                isShowingLatestUpdates = false
                 whatsNew.dismiss()
             }
         )) { release in
             OpenClientWhatsNewView(
                 release: release,
-                connections: facade.recentServerConfigs,
-                activeConnectionID: facade.isConnected ? facade.config.recentServerID : nil,
-                onSelectConnection: { connection in
-                    if let onSelectPluginSetupConnection {
-                        onSelectPluginSetupConnection(connection)
-                    } else {
-                        whatsNew.dismiss()
-                        facade.startConnection(to: connection)
-                    }
-                },
+                connection: facade,
                 onDone: whatsNew.dismiss
             )
         }
@@ -249,6 +239,7 @@ struct ConnectionView: View {
         Section("Help") {
             Button {
                 whatsNew.presentLatestRelease()
+                isShowingLatestUpdates = true
             } label: {
                 LatestUpdatesNavigationRow()
             }
@@ -404,16 +395,26 @@ private struct AppIconThumbnail: View {
     }
 
     private var fallback: some View {
-        Image(systemName: "app.fill")
-            .font(.title2)
-            .foregroundStyle(.tint)
+        Text(String(icon.displayName.prefix(1)))
+            .font(.title2.weight(.bold))
+            .foregroundStyle(Color.accentColor)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.quaternary)
+            .background(
+                LinearGradient(
+                    colors: [Color.accentColor.opacity(0.22), Color.accentColor.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
     }
 
     #if canImport(UIKit)
     private var uiImage: UIImage? {
         for file in icon.iconFiles.reversed() {
+            if let path = Bundle.main.path(forResource: file, ofType: nil),
+               let image = UIImage(contentsOfFile: path) {
+                return image
+            }
             if let image = UIImage(named: file) {
                 return image
             }
@@ -877,11 +878,11 @@ private struct LatestUpdatesNavigationRow: View {
             .frame(width: 52, height: 52)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("See Latest Big Updates")
+                Text("New Features")
                     .font(.headline)
                     .foregroundStyle(.primary)
 
-                Text("Catch up on the biggest features added to OpenClient.")
+                Text("See what is new in the latest version of OpenClient.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

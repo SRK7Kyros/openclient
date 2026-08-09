@@ -78,6 +78,7 @@ final class AppIconStore: ObservableObject {
             ?? infoDictionary["CFBundleIcons~ipad"] as? [String: Any]
             ?? [:]
         let displayNames = infoDictionary["OpenClientAlternateIconDisplayNames"] as? [String: String] ?? [:]
+        let previewFiles = infoDictionary["OpenClientAlternateIconPreviewFiles"] as? [String: String] ?? [:]
         let primary = iconsDictionary["CFBundlePrimaryIcon"] as? [String: Any] ?? [:]
         let primaryName = primary["CFBundleIconName"] as? String ?? "AppIcon"
 
@@ -93,7 +94,7 @@ final class AppIconStore: ObservableObject {
             return OpenClientAppIcon(
                 alternateIconName: name,
                 displayName: displayNames[name] ?? formattedDisplayName(name),
-                iconFiles: icon["CFBundleIconFiles"] as? [String] ?? []
+                iconFiles: previewFiles[name].map { [$0] } ?? (icon["CFBundleIconFiles"] as? [String] ?? [])
             )
         }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending })
 

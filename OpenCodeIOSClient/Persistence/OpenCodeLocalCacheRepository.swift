@@ -49,13 +49,13 @@ enum OpenCodeLocalCacheEventWritePolicy {
     static func writesChatSnapshot(for event: OpenCodeTypedEvent) -> Bool {
         switch event {
         case .messageUpdated,
-             .messagePartUpdated,
              .messageRemoved,
              .messagePartRemoved,
              .todoUpdated,
              .sessionIdle:
             return true
-        case .messagePartDelta:
+        case .messagePartUpdated,
+             .messagePartDelta:
             return false
         default:
             return false

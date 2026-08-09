@@ -70,8 +70,7 @@ final class AppViewModel: ObservableObject {
                 projectPreferencesStore.objectWillChange.eraseToAnyPublisher(),
                 sessionListStore.objectWillChange.eraseToAnyPublisher(),
                 sessionInteractionStore.objectWillChange.eraseToAnyPublisher(),
-            ],
-            modelChanges: modelConfigurationStore.objectWillChange.eraseToAnyPublisher()
+            ]
         )
         return publisher
     }()

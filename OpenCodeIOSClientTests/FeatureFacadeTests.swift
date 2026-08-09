@@ -8,6 +8,25 @@ import UIKit
 
 @MainActor
 final class FeatureFacadeTests: XCTestCase {
+    func testSessionListShimmersGeneratedTitleOnlyWhileSessionIsBusy() {
+        let session = OpenCodeSession(
+            id: "session",
+            title: "New session - 2026-08-04T12:00:00.000Z",
+            workspaceID: nil,
+            directory: nil,
+            projectID: "global",
+            parentID: nil
+        )
+        let idleViewModel = AppViewModel()
+        idleViewModel.allSessions = [session]
+        let busyViewModel = AppViewModel()
+        busyViewModel.allSessions = [session]
+        busyViewModel.sessionStatuses = [session.id: "busy"]
+
+        XCTAssertFalse(idleViewModel.sessionListFacade.snapshot.unpinnedRows[0].shimmersTitle)
+        XCTAssertTrue(busyViewModel.sessionListFacade.snapshot.unpinnedRows[0].shimmersTitle)
+    }
+
     func testStableUIKitMenuCoordinatorReusesUnchangedMenu() {
         #if canImport(UIKit)
         let coordinator = StableUIKitMenuCoordinator(onSelect: { _ in })

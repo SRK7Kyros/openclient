@@ -77,6 +77,46 @@ final class OpenCodeSavedServerTests: XCTestCase {
         XCTAssertEqual(cleanedServers.first?.name, "Desk")
     }
 
+    func testLoadRecentServerConfigsDoesNotLimitConnections() throws {
+        let configs = (1...6).map { index in
+            OpenCodeServerConfig(
+                name: "Server \(index)",
+                baseURL: "https://server-\(index).example.com",
+                username: "nick",
+                password: "secret-\(index)"
+            )
+        }
+        try writeSavedServers(configs)
+
+        let viewModel = AppViewModel()
+
+        XCTAssertEqual(viewModel.recentServerConfigs.map(\.name), configs.map(\.name))
+    }
+
+    func testAddingConnectionsDoesNotDiscardOldestConnection() throws {
+        let viewModel = AppViewModel()
+        let configs = (1...6).map { index in
+            OpenCodeServerConfig(
+                name: "Server \(index)",
+                baseURL: "https://server-\(index).example.com",
+                username: "nick",
+                password: "secret-\(index)"
+            )
+        }
+        configs.forEach { passwordIDsToClean.insert($0.recentServerID) }
+
+        for config in configs {
+            viewModel.config = config
+            viewModel.persistConfigAfterSuccessfulConnection()
+        }
+
+        XCTAssertEqual(viewModel.recentServerConfigs.count, configs.count)
+        XCTAssertEqual(viewModel.recentServerConfigs.last?.recentServerID, configs.first?.recentServerID)
+        let persistedData = try XCTUnwrap(defaults.data(forKey: storageKey))
+        let persistedServers = try JSONDecoder().decode([OpenCodeSavedServer].self, from: persistedData)
+        XCTAssertEqual(persistedServers.count, configs.count)
+    }
+
     func testSaveEditedServerRenamesWithoutChangingIdentity() throws {
         let original = OpenCodeServerConfig(name: "Old Name", iconName: "server.rack", baseURL: "https://rename-only.example.com", username: "nick", password: "secret")
         let viewModel = AppViewModel()

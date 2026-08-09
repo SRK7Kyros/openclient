@@ -2,8 +2,23 @@ import Foundation
 
 extension AppViewModel {
     func widgetSnapshotInput(includeModelOptions: Bool = false) -> WidgetSnapshotInput {
-        let sessions = allSessions
-        let providers = includeModelOptions ? modelConfigurationStore.sortedProviders : []
+        let sessions = allSessions.filter(\.isRootSession)
+        var providers: [OpenCodeProvider] = []
+        var visibleModelsByProviderID: [String: [OpenCodeModel]] = [:]
+        if includeModelOptions {
+            var modelCount = 0
+            for provider in modelConfigurationStore.sortedProviders {
+                let models = Array(
+                    modelConfigurationStore.visibleModels(for: provider)
+                        .prefix(WidgetSnapshotBuilder.modelPerProviderLimit)
+                )
+                guard !models.isEmpty else { continue }
+                providers.append(provider)
+                visibleModelsByProviderID[provider.id] = models
+                modelCount += models.count
+                if modelCount >= WidgetSnapshotBuilder.modelLimit { break }
+            }
+        }
         var sessionTitlesByID: [String: String] = [:]
         var permissionsBySessionID: [String: [OpenCodePermission]] = [:]
         var questionsBySessionID: [String: [OpenCodeQuestionRequest]] = [:]
@@ -27,9 +42,7 @@ extension AppViewModel {
             questionsBySessionID: questionsBySessionID,
             commands: directoryCommands,
             providers: providers,
-            visibleModelsByProviderID: Dictionary(uniqueKeysWithValues: providers.map {
-                ($0.id, modelConfigurationStore.visibleModels(for: $0))
-            })
+            visibleModelsByProviderID: visibleModelsByProviderID
         )
     }
 

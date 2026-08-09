@@ -202,6 +202,7 @@
 		77B81B927582E84B5C49AA84 /* SessionsPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADEBD7A68A16A7E0ED46EE2 /* SessionsPreviews.swift */; };
 		78AC509DF55976D54CDA4A86 /* ChatFacadeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FBBD74E36CF619A9877A927 /* ChatFacadeTests.swift */; };
 		78F32D059AE30FE1B71D193A /* AppViewModel+Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0207739825466816326A8CE4 /* AppViewModel+Widgets.swift */; };
+		79703B9FE37AE1D6B08836E8 /* Trees.png in Resources */ = {isa = PBXBuildFile; fileRef = 1BC7E386B30F28CF8B9690C1 /* Trees.png */; };
 		7A32F8D94D2064B9FACC955E /* ConnectionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80E21EF102A85B41CE48EBC /* ConnectionCoordinator.swift */; };
 		7AFACF693932971AA33CD49A /* MCPListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E174CC4F5F328F7652FFFE5F /* MCPListView.swift */; };
 		7B13E182462CA311B2F1AC45 /* OpenCodeAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F548AE214A483AB9207C376D /* OpenCodeAPIClient.swift */; };
@@ -257,6 +258,7 @@
 		95A42DA19A9D8F38D73C64AA /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D173E5CA44E0FAA00024A7DC /* ActivityRow.swift */; };
 		9702B9E08D94596AAF65B2C2 /* OpenCodeShortcutWidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D43D1AB6ECC283A498C288B9 /* OpenCodeShortcutWidgetIntents.swift */; };
 		97C0AA3BEC35FEA4A20E57D4 /* OpenClientWhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF5F421070FC7D9683E1F03 /* OpenClientWhatsNewView.swift */; };
+		982E14890B343CAB3612BD7F /* Liquidy.png in Resources */ = {isa = PBXBuildFile; fileRef = BE26172E0D3440547587B647 /* Liquidy.png */; };
 		98F51C8BD3AC5CB1093C2E14 /* OpenCodeLiveActivityActionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC220CA26635182C3304FB1D /* OpenCodeLiveActivityActionClient.swift */; };
 		98F8C787EF60BB5A93BB8A84 /* ProjectContentTabSelectorPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B92A6AF2F468C80FC3840F04 /* ProjectContentTabSelectorPreviews.swift */; };
 		9B1CCBB813AE18C74CBC3852 /* LiveActivityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED1CFA40C3D88668C282339 /* LiveActivityStore.swift */; };
@@ -317,6 +319,7 @@
 		BF2EB54B77788971F7F57D43 /* OpenClientVisualImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2E3674A629126EEB539B64 /* OpenClientVisualImageView.swift */; };
 		BF46C26DEF4B2706BAF1E6D1 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5495928F452F10791C0614E4 /* SessionListView.swift */; };
 		BF9C50581431223AA4C85299 /* ChatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9403CD63018375C683CB8CB9 /* ChatPreviews.swift */; };
+		C0E32813718BC60160CD3D73 /* Trees.icon in Resources */ = {isa = PBXBuildFile; fileRef = F98EEF7ACE0EB09C5337DD2B /* Trees.icon */; };
 		C11D54CABA26421308878A34 /* ProjectSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 266C15C3288E0BF0BE49CBA7 /* ProjectSettingsSheet.swift */; };
 		C2E99BF78B77317A9D7B1F32 /* ConnectionFacade.swift in Sources */ = {isa = PBXBuildFile; fileRef = EACDB794BA9593FF2A8A8C72 /* ConnectionFacade.swift */; };
 		C2F3EF1CE04A39FBFD5B3E04 /* ProjectFilesFacade.swift in Sources */ = {isa = PBXBuildFile; fileRef = C479DF6A48BB9D9A47D68D87 /* ProjectFilesFacade.swift */; };
@@ -336,6 +339,7 @@
 		CCECDD9AD6E18B8AC53F0AA2 /* DetailTextBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C2EE024F2F7A8144C58C48 /* DetailTextBlock.swift */; };
 		CD21C8A2BEF609CEBC95ADFE /* OpenCodeChatActivityIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C971B49980524A841E5689 /* OpenCodeChatActivityIntents.swift */; };
 		CE04BCD4856BB7F7EA1A79CA /* OpenClientComposition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E181FB36BDC13D26D98AAC7B /* OpenClientComposition.swift */; };
+		CE1242D870C7D5AF2D22CBFA /* Liquidy.icon in Resources */ = {isa = PBXBuildFile; fileRef = D3A80743ECA47633667C38C6 /* Liquidy.icon */; };
 		CEAEFC6A4167B123B2CA1BF9 /* OpenClientDebugEntitlementControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FACBA07A4DA6A2A280B3820 /* OpenClientDebugEntitlementControls.swift */; };
 		CEBC8BB18B0AA74A6E8E5395 /* PinnedCommandStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAC9A1F93B6E86173FEE8D8 /* PinnedCommandStore.swift */; };
 		CF29802BEBD5A466A64AC665 /* ProjectContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF3564009893D20694D105B /* ProjectContentView.swift */; };
@@ -462,7 +466,7 @@
 
 /* Begin PBXFileReference section */
 		003E56AA44E4A53A895C2015 /* AppViewModel+DeepLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+DeepLinks.swift"; sourceTree = "<group>"; };
-		00F78C3BDED61CA5491C804F /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; name = AppIcon.icon; path = ../AppIcon.icon; sourceTree = "<group>"; };
+		00F78C3BDED61CA5491C804F /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../AppIcon.icon; sourceTree = "<group>"; };
 		01963F5690646B83264E6322 /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
 		0207739825466816326A8CE4 /* AppViewModel+Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Widgets.swift"; sourceTree = "<group>"; };
 		02AF34C3AE03864E566C59DA /* AppViewModel+Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Composer.swift"; sourceTree = "<group>"; };
@@ -480,6 +484,7 @@
 		18EFEF6227AAFB3590882300 /* OpenCodeEventManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeEventManager.swift; sourceTree = "<group>"; };
 		191EA1C1E8E37911E69AF3B6 /* OpenCodeMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeMacApp.swift; sourceTree = "<group>"; };
 		1B139514D80415E620B9F722 /* SessionListStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListStoreTests.swift; sourceTree = "<group>"; };
+		1BC7E386B30F28CF8B9690C1 /* Trees.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Trees.png; path = ../Trees.png; sourceTree = "<group>"; };
 		1C00136A0FE910FE6434E437 /* OpenClientVideoStreamClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClientVideoStreamClient.swift; sourceTree = "<group>"; };
 		1C4FC4BB79119E3F2098968C /* NewProjectChatFacade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewProjectChatFacade.swift; sourceTree = "<group>"; };
 		1C847B3DDA9DF55E2B09D71A /* ModelConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelConfigurationStore.swift; sourceTree = "<group>"; };
@@ -612,6 +617,7 @@
 		B92A6AF2F468C80FC3840F04 /* ProjectContentTabSelectorPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectContentTabSelectorPreviews.swift; sourceTree = "<group>"; };
 		BBB059EBF27890693F2A6FFD /* HelpPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpPreviews.swift; sourceTree = "<group>"; };
 		BCCD275C8D3DA6880342860D /* ConnectionPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionPreviews.swift; sourceTree = "<group>"; };
+		BE26172E0D3440547587B647 /* Liquidy.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Liquidy.png; path = ../Liquidy.png; sourceTree = "<group>"; };
 		C062B901429100F912C90383 /* LiveActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityCoordinator.swift; sourceTree = "<group>"; };
 		C08CAC08E3E7D095333DCE80 /* OpenCodeIOSClient.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenCodeIOSClient.entitlements; sourceTree = "<group>"; };
 		C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
@@ -637,6 +643,7 @@
 		D22332A66515C9C38EB202DC /* TodoInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoInspectorView.swift; sourceTree = "<group>"; };
 		D331185CCDCAFFE1C8933DB5 /* AppCustomizationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCustomizationStoreTests.swift; sourceTree = "<group>"; };
 		D376981457301EA23EB94A60 /* OpenCodePTYModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodePTYModels.swift; sourceTree = "<group>"; };
+		D3A80743ECA47633667C38C6 /* Liquidy.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = Liquidy.icon; path = ../Liquidy.icon; sourceTree = "<group>"; };
 		D430ADBC81A564B4749B510C /* ProjectFilesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFilesStore.swift; sourceTree = "<group>"; };
 		D43D1AB6ECC283A498C288B9 /* OpenCodeShortcutWidgetIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeShortcutWidgetIntents.swift; sourceTree = "<group>"; };
 		D501151F9A7C46AFEB896438 /* TodoStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoStrip.swift; sourceTree = "<group>"; };
@@ -680,6 +687,7 @@
 		F81F2E0015E14FFB785D8439 /* TerminalProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalProjectView.swift; sourceTree = "<group>"; };
 		F8A79AA851BF55A0816C9C92 /* OpenCodeMacClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeMacClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSavedServer.swift; sourceTree = "<group>"; };
+		F98EEF7ACE0EB09C5337DD2B /* Trees.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = Trees.icon; path = ../Trees.icon; sourceTree = "<group>"; };
 		FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeAPIClientTests.swift; sourceTree = "<group>"; };
 		FE9144903832B5D953526476 /* AppViewModel+LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+LocalCache.swift"; sourceTree = "<group>"; };
 		FEF5F421070FC7D9683E1F03 /* OpenClientWhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClientWhatsNewView.swift; sourceTree = "<group>"; };
@@ -1145,9 +1153,13 @@
 				E879D651F7196549575BBF97 /* Assets.xcassets */,
 				A5DDA19A03EB0243DB1DC306 /* Generated-Info.plist */,
 				D6B5CDE60ADDC75A7E9FA410 /* Info.plist */,
+				D3A80743ECA47633667C38C6 /* Liquidy.icon */,
+				BE26172E0D3440547587B647 /* Liquidy.png */,
 				C08CAC08E3E7D095333DCE80 /* OpenCodeIOSClient.entitlements */,
 				E25B65397CDDC5C142888B93 /* OpenCodeIOSClientApp.swift */,
 				191EA1C1E8E37911E69AF3B6 /* OpenCodeMacApp.swift */,
+				F98EEF7ACE0EB09C5337DD2B /* Trees.icon */,
+				1BC7E386B30F28CF8B9690C1 /* Trees.png */,
 				01D1B0365C559A91D1DDC692 /* API */,
 				4E3ACC33E1E45044004278A6 /* Commerce */,
 				EFFB924401AD408E0C904CDB /* Coordinators */,
@@ -1387,7 +1399,11 @@
 				6AE621B9A4D4F8445C701B57 /* AppIcon.icon in Resources */,
 				8705629CBF404A33F9F18000 /* Assets.xcassets in Resources */,
 				E0C4F1285B595673768D8FD7 /* ExcalidrawWeb in Resources */,
+				CE1242D870C7D5AF2D22CBFA /* Liquidy.icon in Resources */,
+				982E14890B343CAB3612BD7F /* Liquidy.png in Resources */,
 				AFA543FA0AA5D9A9096635FF /* OpenClient_icons in Resources */,
+				C0E32813718BC60160CD3D73 /* Trees.icon in Resources */,
+				79703B9FE37AE1D6B08836E8 /* Trees.png in Resources */,
 				DADE98D9FB674C95388E9F37 /* WhatsNew in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1954,11 +1970,11 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.14;
+				MARKETING_VERSION = 1.0.15;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
@@ -1966,12 +1982,12 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.14;
+				MARKETING_VERSION = 1.0.15;
 				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -2008,9 +2024,10 @@
 		6AEB18EE97BAC8A7F4EAB27D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Liquidy Trees";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
@@ -2070,9 +2087,10 @@
 		B90B4C9C97016BC70E1E5AF1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Liquidy Trees";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";

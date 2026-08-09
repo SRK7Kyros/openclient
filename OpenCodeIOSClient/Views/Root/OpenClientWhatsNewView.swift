@@ -1,127 +1,182 @@
-import AVKit
 import SwiftUI
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct OpenClientWhatsNewView: View {
     let release: OpenClientReleaseNotes
-    let connections: [OpenCodeServerConfig]
-    let activeConnectionID: String?
-    let onSelectConnection: (OpenCodeServerConfig) -> Void
+    @ObservedObject var connection: ConnectionFacade
     let onDone: () -> Void
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 12)
+
             ScrollView {
-                VStack(spacing: 38) {
-                    OpenClientWhatsNewHeader(
+                VStack(spacing: 24) {
+                    OpenClientWhatsNewHero(
                         version: release.version,
                         title: release.title,
                         summary: release.summary
                     )
 
-                    OpenClientWhatsNewBrowserSection()
-                    OpenClientWhatsNewPluginSection()
-                    OpenClientWhatsNewSetupSection(
-                        connections: connections,
-                        activeConnectionID: activeConnectionID,
-                        onSelectConnection: onSelectConnection,
-                        onNeedsConnection: onDone
-                    )
-                    OpenClientWhatsNewTerminalSection()
+                OpenClientWhatsNewFeatureList(features: release.features)
+                OpenClientWhatsNewSetupSection(connection: connection)
                 }
-                .frame(maxWidth: 620)
-                .padding(.horizontal, 20)
-                .padding(.top, 34)
-                .padding(.bottom, 48)
+                .frame(maxWidth: 600)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
             }
-            .background(OpenCodePlatformColor.groupedBackground)
-            .navigationTitle("What's New")
-            .opencodeInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: onDone)
-                }
-            }
         }
-        .presentationDetents([.large])
+        .background(OpenCodePlatformColor.groupedBackground)
+        .safeAreaInset(edge: .bottom) {
+            OpenClientWhatsNewFooter(onDone: onDone)
+        }
+        .presentationDetents([.fraction(0.78), .large])
         .presentationDragIndicator(.visible)
     }
 }
 
-private struct OpenClientWhatsNewHeader: View {
+private struct OpenClientWhatsNewHero: View {
     let version: String
     let title: String
     let summary: String
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 78, height: 78)
-                .background(
-                    LinearGradient(
-                        colors: [.indigo, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-                )
-                .shadow(color: .purple.opacity(0.24), radius: 20, y: 10)
-                .accessibilityHidden(true)
-
-            Text("Version \(version)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Text(title)
-                .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
-
-            Text(summary)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-private struct OpenClientWhatsNewBrowserSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            OpenClientWhatsNewSectionHeading(
-                eyebrow: "IN-APP BROWSER",
-                title: "Browse alongside OpenCode",
-                detail: "Keep a website open inside your project while you make changes, refresh the result, and move between the browser and your conversation without losing context."
+        ZStack(alignment: .topTrailing) {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.06, green: 0.09, blue: 0.17),
+                    Color(red: 0.12, green: 0.08, blue: 0.24),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
 
-            OpenClientBrowserWorkflowPreview()
+            Circle()
+                .fill(.cyan.opacity(0.28))
+                .frame(width: 170, height: 170)
+                .blur(radius: 4)
+                .offset(x: 62, y: -70)
 
-            OpenClientBrowserButtonCallout()
+            Circle()
+                .fill(.purple.opacity(0.3))
+                .frame(width: 130, height: 130)
+                .blur(radius: 12)
+                .offset(x: 44, y: 124)
+
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Label("NEW IN \(version)", systemImage: "sparkles")
+                        .font(.caption.weight(.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.92))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.12), in: Capsule())
+
+                    Spacer(minLength: 16)
+
+                    OpenClientWhatsNewIconStack()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Text(summary)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(22)
+        }
+        .frame(maxWidth: .infinity, minHeight: 225, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.14), radius: 24, y: 12)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct OpenClientWhatsNewIconStack: View {
+    var body: some View {
+        HStack(spacing: -8) {
+            OpenClientWhatsNewMiniIcon(systemImage: "link", tint: .cyan, rotation: -7)
+            OpenClientWhatsNewMiniIcon(systemImage: "folder.fill", tint: .orange, rotation: 5)
+            OpenClientWhatsNewMiniIcon(systemImage: "paintpalette.fill", tint: .purple, rotation: 9)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OpenClientWhatsNewMiniIcon: View {
+    let systemImage: String
+    let tint: Color
+    let rotation: Double
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 40, height: 40)
+            .background(tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.7), lineWidth: 2)
+            }
+            .rotationEffect(.degrees(rotation))
+    }
+}
+
+private struct OpenClientWhatsNewFeatureList: View {
+    let features: [OpenClientReleaseNotes.Feature]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NEW FEATURES")
+                    .font(.caption.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+
+                Text("Small changes, right where they count")
+                    .font(.title2.bold())
+            }
+
+            VStack(spacing: 10) {
+                ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
+                    OpenClientWhatsNewFeatureRow(feature: feature, styleIndex: index)
+                }
+            }
         }
     }
 }
 
-private struct OpenClientBrowserButtonCallout: View {
+private struct OpenClientWhatsNewFeatureRow: View {
+    let feature: OpenClientReleaseNotes.Feature
+    let styleIndex: Int
+
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "globe")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: feature.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(tint)
                 .frame(width: 46, height: 46)
-                .background(.indigo, in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(.white.opacity(0.65), lineWidth: 3)
-                        .padding(-5)
-                }
-                .padding(5)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Open it from Sessions")
+                Text(feature.title)
                     .font(.headline)
-                Text("Tap the globe button in the top-right toolbar of a project's Sessions view.")
+                Text(feature.detail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -130,330 +185,209 @@ private struct OpenClientBrowserButtonCallout: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .background(.indigo.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(tint.opacity(0.13), lineWidth: 0.5)
+        }
         .accessibilityElement(children: .combine)
     }
+
+    private var tint: Color {
+        switch styleIndex % 4 {
+        case 0: .cyan
+        case 1: .orange
+        case 2: .purple
+        default: .green
+        }
+    }
 }
 
-private struct OpenClientBrowserWorkflowPreview: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 7) {
-                Circle().fill(.red.opacity(0.75)).frame(width: 8, height: 8)
-                Circle().fill(.yellow.opacity(0.85)).frame(width: 8, height: 8)
-                Circle().fill(.green.opacity(0.75)).frame(width: 8, height: 8)
+private struct OpenClientWhatsNewFooter: View {
+    let onDone: () -> Void
 
-                Text("preview.openclient.dev")
-                    .font(.caption.monospaced())
+    var body: some View {
+        Button(action: onDone) {
+            Text("Continue")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .accessibilityIdentifier("new-features.continue")
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct OpenClientWhatsNewSetupSection: View {
+    @ObservedObject var connection: ConnectionFacade
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("MAKE IT YOURS")
+                    .font(.caption.weight(.bold))
+                    .tracking(0.8)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Text("Set up your workspace")
+                    .font(.title2.bold())
             }
-            .padding(10)
-            .background(.quaternary.opacity(0.45))
 
-            ZStack(alignment: .bottom) {
-                LinearGradient(
-                    colors: [.indigo.opacity(0.22), .purple.opacity(0.08)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            OpenClientWhatsNewIconPicker(store: connection.appIconStore)
 
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("SHIP BETTER WEBSITES")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.indigo)
-                        Text("Build with AI.")
-                            .font(.title2.bold())
-                        Text("Verify every change.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("View project")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(.indigo, in: Capsule())
-                    }
+            Toggle(isOn: Binding(
+                get: { connection.showsChatActivityShimmer },
+                set: { connection.setShowsChatActivityShimmer($0) }
+            )) {
+                Label("Chat activity shimmer", systemImage: "sparkles.rectangle.stack")
+                    .font(.headline)
+            }
+            .tint(.purple)
+            .padding(16)
+            .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                    Spacer(minLength: 0)
+            OpenClientWhatsNewAutoConnectPicker(connection: connection)
+        }
+    }
+}
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Capsule().fill(.indigo.opacity(0.28)).frame(width: 74, height: 8)
-                        Capsule().fill(.quaternary).frame(width: 96, height: 7)
-                        Capsule().fill(.quaternary).frame(width: 82, height: 7)
-                        RoundedRectangle(cornerRadius: 6).fill(.indigo.opacity(0.72)).frame(width: 46, height: 24)
-                    }
-                    .padding(14)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 22)
-                .padding(.bottom, 70)
+private struct OpenClientWhatsNewIconPicker: View {
+    @ObservedObject var store: AppIconStore
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("App icon", systemImage: "app.dashed")
+                .font(.headline)
+
+            ScrollView(.horizontal) {
                 HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(.indigo)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("OpenCode")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.indigo)
-                        Text("Review the updated homepage")
-                            .font(.caption.weight(.medium))
+                    ForEach(store.icons) { icon in
+                        OpenClientWhatsNewIconOption(
+                            icon: icon,
+                            isSelected: icon.alternateIconName == store.selectedAlternateIconName,
+                            isDisabled: store.isChangingIcon
+                        ) {
+                            Task { await store.select(icon) }
+                        }
                     }
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.white)
-                .padding(12)
-                .background(.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .padding(12)
-            }
-            .frame(height: 250)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.quaternary, lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("OpenClient browser showing a website with an OpenCode instruction to review the updated homepage")
-    }
-}
-
-private struct OpenClientWhatsNewPluginSection: View {
-    @State private var selectedHTML: OpenClientVisualHTMLPresentation?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            OpenClientWhatsNewSectionHeading(
-                eyebrow: "OPENCLIENT PLUGIN",
-                title: "Give OpenCode new capabilities",
-                detail: "The OpenClient plugin lets OpenCode work with features inside the app, instead of only describing what to do next."
-            )
-
-            OpenClientWhatsNewCapabilityRow(
-                title: "Browser automation",
-                detail: "OpenCode can inspect visible content, navigate, click controls, enter text, and help verify website changes.",
-                systemImage: "cursorarrow.click.2",
-                tint: .blue
-            )
-
-            OpenClientWhatsNewCapabilityRow(
-                title: "Visual tools",
-                detail: "Charts, maps, safe HTML experiences, images, and videos can appear directly inside your conversations.",
-                systemImage: "sparkles.rectangle.stack",
-                tint: .purple
-            )
-
-            Text("Rendered by the same tools used in chat")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            OpenClientWhatsNewImageDemo()
-
-            OpenClientVisualChartView(activity: Self.chartActivity)
-
-            OpenClientVisualHTMLView(activity: Self.htmlActivity) { payload in
-                selectedHTML = OpenClientVisualHTMLPresentation(payload: payload)
-            }
-
-            OpenClientWhatsNewVideoDemo()
-        }
-        .sheet(item: $selectedHTML) { presentation in
-            OpenClientVisualHTMLDetailView(payload: presentation.payload)
-        }
-    }
-
-    private static let chartActivity = OpenClientVisualChartActivity(
-        payload: OpenClientVisualChartPayload(
-            chartType: .line,
-            title: "Homepage load time",
-            xAxis: OpenClientVisualChartXAxis(type: .category, title: "Build"),
-            yAxis: OpenClientVisualChartYAxis(title: "Milliseconds"),
-            series: [
-                OpenClientVisualChartSeries(
-                    id: "load-time",
-                    name: "Load time",
-                    points: [
-                        OpenClientVisualChartPoint(id: "build-1", x: .string("1.0.9"), y: 920),
-                        OpenClientVisualChartPoint(id: "build-2", x: .string("1.0.10"), y: 780),
-                        OpenClientVisualChartPoint(id: "build-3", x: .string("1.0.11"), y: 690),
-                        OpenClientVisualChartPoint(id: "build-4", x: .string("1.0.12"), y: 510),
-                        OpenClientVisualChartPoint(id: "build-5", x: .string("1.0.13"), y: 430),
-                    ]
-                ),
-            ]
-        )
-    )
-
-    private static let htmlActivity = OpenClientVisualHTMLActivity(
-        payload: OpenClientVisualHTMLPayload(
-            schemaVersion: OpenClientVisualHTMLContract.schemaVersion,
-            title: "Release readiness",
-            accessibilityLabel: "Release readiness card showing all checks passed and ready to ship.",
-            html: """
-            <style>
-            .card { padding: 18px; color: #172033; font-family: -apple-system; }
-            .status { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #d1fae5; color: #047857; font-weight: 700; font-size: 12px; }
-            h2 { margin: 13px 0 6px; font-size: 22px; }
-            p { margin: 0; color: #64748b; font-size: 14px; }
-            .checks { display: flex; gap: 8px; margin-top: 15px; }
-            .check { flex: 1; padding: 9px; border-radius: 10px; background: #eef2ff; color: #4338ca; text-align: center; font-size: 12px; font-weight: 650; }
-            </style>
-            <div class="card">
-              <span class="status">ALL CHECKS PASSED</span>
-              <h2>Ready to ship</h2>
-              <p>The latest website changes are healthy.</p>
-              <div class="checks"><div class="check">Build</div><div class="check">Tests</div><div class="check">Preview</div></div>
-            </div>
-            """,
-            height: 190
-        )
-    )
-}
-
-private struct OpenClientWhatsNewImageDemo: View {
-    private let activity = OpenClientVisualMediaDemo.imageActivity
-    @StateObject private var loading: OpenClientVisualImageLoadingController
-
-    init() {
-        let activity = OpenClientVisualMediaDemo.imageActivity
-        _loading = StateObject(
-            wrappedValue: OpenClientVisualImageLoadingController(
-                id: activity.id,
-                payload: activity.payload,
-                initialImage: OpenClientVisualMediaDemo.loadedImage
-            )
-        )
-    }
-
-    var body: some View {
-        OpenClientVisualImageView(
-            activity: activity,
-            loading: loading,
-            coordinator: nil
-        )
-    }
-}
-
-private struct OpenClientWhatsNewVideoDemo: View {
-    @State private var player: AVPlayer?
-    @State private var isPlaying = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                togglePlayback()
-            } label: {
-                if player == nil {
-                    ZStack(alignment: .bottom) {
-                        openClientPlatformImage(OpenClientVisualMediaDemo.preview.platformImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
-                            .blur(radius: 6)
-                            .scaleEffect(1.06)
-                            .clipped()
-
-                        LinearGradient(
-                            colors: [.black.opacity(0.05), .black.opacity(0.72)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-
-                        OpenClientWhatsNewVideoDemoHeader(isPlaying: false, usesCoverStyle: true)
-                            .padding(14)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
-                } else {
-                    OpenClientWhatsNewVideoDemoHeader(isPlaying: isPlaying, usesCoverStyle: false)
-                        .padding(12)
                 }
             }
-            .buttonStyle(.plain)
-
-            if let player {
-                Divider()
-                VideoPlayer(player: player)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .accessibilityLabel("Website update preview video")
-            }
+            .scrollIndicators(.hidden)
         }
-        .background(OpenCodePlatformColor.secondaryGroupedBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.quaternary, lineWidth: 0.5)
-        }
-        .onDisappear {
-            player?.pause()
-            isPlaying = false
-        }
-    }
-
-    private func togglePlayback() {
-        if let player {
-            if isPlaying {
-                player.pause()
-            } else {
-                let duration = player.currentItem?.duration.seconds ?? 0
-                if duration.isFinite, duration > 0, player.currentTime().seconds >= duration - 0.1 {
-                    player.seek(to: .zero)
-                }
-                player.play()
-            }
-            isPlaying.toggle()
-            return
-        }
-
-        guard let url = Bundle.main.url(
-            forResource: "homepage-preview",
-            withExtension: "mp4",
-            subdirectory: "WhatsNew"
-        ) else { return }
-        let player = AVPlayer(url: url)
-        self.player = player
-        isPlaying = true
-        player.play()
+        .padding(16)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onAppear { store.refresh() }
     }
 }
 
-private struct OpenClientWhatsNewVideoDemoHeader: View {
-    let isPlaying: Bool
-    let usesCoverStyle: Bool
+private struct OpenClientWhatsNewIconOption: View {
+    let icon: OpenClientAppIcon
+    let isSelected: Bool
+    let isDisabled: Bool
+    let select: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.pink)
-                .frame(width: 38, height: 38)
-                .background(.pink.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Website update preview")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(usesCoverStyle ? Color.white : Color.primary)
-                Text("homepage-preview.mp4 · Local demo")
-                    .font(.caption)
-                    .foregroundStyle(usesCoverStyle ? Color.white.opacity(0.78) : Color.secondary)
+        Button(action: select) {
+            VStack(spacing: 7) {
+                OpenClientWhatsNewIconArtwork(icon: icon, isSelected: isSelected, background: iconBackground)
+                Text(icon.displayName)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
-
-            Spacer(minLength: 8)
-
-            Label(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.pink, in: Capsule())
+            .frame(width: 72)
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .disabled(isDisabled || isSelected)
+        .accessibilityLabel("Use \(icon.displayName) app icon")
+    }
+
+    private var iconBackground: Color {
+        isSelected ? .accentColor : .accentColor.opacity(0.12)
+    }
+}
+
+private struct OpenClientWhatsNewIconArtwork: View {
+    let icon: OpenClientAppIcon
+    let isSelected: Bool
+    let background: Color
+
+    var body: some View {
+        Group {
+            #if canImport(UIKit)
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                fallback
+            }
+            #else
+            fallback
+            #endif
+        }
+        .frame(width: 46, height: 46)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var fallback: some View {
+        Image(systemName: icon.alternateIconName == nil ? "app.fill" : "paintpalette.fill")
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(background)
+    }
+
+    #if canImport(UIKit)
+    private var image: UIImage? {
+        for file in icon.iconFiles.reversed() {
+            if let path = Bundle.main.path(forResource: file, ofType: nil),
+               let image = UIImage(contentsOfFile: path) {
+                return image
+            }
+            if let image = UIImage(named: file) {
+                return image
+            }
+        }
+        return nil
+    }
+    #endif
+}
+
+private struct OpenClientWhatsNewAutoConnectPicker: View {
+    @ObservedObject var connection: ConnectionFacade
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Connect on launch", systemImage: "bolt.horizontal.circle.fill")
+                .font(.headline)
+
+            if connection.recentServerConfigs.isEmpty {
+                Text("Add a server first, then choose it here to connect automatically when OpenClient opens.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Picker("Auto-Connect Server", selection: Binding(
+                    get: { connection.autoConnectServerID },
+                    set: { connection.setAutoConnectServerID($0) }
+                )) {
+                    Text("Off").tag(nil as String?)
+                    ForEach(connection.recentServerConfigs, id: \.recentServerID) { server in
+                        Text(server.displayName).tag(server.recentServerID as String?)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(16)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -536,219 +470,4 @@ enum OpenClientVisualMediaDemo {
         duration: 6,
         cover: preview
     )
-}
-
-private struct OpenClientWhatsNewSetupSection: View {
-    let connections: [OpenCodeServerConfig]
-    let activeConnectionID: String?
-    let onSelectConnection: (OpenCodeServerConfig) -> Void
-    let onNeedsConnection: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            OpenClientWhatsNewSectionHeading(
-                eyebrow: "ONE-TIME SETUP",
-                title: "Set up the OpenClient plugin",
-                detail: "Ask OpenCode to add the plugin to your global configuration so its tools are available across projects. You review the prefilled request before anything is sent."
-            )
-
-            HStack(alignment: .top, spacing: 12) {
-                Text("1")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 24, height: 24)
-                    .background(.indigo, in: Circle())
-                Text("Choose the OpenCode server you want to configure.")
-                    .font(.subheadline)
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                Text("2")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 24, height: 24)
-                    .background(.purple, in: Circle())
-                Text("Review and send the installation request in a new Global chat.")
-                    .font(.subheadline)
-            }
-
-            if connections.isEmpty {
-                Button(action: onNeedsConnection) {
-                    Label("Add a Server to Continue", systemImage: "plus.circle.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-            } else {
-                NavigationLink {
-                    OpenClientWhatsNewConnectionPicker(
-                        connections: connections,
-                        activeConnectionID: activeConnectionID,
-                        onSelectConnection: onSelectConnection
-                    )
-                } label: {
-                    Label("Set Up with OpenCode", systemImage: "wand.and.sparkles")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityIdentifier("whats-new.setup-plugin")
-            }
-
-            Label(
-                "Use the plugin bridge only over a trusted private network, VPN, or Tailnet. Never expose ports 4070–4090 directly to the public internet.",
-                systemImage: "lock.shield"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(18)
-        .background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-}
-
-private struct OpenClientWhatsNewConnectionPicker: View {
-    let connections: [OpenCodeServerConfig]
-    let activeConnectionID: String?
-    let onSelectConnection: (OpenCodeServerConfig) -> Void
-
-    var body: some View {
-        List(connections, id: \.recentServerID) { connection in
-            Button {
-                onSelectConnection(connection)
-            } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: connection.displayIconName)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.indigo)
-                        .frame(width: 40, height: 40)
-                        .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(connection.displayName)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text(connection.displayHost)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    if activeConnectionID == connection.recentServerID {
-                        Text("Connected")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.green)
-                    }
-
-                    Image(systemName: "chevron.forward")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("whats-new.connection.\(connection.recentServerID)")
-        }
-        .opencodeGroupedListStyle()
-        .navigationTitle("Choose a Server")
-        .opencodeInlineNavigationTitle()
-    }
-}
-
-private struct OpenClientWhatsNewTerminalSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            OpenClientWhatsNewSectionHeading(
-                eyebrow: "TERMINAL",
-                title: "A terminal for every project",
-                detail: "Open and manage terminal sessions directly from project navigation. Keep commands running beside your files and conversations without switching apps."
-            )
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Circle().fill(.red.opacity(0.75)).frame(width: 8, height: 8)
-                    Circle().fill(.yellow.opacity(0.85)).frame(width: 8, height: 8)
-                    Circle().fill(.green.opacity(0.75)).frame(width: 8, height: 8)
-                    Spacer()
-                    Text("openclient — zsh")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(12)
-                .background(.white.opacity(0.07))
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("$ npm run build")
-                        .foregroundStyle(.white)
-                    Text("✓ Build completed in 1.8s")
-                        .foregroundStyle(.green)
-                    Text("$ _")
-                        .foregroundStyle(.white)
-                }
-                .font(.subheadline.monospaced())
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
-            }
-            .background(Color(red: 0.055, green: 0.07, blue: 0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Project terminal showing a completed build")
-        }
-    }
-}
-
-private struct OpenClientWhatsNewSectionHeading: View {
-    let eyebrow: String
-    let title: String
-    let detail: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(eyebrow)
-                .font(.caption.weight(.bold))
-                .tracking(0.8)
-                .foregroundStyle(.indigo)
-            Text(title)
-                .font(.title2.bold())
-            Text(detail)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct OpenClientWhatsNewCapabilityRow: View {
-    let title: String
-    let detail: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 40, height: 40)
-                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
 }

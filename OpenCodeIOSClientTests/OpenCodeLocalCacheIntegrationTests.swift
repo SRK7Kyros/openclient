@@ -64,7 +64,7 @@ final class OpenCodeLocalCacheIntegrationTests: XCTestCase {
 
         XCTAssertEqual(viewModel.selectedDirectory, project.worktree)
         XCTAssertEqual(viewModel.directoryStore.sessions, [session])
-        XCTAssertTrue(viewModel.isLoadingSessions)
+        XCTAssertFalse(viewModel.isLoadingSessions)
     }
 
     func testSelectionPreparationHydratesDiskBeforeExposingChatRoute() async throws {

@@ -10,10 +10,11 @@ struct SessionListView: View {
             snapshot: facade.snapshot,
             onSessionChosen: onSessionChosen
         )
+        .equatable()
     }
 }
 
-private struct SessionListContent: View {
+private struct SessionListContent: View, Equatable {
     let facade: SessionListFacade
     let snapshot: SessionListFacade.Snapshot
     @State private var renamingSession: OpenCodeSession?
@@ -21,6 +22,10 @@ private struct SessionListContent: View {
     @State private var isShowingCreateWorkspaceAlert = false
     @State private var createWorkspaceName = ""
     let onSessionChosen: () -> Void
+
+    nonisolated static func == (lhs: SessionListContent, rhs: SessionListContent) -> Bool {
+        lhs.facade === rhs.facade && lhs.snapshot == rhs.snapshot
+    }
 
     var body: some View {
         List {
@@ -145,9 +150,6 @@ private struct SessionListContent: View {
         .refreshable {
             await facade.refresh()
         }
-        .task(id: cachePrefetchKey) {
-            await facade.prefetchCachedChats()
-        }
         .transaction { transaction in
             if snapshot.hasBusySession {
                 transaction.animation = nil
@@ -188,13 +190,6 @@ private struct SessionListContent: View {
             Text("OpenCode will create a separate git worktree for this project.")
         }
         .animation(opencodeSelectionAnimation, value: snapshot.selectedSessionID)
-    }
-
-    private var cachePrefetchKey: String {
-        let rows = snapshot.pinnedRows
-            + snapshot.unpinnedRows
-            + snapshot.workspaceSections.flatMap(\.rows)
-        return rows.prefix(1).map(\.id).joined(separator: "|")
     }
 
     private var renameAlertBinding: Binding<Bool> {

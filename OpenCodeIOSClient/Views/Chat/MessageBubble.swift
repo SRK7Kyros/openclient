@@ -467,7 +467,7 @@ struct MessageBubble: View {
                 }
             } else {
                 let isStreamingText = isStreamingTextPart(part, index: index)
-                let content = MarkdownMessageText(
+                let markdown = MarkdownMessageText(
                     text: text,
                     isUser: isUser,
                     style: textStyle(for: part),
@@ -475,11 +475,26 @@ struct MessageBubble: View {
                     animatesStreamingText: animatesStreamingText,
                     streamingAnimationID: "\(effectiveMessage.id):\(part.id ?? "part-\(index)")"
                 )
+                let urls = isStreamingText ? [] : MessageLinkExtractor.urls(in: text)
 
                 if isUser {
-                    bubbleWrapped(content)
+                    VStack(alignment: .trailing, spacing: MessageBubbleSpacing.part) {
+                        bubbleWrapped(markdown)
+#if canImport(LinkPresentation)
+                        if !urls.isEmpty {
+                            OpenClientMessageLinkPreviews(urls: urls, alignment: .trailing)
+                        }
+#endif
+                    }
                 } else {
-                    content
+                    VStack(alignment: .leading, spacing: MessageBubbleSpacing.part) {
+                        markdown
+#if canImport(LinkPresentation)
+                        if !urls.isEmpty {
+                            OpenClientMessageLinkPreviews(urls: urls, alignment: .leading)
+                        }
+#endif
+                    }
                 }
             }
         } else if shouldShowUnknownStreamingPartPlaceholder(part) {

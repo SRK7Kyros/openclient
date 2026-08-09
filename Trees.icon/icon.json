@@ -1,0 +1,85 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.97665,0.97005,1.00000,1.00000",
+      "srgb:0.00000,0.00000,0.00000,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "Union.png",
+          "name" : "Union",
+          "position" : {
+            "scale" : 0.68,
+            "translation-in-points" : [
+              0,
+              348.25
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Rectangle 5.png",
+          "name" : "Rectangle 5",
+          "position" : {
+            "scale" : 0.72,
+            "translation-in-points" : [
+              0,
+              443.765625
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Rectangle 4.png",
+          "name" : "Rectangle 4",
+          "position" : {
+            "scale" : 0.72,
+            "translation-in-points" : [
+              0,
+              397.1875
+            ]
+          }
+        },
+        {
+          "image-name" : "czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmw0MjEwMDgxODQxNS1pbWFnZS1qb2I1NzItMi5qcGc.png",
+          "name" : "czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmw0MjEwMDgxODQxNS1pbWFnZS1qb2I1NzItMi5qcGc",
+          "position" : {
+            "scale" : 1.41,
+            "translation-in-points" : [
+              21.375,
+              160.73828125
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

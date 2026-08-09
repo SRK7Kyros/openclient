@@ -29,6 +29,16 @@ final class ModelConfigurationStore: ObservableObject {
     private var latestModelReferencesCache: Set<OpenCodeModelReference>?
     private var visibleModelsCache: [String: [OpenCodeModel]] = [:]
     private var loadedProviderScope: String?
+    private let internetReleaseDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private let fullReleaseDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter
+    }()
 
     init(
         availableAgents: [OpenCodeAgent] = [],
@@ -392,22 +402,31 @@ final class ModelConfigurationStore: ObservableObject {
     }
 
     func syncSelections(forSessionID sessionID: String, agent: String?, model: OpenCodeMessageModelReference?) -> Bool {
-        if let agent, selectableAgents.contains(where: { $0.name == agent }) {
-            selectedAgentNamesBySessionID[sessionID] = agent
-        } else {
-            selectedAgentNamesBySessionID[sessionID] = nil
+        let nextAgent = agent.flatMap { candidate in
+            selectableAgents.contains(where: { $0.name == candidate }) ? candidate : nil
+        }
+        if selectedAgentNamesBySessionID[sessionID] != nextAgent {
+            selectedAgentNamesBySessionID[sessionID] = nextAgent
         }
         guard let model else {
-            selectedModelsBySessionID[sessionID] = nil
-            selectedVariantsBySessionID[sessionID] = nil
+            if selectedModelsBySessionID[sessionID] != nil {
+                selectedModelsBySessionID[sessionID] = nil
+            }
+            if selectedVariantsBySessionID[sessionID] != nil {
+                selectedVariantsBySessionID[sessionID] = nil
+            }
             return false
         }
         let reference = OpenCodeModelReference(providerID: model.providerID, modelID: model.modelID)
-        selectedModelsBySessionID[sessionID] = validModelReferences.contains(reference) ? reference : nil
-        if let variant = model.variant, reasoningVariants(forSessionID: sessionID).contains(variant) {
-            selectedVariantsBySessionID[sessionID] = variant
-        } else {
-            selectedVariantsBySessionID[sessionID] = nil
+        let nextReference = validModelReferences.contains(reference) ? reference : nil
+        if selectedModelsBySessionID[sessionID] != nextReference {
+            selectedModelsBySessionID[sessionID] = nextReference
+        }
+        let nextVariant = model.variant.flatMap { variant in
+            reasoningVariants(forSessionID: sessionID).contains(variant) ? variant : nil
+        }
+        if selectedVariantsBySessionID[sessionID] != nextVariant {
+            selectedVariantsBySessionID[sessionID] = nextVariant
         }
         return true
     }
@@ -469,11 +488,8 @@ final class ModelConfigurationStore: ObservableObject {
 
     private func parsedReleaseDate(_ value: String?) -> Date? {
         guard let value else { return nil }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso.date(from: value) { return date }
-        iso.formatOptions = [.withFullDate]
-        return iso.date(from: value)
+        return internetReleaseDateFormatter.date(from: value)
+            ?? fullReleaseDateFormatter.date(from: value)
     }
 
     private static func loadModelVisibilityPreferences() -> [String: ModelVisibilityPreference] {

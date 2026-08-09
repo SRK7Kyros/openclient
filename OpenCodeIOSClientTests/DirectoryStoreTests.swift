@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import OpenClient
 
@@ -243,10 +244,22 @@ final class DirectoryStoreTests: XCTestCase {
     func testApplySessionStatusesMirrorsDirectoryAndSyncState() {
         let store = DirectoryStore(sessionStatuses: ["ses_stale": "busy"])
 
-        store.applySessionStatuses(["ses_selected": "idle"])
+        XCTAssertTrue(store.applySessionStatuses(["ses_selected": "idle"]))
 
         XCTAssertEqual(store.sessionStatuses, ["ses_selected": "idle"])
         XCTAssertEqual(store.syncState.sessionStatusesBySessionID, ["ses_selected": "idle"])
+    }
+
+    func testApplySessionStatusesDoesNotPublishWhenStateIsUnchanged() {
+        let store = DirectoryStore()
+        XCTAssertTrue(store.applySessionStatuses(["ses_selected": "idle"]))
+        var publicationCount = 0
+        let observation = store.objectWillChange.sink { publicationCount += 1 }
+
+        XCTAssertFalse(store.applySessionStatuses(["ses_selected": "idle"]))
+
+        XCTAssertEqual(publicationCount, 0)
+        withExtendedLifetime(observation) {}
     }
 
     func testApplyCanonicalMessagesReplacesSessionTranscriptInSyncState() {

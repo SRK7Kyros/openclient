@@ -155,15 +155,6 @@ extension AppViewModel {
         return snapshot
     }
 
-    func prefetchChatsFromLocalCache(_ sessions: [OpenCodeSession]) async {
-        guard usesLocalCache, config.hasCredentials else { return }
-        let serverID = config.recentServerID
-        for session in sessions.prefix(1) {
-            guard !Task.isCancelled, config.recentServerID == serverID else { return }
-            _ = await localChatSnapshot(serverID: serverID, sessionID: session.id)
-        }
-    }
-
     private func localChatSnapshot(
         serverID: String,
         sessionID: String,
@@ -279,7 +270,7 @@ extension AppViewModel {
 
         localCacheWriteTasksByKey[runtimeKey] = Task.detached { [weak self] in
             if !immediate {
-                try? await Task.sleep(for: .milliseconds(750))
+                try? await Task.sleep(for: .seconds(5))
             }
             guard !Task.isCancelled else { return }
             let messages = syncState.messageEnvelopes(forSessionID: sessionID)

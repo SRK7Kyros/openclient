@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ProjectFacade: ObservableObject {
     struct ListSnapshot: Equatable {
+        let allProjects: [OpenCodeProject]
         let projects: [OpenCodeProject]
         let currentProjectID: String?
         let selectedDirectory: String?
@@ -88,9 +89,13 @@ final class ProjectFacade: ObservableObject {
     }
 
     var listSnapshot: ListSnapshot {
-        let projectIDs = viewModel.projects.map(\.id).joined(separator: "|")
+        let scopeKey = viewModel.config.recentServerID
+        let allProjects = viewModel.projectStore.orderedProjects(scopeKey: scopeKey)
+        let visibleProjects = viewModel.projectStore.visibleProjects(scopeKey: scopeKey)
+        let projectIDs = allProjects.map(\.id).sorted().joined(separator: "|")
         return ListSnapshot(
-            projects: viewModel.projects,
+            allProjects: allProjects,
+            projects: visibleProjects,
             currentProjectID: viewModel.currentProject?.id,
             selectedDirectory: viewModel.selectedDirectory,
             recentSessions: viewModel.recentProjectSessions,
@@ -163,6 +168,22 @@ final class ProjectFacade: ObservableObject {
     }
 
     func isSelected(_ project: OpenCodeProject) -> Bool { viewModel.isProjectSelected(project) }
+    func isVisible(_ project: OpenCodeProject) -> Bool {
+        viewModel.projectStore.isProjectVisible(project, scopeKey: viewModel.config.recentServerID)
+    }
+
+    func setVisibility(_ isVisible: Bool, for project: OpenCodeProject) {
+        viewModel.projectStore.setProjectVisibility(project, isVisible: isVisible, scopeKey: viewModel.config.recentServerID)
+    }
+
+    func moveProjects(fromOffsets source: IndexSet, toOffset destination: Int) {
+        viewModel.projectStore.moveProjects(
+            fromOffsets: source,
+            toOffset: destination,
+            scopeKey: viewModel.config.recentServerID
+        )
+    }
+
     func canEditPreferences(for project: OpenCodeProject) -> Bool {
         !isReadOnly && viewModel.canEditProjectPreferences(project)
     }

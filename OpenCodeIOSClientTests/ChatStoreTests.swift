@@ -138,6 +138,42 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertFalse(MarkdownMessageText._testHasActiveStreamingCodeBlock(in: "A normal streaming paragraph"))
     }
 
+    func testMessageLinkExtractorFindsBareAndMarkdownLinks() {
+        let urls = MessageLinkExtractor.urls(
+            in: "Visit https://example.com/docs, then [Apple](https://apple.com/swift#overview)."
+        )
+
+        XCTAssertEqual(urls.map(\.absoluteString), [
+            "https://example.com/docs",
+            "https://apple.com/swift"
+        ])
+    }
+
+    func testMessageLinkExtractorIgnoresCodeAndDeduplicatesFragments() {
+        let text = """
+        Open https://example.com/page#first and https://example.com/page#second.
+        `https://inline.example.com`
+        ```swift
+        let url = "https://code.example.com"
+        ```
+        """
+
+        XCTAssertEqual(
+            MessageLinkExtractor.urls(in: text).map(\.absoluteString),
+            ["https://example.com/page"]
+        )
+    }
+
+    func testMessageLinkExtractorLimitsPreviewsToThreeWebLinks() {
+        let text = "mailto:hello@example.com https://one.example https://two.example https://three.example https://four.example"
+
+        XCTAssertEqual(MessageLinkExtractor.urls(in: text).map(\.host), [
+            "one.example",
+            "two.example",
+            "three.example"
+        ])
+    }
+
     func testContextIdentitySurvivesPartIndexChanges() {
         let part = OpenCodePart(
             id: "part_read",

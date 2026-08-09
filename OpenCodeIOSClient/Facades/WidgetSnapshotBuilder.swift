@@ -29,8 +29,8 @@ struct WidgetServerPublication: Sendable {
 }
 
 enum WidgetSnapshotBuilder {
-    private static let modelLimit = 120
-    private static let modelPerProviderLimit = 40
+    static let modelLimit = 120
+    static let modelPerProviderLimit = 40
 
     static func build(
         from input: WidgetSnapshotInput,

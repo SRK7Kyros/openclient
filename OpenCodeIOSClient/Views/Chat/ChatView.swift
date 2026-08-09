@@ -2223,14 +2223,16 @@ struct ChatView: View {
             composerOverlay
         }
         .overlay(alignment: .top) {
-            if showsChatActivityShimmer {
-                ChatStatusBarStateShimmer(tint: activeSessionTint)
-                    .ignoresSafeArea(.container, edges: .top)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
+            ZStack(alignment: .top) {
+                if showsChatActivityShimmer {
+                    ChatStatusBarStateShimmer(tint: activeSessionTint)
+                        .ignoresSafeArea(.container, edges: .top)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeOut(duration: 0.22), value: showsChatActivityShimmer)
         }
-        .animation(.easeOut(duration: 0.22), value: showsChatActivityShimmer)
         .navigationTitle("")
         .opencodeInlineNavigationTitle()
         .onAppear {

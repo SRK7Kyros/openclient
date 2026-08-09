@@ -340,9 +340,18 @@ final class DirectoryStore: ObservableObject {
         syncStore.state.todosBySessionID[sessionID] = todos
     }
 
-    func applySessionStatuses(_ statuses: [String: String]) {
-        sessionStatuses = statuses
-        syncStore.state.sessionStatusesBySessionID = statuses
+    @discardableResult
+    func applySessionStatuses(_ statuses: [String: String]) -> Bool {
+        var changed = false
+        if sessionStatuses != statuses {
+            sessionStatuses = statuses
+            changed = true
+        }
+        if syncStore.state.sessionStatusesBySessionID != statuses {
+            syncStore.state.sessionStatusesBySessionID = statuses
+            changed = true
+        }
+        return changed
     }
 
     func applyCanonicalMessages(_ messages: [OpenCodeMessageEnvelope], forSessionID sessionID: String) {

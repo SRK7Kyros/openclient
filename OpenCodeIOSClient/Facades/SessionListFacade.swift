@@ -141,7 +141,6 @@ final class SessionListFacade: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] store in
                 self?.bindActiveDirectoryStore(store)
-                self?.objectWillChange.send()
                 self?.scheduleSnapshotRefresh()
             }
             .store(in: &observations)
@@ -286,19 +285,6 @@ final class SessionListFacade: ObservableObject {
         await viewModel.loadMoreSessions()
     }
 
-    func prefetchCachedChats() async {
-        var sessions: [OpenCodeSession] = []
-        var seen = Set<String>()
-        let rows = snapshot.pinnedRows
-            + snapshot.unpinnedRows
-            + snapshot.workspaceSections.flatMap(\.rows)
-        for row in rows where seen.insert(row.session.id).inserted {
-            sessions.append(row.session)
-            if sessions.count == 1 { break }
-        }
-        await viewModel.prefetchChatsFromLocalCache(sessions)
-    }
-
     func beginSelection(_ session: OpenCodeSession) -> SelectionTicket {
         let previousSessionID = viewModel.beginSessionNavigation(session)
         return SelectionTicket(
@@ -409,6 +395,7 @@ final class SessionListFacade: ObservableObject {
         hasPermissionRequest: Bool? = nil
     ) -> RowSnapshot {
         let generatedTitle = session.defaultGeneratedTitleDisplayName
+        let isBusy = viewModel.sessionStatuses[session.id] == "busy"
         return RowSnapshot(
             session: session,
             isSelected: viewModel.selectedSession?.id == session.id,
@@ -416,12 +403,12 @@ final class SessionListFacade: ObservableObject {
             workspaceOverline: workspaceOverline,
             style: .regular,
             preview: viewModel.sessionPreviews[session.id],
-            isBusy: viewModel.sessionStatuses[session.id] == "busy",
+            isBusy: isBusy,
             hasLiveActivity: viewModel.isLiveActivityActive(for: session),
             hasDraft: viewModel.hasMessageDraft(for: session),
             hasPermissionRequest: hasPermissionRequest ?? viewModel.hasPermissionRequest(for: session),
             displayTitle: generatedTitle ?? session.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled Session",
-            shimmersTitle: generatedTitle != nil
+            shimmersTitle: generatedTitle != nil && isBusy
         )
     }
 
@@ -434,7 +421,6 @@ final class SessionListFacade: ObservableObject {
         store.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
                 self?.scheduleSnapshotRefresh()
             }
             .store(in: &activeDirectoryObservations)

@@ -32,8 +32,10 @@ Light, dark, and tinted appearances inside one Icon Composer document are system
 ```yaml
 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Blue"
-ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
 ```
+
+Explicit alternate icon names and `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS` are alternative asset-catalog modes. Keep the latter set to `NO` when listing alternates explicitly; enabling both can produce `No applicable app icon found` warnings and unreliable icon switching.
 
 Use a space-separated list when adding more than one icon:
 
@@ -46,6 +48,8 @@ ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Blue AppIcon-Orange AppI
 ```bash
 INCLUDE_PROJECT_LOCAL_YAML=1 xcodegen generate
 ```
+
+The configured XcodeGen post-generation script updates `.icon` file references to Xcode 26's `folder.iconcomposer.icon` type. This is required for alternate Icon Composer documents to compile; the current XcodeGen release otherwise emits the older `wrapper.icon` type.
 
 6. Build and open **Configurations > Appearance > App Icon**. The new icon should appear automatically.
 
@@ -63,6 +67,25 @@ OpenClientAlternateIconDisplayNames:
 ```
 
 The dictionary keys must match the names in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` exactly.
+
+## Add Picker Preview Images
+
+Icon Composer app-icon renditions aren't safely loadable through `UIImage(named:)`. Export a flattened PNG for each alternate icon and add it as an ordinary app resource:
+
+```yaml
+- path: AppIcon-Blue.png
+  buildPhase: resources
+  group: OpenCodeIOSClient
+```
+
+Map the alternate icon name to its preview filename in the app target's `info.properties`:
+
+```yaml
+OpenClientAlternateIconPreviewFiles:
+  AppIcon-Blue: AppIcon-Blue.png
+```
+
+OpenClient loads these files directly from the app bundle. The dictionary key must match the alternate icon name exactly.
 
 ## Verify The Built App
 
@@ -86,8 +109,14 @@ Confirm that:
 
 - `CFBundleIcons.CFBundlePrimaryIcon` contains `AppIcon`.
 - `CFBundleIcons.CFBundleAlternateIcons` contains every configured alternate name.
-- The generated icon PNG files are present in `OpenClient.app`.
+- `Assets.car` contains a `MultiSized Image` entry for every Icon Composer name.
 - `UIApplication.shared.supportsAlternateIcons` is true on the test device.
+
+Inspect the compiled asset catalog when needed:
+
+```bash
+xcrun assetutil --info "<derived-data>/Build/Products/Debug-iphonesimulator/OpenClient.app/Assets.car"
+```
 
 The system displays its own confirmation alert after a successful icon change. That alert is expected.
 
@@ -112,6 +141,7 @@ Before removing a shipped alternate icon, switch test devices back to the primar
 - Confirm the alternate `.icon` document is included in `project.yml` with `buildPhase: resources`.
 - Confirm its extension-free name is in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`.
 - Regenerate the Xcode project after editing `project.yml`.
+- Confirm the generated project identifies each `.icon` file as `folder.iconcomposer.icon`.
 - Inspect the built app's `Info.plist`, not the source `Generated-Info.plist`.
 
 ### The Picker Shows An Icon But Changing It Fails
@@ -123,6 +153,9 @@ Before removing a shipped alternate icon, switch test devices back to the primar
 
 ### The Preview Is Missing
 
-- Inspect `CFBundleIconFiles` for the affected alternate icon.
-- Confirm Xcode generated the matching PNG files in the built app bundle.
+- Icon Composer alternates are compiled as `MultiSized Image` entries in `Assets.car` and may omit `CFBundleIconFiles`.
+- Confirm the flattened PNG is included as a resource in `project.yml`.
+- Confirm `OpenClientAlternateIconPreviewFiles` maps the alternate name to the exact PNG filename.
+- OpenClient shows a labeled fallback tile when no ordinary preview file is available.
+- Confirm `Assets.car` contains the affected icon name.
 - Verify the Icon Composer document supports iOS square icons.

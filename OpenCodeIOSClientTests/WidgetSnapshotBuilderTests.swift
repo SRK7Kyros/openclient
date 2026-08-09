@@ -116,6 +116,68 @@ final class WidgetSnapshotBuilderTests: XCTestCase {
         XCTAssertNil(publication.commands.first?.directory)
     }
 
+    func testViewModelInputSkipsChildSessionsThatWidgetsDoNotPublish() {
+        let root = OpenCodeSession(
+            id: "ses_root",
+            title: "Root",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: nil
+        )
+        let child = OpenCodeSession(
+            id: "ses_child",
+            title: "Child",
+            workspaceID: nil,
+            directory: root.directory,
+            projectID: root.projectID,
+            parentID: root.id
+        )
+        let viewModel = AppViewModel()
+        viewModel.config = OpenCodeServerConfig(
+            baseURL: "https://example.com",
+            username: "nick",
+            password: "secret"
+        )
+        viewModel.allSessions = [root, child]
+
+        let input = viewModel.widgetSnapshotInput()
+
+        XCTAssertEqual(input.sessions.map(\.id), [root.id])
+    }
+
+    func testViewModelInputStopsPreparingModelsAtWidgetLimit() {
+        let providers = (0 ..< 5).map { providerIndex in
+            let providerID = "provider-\(providerIndex)"
+            let models = Dictionary(uniqueKeysWithValues: (0 ..< 50).map { modelIndex in
+                let modelID = "model-\(modelIndex)"
+                return (
+                    modelID,
+                    OpenCodeModel(
+                        id: modelID,
+                        providerID: providerID,
+                        name: modelID,
+                        capabilities: OpenCodeModelCapabilities(reasoning: false)
+                    )
+                )
+            })
+            return OpenCodeProvider(id: providerID, name: providerID, models: models)
+        }
+        let viewModel = AppViewModel()
+        viewModel.modelConfigurationStore.applyProviderState(
+            OpenCodeProviderListResponse(
+                all: providers,
+                connected: providers.map(\.id),
+                default: [:]
+            )
+        )
+
+        let input = viewModel.widgetSnapshotInput(includeModelOptions: true)
+
+        XCTAssertEqual(input.providers.count, 3)
+        XCTAssertEqual(input.visibleModelsByProviderID.values.reduce(0) { $0 + $1.count }, 120)
+    }
+
     func testPublisherWritesAndReloadsOnlyRelevantTimelines() async {
         let writer = WidgetWriterSpy()
         let reloader = WidgetTimelineReloaderSpy()

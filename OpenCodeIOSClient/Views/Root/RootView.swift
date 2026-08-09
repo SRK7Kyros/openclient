@@ -9,7 +9,8 @@ struct RootView<ChatDestination: View>: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
     @State private var didRunUITestAutoConnect = false
-    @State private var pendingPluginSetupConnectionID: String?
+    @State private var isWaitingForAutomaticConnection = false
+    @State private var didFinishAutomaticConnection = false
 
     init(
         shell: AppShellFacade,
@@ -36,7 +37,8 @@ struct RootView<ChatDestination: View>: View {
     private var rootWhatsNewSheet: Binding<OpenClientReleaseNotes?> {
         Binding(
             get: {
-                guard shell.primarySheet == nil else { return nil }
+                guard shell.primarySheet == nil,
+                      !isWaitingForAutomaticConnection || didFinishAutomaticConnection else { return nil }
                 return whatsNew.presentedRelease
             },
             set: { release in
@@ -91,8 +93,7 @@ struct RootView<ChatDestination: View>: View {
                 ConnectionSheetView(
                     facade: shell.connection,
                     commerce: shell.commerce,
-                    whatsNew: whatsNew,
-                    onSelectPluginSetupConnection: beginPluginSetup
+                    whatsNew: whatsNew
                 )
             case let .newProjectChat(request):
                 ProjectNewChatSheet(viewModel: shell.newProjectChat, request: request, autoFocusInput: shouldAutoFocusNewChatInput) {
@@ -106,9 +107,7 @@ struct RootView<ChatDestination: View>: View {
         .sheet(item: rootWhatsNewSheet) { release in
             OpenClientWhatsNewView(
                 release: release,
-                connections: shell.connection.recentServerConfigs,
-                activeConnectionID: activeConnectionID,
-                onSelectConnection: beginPluginSetup,
+                connection: shell.connection,
                 onDone: whatsNew.dismiss
             )
         }
@@ -123,15 +122,17 @@ struct RootView<ChatDestination: View>: View {
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
-            completePluginSetupIfReady()
         }
         .onChange(of: shell.isShowingConnectionOverlay) { _, isShowing in
             guard !isShowing else { return }
 
+            if isWaitingForAutomaticConnection {
+                didFinishAutomaticConnection = true
+            }
+
             withAnimation(opencodeSelectionAnimation) {
                 showProjectSidebarIfNeeded()
             }
-            completePluginSetupIfReady()
         }
         .animation(opencodeSelectionAnimation, value: shell.hasActiveWorkspace)
         .task {
@@ -144,36 +145,7 @@ struct RootView<ChatDestination: View>: View {
                 return
             }
 #endif
-            shell.connection.startAutomaticConnectionIfConfigured()
-        }
-    }
-
-    private var activeConnectionID: String? {
-        shell.isConnected ? shell.connection.config.recentServerID : nil
-    }
-
-    private func beginPluginSetup(on connection: OpenCodeServerConfig) {
-        pendingPluginSetupConnectionID = connection.recentServerID
-        whatsNew.dismiss()
-
-        if activeConnectionID == connection.recentServerID {
-            completePluginSetupIfReady()
-        } else {
-            shell.connection.startConnection(to: connection)
-        }
-    }
-
-    private func completePluginSetupIfReady() {
-        guard let pendingPluginSetupConnectionID,
-              shell.isConnected,
-              !shell.isShowingConnectionOverlay,
-              shell.connection.config.recentServerID == pendingPluginSetupConnectionID else { return }
-
-        self.pendingPluginSetupConnectionID = nil
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            shell.presentPluginSetupChat()
+            isWaitingForAutomaticConnection = shell.connection.startAutomaticConnectionIfConfigured()
         }
     }
 

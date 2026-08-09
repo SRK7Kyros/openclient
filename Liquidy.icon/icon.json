@@ -1,0 +1,85 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.00000,0.00000,0.00000,1.00000",
+      "srgb:1.00000,0.96794,0.99914,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "Union.png",
+          "name" : "Union",
+          "position" : {
+            "scale" : 0.68,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Rectangle 5.png",
+          "name" : "Rectangle 5",
+          "position" : {
+            "scale" : 0.72,
+            "translation-in-points" : [
+              0,
+              95.515625
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Rectangle 4.png",
+          "name" : "Rectangle 4",
+          "position" : {
+            "scale" : 0.72,
+            "translation-in-points" : [
+              0,
+              48.9375
+            ]
+          }
+        },
+        {
+          "image-name" : "liquid-glass-minimalist-vertical-wallpaper-da8ccedb.jpg",
+          "name" : "liquid-glass-minimalist-vertical-wallpaper-da8ccedb",
+          "position" : {
+            "scale" : 0.44,
+            "translation-in-points" : [
+              9.34375,
+              127.0234375
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

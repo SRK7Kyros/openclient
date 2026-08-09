@@ -473,8 +473,8 @@ extension AppViewModel {
         let statuses = try await client.listSessionStatuses(directory: directory)
         guard directoryStoreRegistry.generation == targetGeneration,
               directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-        targetStore.applySessionStatuses(statuses)
-        if directoryStoreRegistry.activeStore === targetStore {
+        let changed = targetStore.applySessionStatuses(statuses)
+        if changed, directoryStoreRegistry.activeStore === targetStore {
             objectWillChange.send()
         }
     }

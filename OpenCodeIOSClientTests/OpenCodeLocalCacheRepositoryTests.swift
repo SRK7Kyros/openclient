@@ -10,7 +10,7 @@ final class OpenCodeLocalCacheRepositoryTests: XCTestCase {
             field: "text",
             delta: "Streaming"
         )))
-        XCTAssertTrue(OpenCodeLocalCacheEventWritePolicy.writesChatSnapshot(for: .messagePartUpdated(
+        XCTAssertFalse(OpenCodeLocalCacheEventWritePolicy.writesChatSnapshot(for: .messagePartUpdated(
             OpenCodePart(
                 id: "prt_cache",
                 messageID: "msg_cache",
@@ -27,6 +27,64 @@ final class OpenCodeLocalCacheRepositoryTests: XCTestCase {
             )
         )))
         XCTAssertTrue(OpenCodeLocalCacheEventWritePolicy.writesChatSnapshot(for: .sessionIdle(sessionID: "ses_cache")))
+    }
+
+    func testUnchangedNewerChatWriteStillRejectsAnOlderChangedSnapshot() async throws {
+        let repository = try OpenCodeLocalCacheRepositoryFactory.makeInMemory()
+        let original = [message(id: "message-1", sessionID: "session-1", text: "Original")]
+        let stale = [message(id: "message-1", sessionID: "session-1", text: "Stale")]
+        let initialRefreshedAt = Date(timeIntervalSince1970: 100)
+
+        try await repository.saveChatMessages(
+            original,
+            serverID: "server",
+            sessionID: "session-1",
+            refreshedAt: initialRefreshedAt,
+            writtenAt: Date(timeIntervalSince1970: 1)
+        )
+        try await repository.saveChatMessages(
+            original,
+            serverID: "server",
+            sessionID: "session-1",
+            refreshedAt: Date(timeIntervalSince1970: 200),
+            writtenAt: Date(timeIntervalSince1970: 3)
+        )
+        try await repository.saveChatMessages(
+            stale,
+            serverID: "server",
+            sessionID: "session-1",
+            refreshedAt: Date(timeIntervalSince1970: 150),
+            writtenAt: Date(timeIntervalSince1970: 2)
+        )
+
+        let snapshot = try await repository.loadChat(serverID: "server", sessionID: "session-1")
+        XCTAssertEqual(snapshot?.messages, original)
+        XCTAssertEqual(snapshot?.messagesRefreshedAt, initialRefreshedAt)
+    }
+
+    func testUnchangedNewerTodoWriteDoesNotRewriteRefreshMetadata() async throws {
+        let repository = try OpenCodeLocalCacheRepositoryFactory.makeInMemory()
+        let todos = [OpenCodeTodo(content: "Persist efficiently", status: "pending", priority: "high")]
+        let initialRefreshedAt = Date(timeIntervalSince1970: 100)
+
+        try await repository.saveTodos(
+            todos,
+            serverID: "server",
+            sessionID: "session-1",
+            refreshedAt: initialRefreshedAt,
+            writtenAt: Date(timeIntervalSince1970: 1)
+        )
+        try await repository.saveTodos(
+            todos,
+            serverID: "server",
+            sessionID: "session-1",
+            refreshedAt: Date(timeIntervalSince1970: 200),
+            writtenAt: Date(timeIntervalSince1970: 2)
+        )
+
+        let snapshot = try await repository.loadChat(serverID: "server", sessionID: "session-1")
+        XCTAssertEqual(snapshot?.todos, todos)
+        XCTAssertEqual(snapshot?.todosRefreshedAt, initialRefreshedAt)
     }
 
     func testRoundTripPreservesSnapshotValuesAndRefreshDates() async throws {
