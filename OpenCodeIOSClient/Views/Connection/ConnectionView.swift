@@ -263,7 +263,7 @@ struct ConnectionView: View {
     }
 }
 
-private struct RootConfigurationsView: View {
+struct RootConfigurationsView: View {
     @ObservedObject var facade: ConnectionFacade
 
     var body: some View {

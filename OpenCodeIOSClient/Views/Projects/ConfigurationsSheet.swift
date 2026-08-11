@@ -5,6 +5,7 @@ import SafariServices
 
 struct ConfigurationsSheet: View {
     @ObservedObject var viewModel: ConfigurationsFacade
+    @ObservedObject var connection: ConnectionFacade
     let bridge: OpenClientBridgeFacade?
     @State private var navigationPath = NavigationPath()
 
@@ -13,6 +14,15 @@ struct ConfigurationsSheet: View {
 
         NavigationStack(path: $navigationPath) {
             Form {
+                Section {
+                    NavigationLink {
+                        RootConfigurationsView(facade: connection)
+                    } label: {
+                        Label("Global Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("configurations.global-settings")
+                }
+
                 Section {
                     NavigationLink {
                         AgentDefaultSelectionView(viewModel: viewModel)

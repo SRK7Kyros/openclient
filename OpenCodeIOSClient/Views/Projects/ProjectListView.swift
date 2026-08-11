@@ -264,7 +264,7 @@ struct ProjectListView: View {
             get: { configurations.isShowingConfigurationsSheet },
             set: { configurations.isShowingConfigurationsSheet = $0 }
         )) {
-            ConfigurationsSheet(viewModel: configurations, bridge: bridge)
+            ConfigurationsSheet(viewModel: configurations, connection: connection, bridge: bridge)
         }
         .sheet(isPresented: Binding(
             get: { games.isShowingFindPlaceModelSheet },
