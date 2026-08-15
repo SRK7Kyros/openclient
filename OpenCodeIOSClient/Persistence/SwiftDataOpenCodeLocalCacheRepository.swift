@@ -1,6 +1,13 @@
 import Foundation
 import SwiftData
 
+private struct OpenCodeCachedDirectoryPayload: Codable {
+    let sessions: [OpenCodeSession]
+    let statuses: [String: String]?
+    let permissions: [OpenCodePermission]?
+    let questions: [OpenCodeQuestionRequest]?
+}
+
 @Model
 final class OpenCodeCachedProjectsRecord {
     @Attribute(.unique) var key: String
@@ -145,8 +152,12 @@ actor SwiftDataOpenCodeLocalCacheRepository: OpenCodeLocalCacheRepository {
     ) async throws -> OpenCodeCachedDirectorySessionsSnapshot? {
         let key = OpenCodeLocalCacheKey.make([serverID, directory])
         guard let record = try directorySessionsRecord(forKey: key) else { return nil }
+        let payload = try directoryPayload(from: record.payload)
         return OpenCodeCachedDirectorySessionsSnapshot(
-            sessions: try decode([OpenCodeSession].self, from: record.payload),
+            sessions: payload.sessions,
+            statuses: payload.statuses,
+            permissions: payload.permissions,
+            questions: payload.questions,
             refreshedAt: record.refreshedAt
         )
     }
@@ -159,7 +170,16 @@ actor SwiftDataOpenCodeLocalCacheRepository: OpenCodeLocalCacheRepository {
         writtenAt: Date
     ) async throws {
         let key = OpenCodeLocalCacheKey.make([serverID, directory])
-        let payload = try encode(sessions)
+        let existing = try directorySessionsRecord(forKey: key)
+            .flatMap { try? directoryPayload(from: $0.payload) }
+        let payload = try encode(
+            OpenCodeCachedDirectoryPayload(
+                sessions: sessions,
+                statuses: existing?.statuses,
+                permissions: existing?.permissions,
+                questions: existing?.questions
+            )
+        )
         if let record = try directorySessionsRecord(forKey: key) {
             guard writtenAt >= record.writtenAt else { return }
             record.serverID = serverID
@@ -178,6 +198,63 @@ actor SwiftDataOpenCodeLocalCacheRepository: OpenCodeLocalCacheRepository {
             )
         }
         try modelContext.save()
+    }
+
+    func saveDirectoryMetadata(
+        statuses: [String: String],
+        permissions: [OpenCodePermission],
+        questions: [OpenCodeQuestionRequest],
+        serverID: String,
+        directory: String?,
+        refreshedAt: Date,
+        writtenAt: Date
+    ) async throws {
+        let key = OpenCodeLocalCacheKey.make([serverID, directory])
+        if let record = try directorySessionsRecord(forKey: key) {
+            guard writtenAt >= record.writtenAt else { return }
+            let existing = try directoryPayload(from: record.payload)
+            record.serverID = serverID
+            record.payload = try encode(
+                OpenCodeCachedDirectoryPayload(
+                    sessions: existing.sessions,
+                    statuses: statuses,
+                    permissions: permissions,
+                    questions: questions
+                )
+            )
+            record.refreshedAt = refreshedAt
+            record.writtenAt = writtenAt
+        } else {
+            modelContext.insert(
+                OpenCodeCachedDirectorySessionsRecord(
+                    key: key,
+                    serverID: serverID,
+                    payload: try encode(
+                        OpenCodeCachedDirectoryPayload(
+                            sessions: [],
+                            statuses: statuses,
+                            permissions: permissions,
+                            questions: questions
+                        )
+                    ),
+                    refreshedAt: refreshedAt,
+                    writtenAt: writtenAt
+                )
+            )
+        }
+        try modelContext.save()
+    }
+
+    private func directoryPayload(from data: Data) throws -> OpenCodeCachedDirectoryPayload {
+        if let payload = try? decode(OpenCodeCachedDirectoryPayload.self, from: data) {
+            return payload
+        }
+        return OpenCodeCachedDirectoryPayload(
+            sessions: try decode([OpenCodeSession].self, from: data),
+            statuses: nil,
+            permissions: nil,
+            questions: nil
+        )
     }
 
     func loadChat(
@@ -291,10 +368,17 @@ actor SwiftDataOpenCodeLocalCacheRepository: OpenCodeLocalCacheRepository {
     func removeSession(serverID: String, sessionID: String, removedAt: Date) async throws {
         for record in try directorySessionRecords(serverID: serverID) {
             guard removedAt >= record.writtenAt else { continue }
-            let sessions = try decode([OpenCodeSession].self, from: record.payload)
-            let remaining = sessions.filter { $0.id != sessionID }
-            if remaining.count != sessions.count {
-                record.payload = try encode(remaining)
+            let payload = try directoryPayload(from: record.payload)
+            let remaining = payload.sessions.filter { $0.id != sessionID }
+            if remaining.count != payload.sessions.count {
+                record.payload = try encode(
+                    OpenCodeCachedDirectoryPayload(
+                        sessions: remaining,
+                        statuses: payload.statuses?.filter { $0.key != sessionID },
+                        permissions: payload.permissions?.filter { $0.sessionID != sessionID },
+                        questions: payload.questions?.filter { $0.sessionID != sessionID }
+                    )
+                )
             }
             record.writtenAt = removedAt
         }
@@ -414,6 +498,16 @@ struct NoOpOpenCodeLocalCacheRepository: OpenCodeLocalCacheRepository {
     func saveProjects(
         _ projects: [OpenCodeProject],
         serverID: String,
+        refreshedAt: Date,
+        writtenAt: Date
+    ) async throws {}
+
+    func saveDirectoryMetadata(
+        statuses: [String: String],
+        permissions: [OpenCodePermission],
+        questions: [OpenCodeQuestionRequest],
+        serverID: String,
+        directory: String?,
         refreshedAt: Date,
         writtenAt: Date
     ) async throws {}

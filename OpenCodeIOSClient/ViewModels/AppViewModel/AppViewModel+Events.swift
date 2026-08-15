@@ -381,6 +381,7 @@ extension AppViewModel {
         case let .sessionDeleted(session):
             removePinnedSessionIDFromAllScopes(session.id)
             removeSessionPreview(for: session.id)
+            sessionListStore.removeRecentSession(sessionID: session.id)
         case let .vcsBranchUpdated(branch):
             projectFilesStore.applyBranchUpdate(branch)
             projectFilesFacade.refreshFromEvent()

@@ -37,6 +37,8 @@ final class ProjectFacade: ObservableObject {
 
     struct SettingsSnapshot: Equatable {
         let isLiveActivityAutoStartEnabled: Bool
+        let sessionCardStyle: SessionCardStyle
+        let showsActivityLastUserMessage: Bool
         let hasProUnlock: Bool
         let isProjectWorkspacesEnabled: Bool
         let hasGitProject: Bool
@@ -70,6 +72,7 @@ final class ProjectFacade: ObservableObject {
             viewModel.modelConfigurationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.commerceFacade.objectWillChange.eraseToAnyPublisher(),
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
+            viewModel.appCustomizationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.$config.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingProjectSettingsSheet.map { _ in () }.eraseToAnyPublisher(),
         ])
@@ -124,6 +127,8 @@ final class ProjectFacade: ObservableObject {
     var settingsSnapshot: SettingsSnapshot {
         SettingsSnapshot(
             isLiveActivityAutoStartEnabled: viewModel.isLiveActivityAutoStartEnabled,
+            sessionCardStyle: viewModel.appCustomizationStore.sessionCardStyle,
+            showsActivityLastUserMessage: viewModel.appCustomizationStore.showsActivityLastUserMessage,
             hasProUnlock: viewModel.hasProUnlock,
             isProjectWorkspacesEnabled: viewModel.isProjectWorkspacesEnabled,
             hasGitProject: viewModel.hasGitProject,
@@ -264,6 +269,14 @@ final class ProjectFacade: ObservableObject {
     }
     func dismissSettings() { viewModel.isShowingProjectSettingsSheet = false }
     func setLiveActivityAutoStartEnabled(_ isEnabled: Bool) { viewModel.setLiveActivityAutoStartEnabled(isEnabled) }
+    func setSessionCardStyle(_ style: SessionCardStyle) {
+        viewModel.appCustomizationStore.setSessionCardStyle(style)
+        objectWillChange.send()
+    }
+    func setShowsActivityLastUserMessage(_ shows: Bool) {
+        viewModel.appCustomizationStore.setShowsActivityLastUserMessage(shows)
+        objectWillChange.send()
+    }
 
     func setWorkspacesEnabled(_ isEnabled: Bool) async {
         guard !isReadOnly else { return }

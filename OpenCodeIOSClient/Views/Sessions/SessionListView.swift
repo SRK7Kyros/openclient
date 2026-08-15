@@ -150,6 +150,9 @@ private struct SessionListContent: View, Equatable {
         .refreshable {
             await facade.refresh()
         }
+        .task(id: snapshot.cardStyle) {
+            await facade.prepareActivityCardsIfNeeded()
+        }
         .transaction { transaction in
             if snapshot.hasBusySession {
                 transaction.animation = nil
@@ -299,21 +302,7 @@ private struct SessionListContent: View, Equatable {
                 await facade.completeSelection(ticket)
             }
         } label: {
-            SessionRow(
-                session: row.session,
-                isSelected: row.isSelected,
-                showsPinnedBadge: row.showsPinnedBadge,
-                workspaceOverline: row.workspaceOverline,
-                style: row.style,
-                preview: row.preview,
-                isBusy: row.isBusy,
-                hasLiveActivity: row.hasLiveActivity,
-                hasDraft: row.hasDraft,
-                hasPermissionRequest: row.hasPermissionRequest,
-                displayTitle: row.displayTitle,
-                shimmersTitle: row.shimmersTitle
-            )
-            .equatable()
+            sessionRowLabel(for: row)
         }
         .buttonStyle(SessionRowButtonStyle())
         .contentShape(Rectangle())
@@ -329,11 +318,60 @@ private struct SessionListContent: View, Equatable {
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             pinButton(for: row.session)
         }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if !snapshot.isReadOnly {
                 deleteButton(for: row.session)
                 renameButton(for: row.session)
                 liveActivityButton(for: row.session)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionRowLabel(for row: SessionListFacade.RowSnapshot) -> some View {
+        switch snapshot.cardStyle {
+        case .compact:
+            SessionRow(
+                session: row.session,
+                isSelected: row.isSelected,
+                showsPinnedBadge: row.showsPinnedBadge,
+                workspaceOverline: row.workspaceOverline,
+                style: .compact,
+                preview: row.preview,
+                isBusy: row.isBusy,
+                hasLiveActivity: row.hasLiveActivity,
+                hasDraft: row.hasDraft,
+                hasPermissionRequest: row.hasPermissionRequest,
+                displayTitle: row.displayTitle,
+                shimmersTitle: row.shimmersTitle
+            )
+            .equatable()
+        case .simple:
+            SessionRow(
+                session: row.session,
+                isSelected: row.isSelected,
+                showsPinnedBadge: row.showsPinnedBadge,
+                workspaceOverline: row.workspaceOverline,
+                style: row.style,
+                preview: row.preview,
+                isBusy: row.isBusy,
+                hasLiveActivity: row.hasLiveActivity,
+                hasDraft: row.hasDraft,
+                hasPermissionRequest: row.hasPermissionRequest,
+                displayTitle: row.displayTitle,
+                shimmersTitle: row.shimmersTitle
+            )
+            .equatable()
+        case .activity:
+            ActivitySessionRow(
+                row: row.activityRow,
+                showsLastUserMessage: snapshot.showsActivityLastUserMessage
+            )
+            .overlay {
+                if row.isSelected {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1.4)
+                }
             }
         }
     }

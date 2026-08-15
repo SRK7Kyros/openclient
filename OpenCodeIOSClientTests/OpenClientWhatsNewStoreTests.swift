@@ -57,6 +57,21 @@ final class OpenClientWhatsNewStoreTests: XCTestCase {
         XCTAssertNil(reopenedStore.presentedRelease)
     }
 
+    func testNewAnnouncementPresentsOnceForALaterBuildOfTheSameVersion() {
+        _ = OpenClientWhatsNewStore(
+            defaults: defaults,
+            currentVersion: "2.0",
+            releases: [],
+            hasExistingConnection: false
+        )
+
+        let updatedBuild = makeStore(hasExistingConnection: false)
+        XCTAssertEqual(updatedBuild.presentedRelease?.version, "2.0")
+
+        let reopenedBuild = makeStore(hasExistingConnection: false)
+        XCTAssertNil(reopenedBuild.presentedRelease)
+    }
+
     func testCurrentCatalogDescribesVersionOnePointZeroPointFifteen() {
         let release = OpenClientReleaseNotesCatalog.releases.first { $0.version == "1.0.15" }
 
@@ -66,6 +81,21 @@ final class OpenClientWhatsNewStoreTests: XCTestCase {
             "Projects, your way",
             "Make it yours",
             "Connect on launch",
+        ])
+    }
+
+    func testCurrentCatalogDescribesActivityRelease() {
+        let release = OpenClientReleaseNotesCatalog.releases.first { $0.version == "1.0.16" }
+
+        XCTAssertEqual(release?.title, "Activity, at a glance")
+        XCTAssertEqual(release?.hero, .activity)
+        XCTAssertEqual(release?.featureSectionTitle, "Every conversation, in motion")
+        XCTAssertFalse(release?.showsSetup == true)
+        XCTAssertEqual(release?.features.map(\.title), [
+            "One view across projects",
+            "The latest context, live",
+            "Cards that fit your flow",
+            "Start from anywhere",
         ])
     }
 

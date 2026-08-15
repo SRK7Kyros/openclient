@@ -1807,7 +1807,7 @@ enum OpenCodePermissionPattern: Codable, Hashable {
     }
 }
 
-struct OpenCodePermission: Decodable, Hashable, Identifiable, Sendable {
+struct OpenCodePermission: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let sessionID: String
     let permission: String

@@ -93,10 +93,37 @@ final class OpenCodeLocalCacheRepositoryTests: XCTestCase {
         let sessionsDate = Date(timeIntervalSince1970: 2_000)
         let messagesDate = Date(timeIntervalSince1970: 3_000)
         let todosDate = Date(timeIntervalSince1970: 4_000)
+        let metadataDate = Date(timeIntervalSince1970: 5_000)
         let projects = [project(id: "project-1", name: "Project One")]
         let sessions = [session(id: "session-1", title: "Session One", directory: "/project")]
         let messages = [message(id: "message-1", sessionID: "session-1", text: "Hello")]
         let todos = [OpenCodeTodo(content: "Cache snapshots", status: "pending", priority: "high")]
+        let statuses = ["session-1": "busy"]
+        let permissions = [
+            OpenCodePermission(
+                id: "permission-1",
+                sessionID: "session-1",
+                permission: "bash",
+                patterns: ["xcodebuild test"],
+                always: nil,
+                metadata: nil,
+                tool: nil
+            ),
+        ]
+        let questions = [
+            OpenCodeQuestionRequest(
+                id: "question-1",
+                sessionID: "session-1",
+                questions: [
+                    OpenCodeQuestion(
+                        question: "Continue?",
+                        header: "Next step",
+                        options: [OpenCodeQuestionOption(label: "Yes", description: "Continue")]
+                    ),
+                ],
+                tool: nil
+            ),
+        ]
 
         try await repository.saveProjects(projects, serverID: "server", refreshedAt: projectsDate)
         try await repository.saveDirectorySessions(
@@ -117,6 +144,15 @@ final class OpenCodeLocalCacheRepositoryTests: XCTestCase {
             sessionID: "session-1",
             refreshedAt: todosDate
         )
+        try await repository.saveDirectoryMetadata(
+            statuses: statuses,
+            permissions: permissions,
+            questions: questions,
+            serverID: "server",
+            directory: "/project",
+            refreshedAt: metadataDate,
+            writtenAt: Date()
+        )
 
         let projectsSnapshot = try await repository.loadProjects(serverID: "server")
         let sessionsSnapshot = try await repository.loadDirectorySessions(
@@ -131,7 +167,10 @@ final class OpenCodeLocalCacheRepositoryTests: XCTestCase {
         XCTAssertEqual(loadedProjects.projects, projects)
         XCTAssertEqual(loadedProjects.refreshedAt, projectsDate)
         XCTAssertEqual(loadedSessions.sessions, sessions)
-        XCTAssertEqual(loadedSessions.refreshedAt, sessionsDate)
+        XCTAssertEqual(loadedSessions.statuses, statuses)
+        XCTAssertEqual(loadedSessions.permissions, permissions)
+        XCTAssertEqual(loadedSessions.questions, questions)
+        XCTAssertEqual(loadedSessions.refreshedAt, metadataDate)
         XCTAssertEqual(loadedChat.messages, messages)
         XCTAssertEqual(loadedChat.todos, todos)
         XCTAssertEqual(loadedChat.messagesRefreshedAt, messagesDate)

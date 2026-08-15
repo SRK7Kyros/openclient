@@ -21,6 +21,15 @@ protocol OpenCodeLocalCacheRepository: Sendable {
         refreshedAt: Date,
         writtenAt: Date
     ) async throws
+    func saveDirectoryMetadata(
+        statuses: [String: String],
+        permissions: [OpenCodePermission],
+        questions: [OpenCodeQuestionRequest],
+        serverID: String,
+        directory: String?,
+        refreshedAt: Date,
+        writtenAt: Date
+    ) async throws
 
     func loadChat(
         serverID: String,
@@ -186,6 +195,9 @@ struct OpenCodeCachedProjectsSnapshot: Sendable {
 
 struct OpenCodeCachedDirectorySessionsSnapshot: Sendable {
     let sessions: [OpenCodeSession]
+    let statuses: [String: String]?
+    let permissions: [OpenCodePermission]?
+    let questions: [OpenCodeQuestionRequest]?
     let refreshedAt: Date
 
     func isFresh(

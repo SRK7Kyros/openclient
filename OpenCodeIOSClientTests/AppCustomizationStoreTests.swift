@@ -3,6 +3,11 @@ import XCTest
 
 @MainActor
 final class AppCustomizationStoreTests: XCTestCase {
+    func testSessionCardStylesUseRequestedOrderAndLabels() {
+        XCTAssertEqual(SessionCardStyle.allCases, [.compact, .simple, .activity])
+        XCTAssertEqual(SessionCardStyle.allCases.map(\.title), ["Compact", "Default", "Activity"])
+    }
+
     func testPreferencesPersistAndDefaultShimmerToEnabled() throws {
         let suiteName = "AppCustomizationStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -10,13 +15,19 @@ final class AppCustomizationStoreTests: XCTestCase {
 
         let store = AppCustomizationStore(defaults: defaults)
         XCTAssertTrue(store.showsChatActivityShimmer)
+        XCTAssertTrue(store.showsActivityLastUserMessage)
+        XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertNil(store.autoConnectServerID)
 
         store.setShowsChatActivityShimmer(false)
+        store.setShowsActivityLastUserMessage(false)
+        store.setSessionCardStyle(.activity)
         store.setAutoConnectServerID("server-one")
 
         let restored = AppCustomizationStore(defaults: defaults)
         XCTAssertFalse(restored.showsChatActivityShimmer)
+        XCTAssertFalse(restored.showsActivityLastUserMessage)
+        XCTAssertEqual(restored.sessionCardStyle, .activity)
         XCTAssertEqual(restored.autoConnectServerID, "server-one")
     }
 
@@ -35,6 +46,28 @@ final class AppCustomizationStoreTests: XCTestCase {
         let store = AppCustomizationStore(defaults: defaults)
 
         XCTAssertFalse(store.showsChatActivityShimmer)
+        XCTAssertTrue(store.showsActivityLastUserMessage)
+        XCTAssertEqual(store.sessionCardStyle, .simple)
+        XCTAssertEqual(store.autoConnectServerID, "server-one")
+    }
+
+    func testUnknownSessionCardStyleFallsBackToSimpleWithoutDiscardingOtherPreferences() throws {
+        let suiteName = "AppCustomizationStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: [
+                "showsChatActivityShimmer": false,
+                "sessionCardStyle": "future-style",
+                "autoConnectServerID": "server-one",
+            ]),
+            forKey: "appCustomizationPreferences"
+        )
+
+        let store = AppCustomizationStore(defaults: defaults)
+
+        XCTAssertFalse(store.showsChatActivityShimmer)
+        XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertEqual(store.autoConnectServerID, "server-one")
     }
 

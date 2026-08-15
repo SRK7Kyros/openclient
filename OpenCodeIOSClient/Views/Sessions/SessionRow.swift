@@ -47,11 +47,11 @@ struct SessionRow: View, Equatable {
                 compactContent
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, style == .compact ? 10 : 14)
+        .padding(.vertical, style == .compact ? 8 : 12)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: style == .compact ? 14 : 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: style == .compact ? 14 : 18, style: .continuous)
                 .strokeBorder(rowBorder, lineWidth: isSelected ? 1.4 : 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,10 +81,7 @@ struct SessionRow: View, Equatable {
                     Spacer(minLength: 8)
 
                     if let date = preview?.date {
-                        Text(date, style: .relative)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        SessionRelativeTimeText(date: date)
                     }
                 }
 
@@ -92,43 +89,44 @@ struct SessionRow: View, Equatable {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    .truncationMode(.head)
             }
         }
     }
 
     private var compactContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                Spacer(minLength: 0)
+        HStack(spacing: 10) {
+            SessionAvatar(title: titleText, size: 30)
 
-                HStack(spacing: 6) {
-                    if isBusy {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 8, height: 8)
-                    }
+            ShimmeringSessionTitle(text: titleText, active: shimmersTitle, font: .subheadline.weight(.medium), lineLimit: 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if hasLiveActivity {
-                        badgeIcon(systemName: "waveform", foreground: .indigo, background: Color.indigo.opacity(0.12))
-                    }
-
-                    if hasDraft {
-                        badgeIcon(systemName: "pencil", foreground: .secondary, background: Color.gray.opacity(0.12))
-                    }
-
-                    if hasPermissionRequest {
-                        badgeIcon(systemName: "hand.raised.fill", foreground: .orange, background: Color.orange.opacity(0.12))
-                    }
+            HStack(spacing: 8) {
+                if showsPinnedBadge {
+                    compactIndicator(systemName: "pin.fill", color: .secondary)
+                }
+                if isBusy {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 7, height: 7)
+                }
+                if hasLiveActivity {
+                    compactIndicator(systemName: "waveform", color: .indigo)
+                }
+                if hasDraft {
+                    compactIndicator(systemName: "pencil", color: .secondary)
+                }
+                if hasPermissionRequest {
+                    compactIndicator(systemName: "hand.raised.fill", color: .orange)
                 }
             }
-
-            SessionAvatar(title: titleText)
-                .frame(maxWidth: .infinity)
-
-            ShimmeringSessionTitle(text: titleText, active: shimmersTitle, font: .subheadline.weight(.medium), lineLimit: 2, alignment: .center)
-                .frame(maxWidth: .infinity)
         }
+    }
+
+    private func compactIndicator(systemName: String, color: Color) -> some View {
+        Image(systemName: systemName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
     }
 
     private var titleLine: some View {

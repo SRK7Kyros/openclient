@@ -31,6 +31,12 @@ enum AppShellContentRoute: Equatable {
     case selectProject
     case loadingProject
     case projectContent
+    case activity
+}
+
+enum AppShellContentSelection: Equatable {
+    case project
+    case activity
 }
 
 struct AppShellChatRoute: Equatable {
@@ -127,6 +133,7 @@ final class AppShellFacade: ObservableObject {
     let projects: ProjectFacade
     let newProjectChat: NewProjectChatFacade
     let sessions: SessionListFacade
+    let activity: ActivityFacade
     let projectFiles: ProjectFilesFacade
     let mcp: MCPFacade
     let terminal: TerminalFacade
@@ -136,6 +143,7 @@ final class AppShellFacade: ObservableObject {
     let browser: BrowserStore
 
     private unowned let viewModel: AppViewModel
+    @Published private(set) var contentSelection: AppShellContentSelection = .project
     private var observations: Set<AnyCancellable> = []
     private var activeDirectoryObservations: Set<AnyCancellable> = []
 
@@ -146,6 +154,7 @@ final class AppShellFacade: ObservableObject {
         projects = viewModel.projectFacade
         newProjectChat = viewModel.newProjectChatFacade
         sessions = viewModel.sessionListFacade
+        activity = viewModel.activityFacade
         projectFiles = viewModel.projectFilesFacade
         mcp = viewModel.mcpFacade
         terminal = viewModel.terminalFacade
@@ -225,6 +234,7 @@ final class AppShellFacade: ObservableObject {
         return viewModel.chatStore.preparedSessionID == selectedSessionID
     }
     var chatDetailPresentationRequest: Int { viewModel.chatDetailPresentationRequest }
+    var isActivitySelected: Bool { contentSelection == .activity }
 
     var projectContentSnapshot: ProjectContentSnapshot {
         let files = projectFiles.snapshot
@@ -261,6 +271,7 @@ final class AppShellFacade: ObservableObject {
     }
 
     func contentRoute(isCompact: Bool) -> AppShellContentRoute {
+        if contentSelection == .activity { return .activity }
         guard projects.currentProject != nil else { return .selectProject }
         let directory = viewModel.directoryStoreRegistry.activeStore
         if isCompact, directory.isLoadingSessions, directory.sessions.isEmpty {
@@ -271,13 +282,13 @@ final class AppShellFacade: ObservableObject {
 
     func detailRoute(isCompact: Bool) -> AppShellDetailRoute {
         let projectContent = projectContentSnapshot
-        if projectContent.selectedTab == .git, projectContent.hasGitProject {
+        if contentSelection == .project, projectContent.selectedTab == .git, projectContent.hasGitProject {
             return projectFiles.snapshot.selectedFileIsChanged ? .gitDiff : .gitFile
         }
-        if projectContent.selectedTab == .mcp {
+        if contentSelection == .project, projectContent.selectedTab == .mcp {
             return .mcp
         }
-        if projectContent.selectedTab == .terminal {
+        if contentSelection == .project, projectContent.selectedTab == .terminal {
             guard let terminalID = terminal.snapshot.activeTerminalID else {
                 return .selectTerminal
             }
@@ -297,6 +308,14 @@ final class AppShellFacade: ObservableObject {
                 presentationRequest: viewModel.chatDetailPresentationRequest
             )
         )
+    }
+
+    func selectActivity() {
+        contentSelection = .activity
+    }
+
+    func selectProjectContent() {
+        contentSelection = .project
     }
 
     func dismissPrimarySheet() {

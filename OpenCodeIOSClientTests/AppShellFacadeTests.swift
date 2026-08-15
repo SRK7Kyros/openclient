@@ -71,6 +71,32 @@ final class AppShellFacadeTests: XCTestCase {
         XCTAssertEqual(shell.contentRoute(isCompact: true), .projectContent)
     }
 
+    func testActivityUsesContentColumnWithoutReplacingPreparedChatDetail() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        let project = makeProject(vcs: "git")
+        let session = makeSession()
+        viewModel.currentProject = project
+        viewModel.selectedDirectory = project.worktree
+        viewModel.selectedSession = session
+        viewModel.backendMode = .server
+        viewModel.selectedProjectContentTab = .git
+        viewModel.chatStore.beginSelectingSession(sessionID: session.id, cachedMessages: [])
+
+        shell.selectActivity()
+
+        XCTAssertEqual(shell.contentRoute(isCompact: false), .activity)
+        XCTAssertEqual(
+            shell.detailRoute(isCompact: false),
+            .chat(AppShellChatRoute(sessionID: session.id, presentationRequest: 0))
+        )
+
+        shell.selectProjectContent()
+
+        XCTAssertEqual(shell.contentRoute(isCompact: false), .projectContent)
+        XCTAssertEqual(shell.detailRoute(isCompact: false), .gitFile)
+    }
+
     func testProjectToolbarNewSessionPresentsCurrentContext() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade

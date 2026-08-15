@@ -7,6 +7,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case projects
     case newSession = "new-session"
     case sessions
+    case activity
     case browser
     case visualTools = "visual-tools"
     case terminal
@@ -52,6 +53,8 @@ extension AppViewModel {
             return screenshotNewSession()
         case .sessions:
             return screenshotSessions()
+        case .activity:
+            return screenshotActivity()
         case .browser:
             return screenshotBrowser()
         case .visualTools:
@@ -150,7 +153,96 @@ extension AppViewModel {
 
     private static func screenshotSessions() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil)
+        viewModel.appCustomizationStore.setSessionCardStyle(.simple)
         viewModel.pinnedSessionIDsByScope = [viewModel.currentPinScopeKey: [OpenClientScreenshotData.releaseSession.id]]
+        return viewModel
+    }
+
+    private static func screenshotActivity() -> AppViewModel {
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: nil, sessions: [OpenClientScreenshotData.releaseSession])
+        viewModel.projects.append(
+            OpenCodeProject(
+                id: "screenshot-avatarless",
+                worktree: "/Users/nick/Code/avatarless-project",
+                vcs: "git",
+                name: "avatarless-project",
+                sandboxes: nil,
+                icon: nil,
+                time: nil
+            )
+        )
+        let directory = OpenClientScreenshotData.repoProject.worktree
+        let store = viewModel.directoryStoreRegistry.store(for: directory)
+        _ = store.upsertSessions([OpenClientScreenshotData.releaseSession, OpenClientScreenshotData.followupSession])
+        _ = store.applySessionStatuses([
+            OpenClientScreenshotData.releaseSession.id: "idle",
+            OpenClientScreenshotData.followupSession.id: "busy",
+        ])
+        store.applyCanonicalMessages(
+            [
+                OpenCodeMessageEnvelope.local(
+                    role: "user",
+                    text: "Make the Activity preview retain the latest streamed response.",
+                    sessionID: OpenClientScreenshotData.releaseSession.id
+                ),
+                OpenCodeMessageEnvelope.local(
+                    role: "assistant",
+                    text: "Checked /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform and verified every deterministic preview. The newest sentence must remain visible while this text fills both available lines.",
+                    sessionID: OpenClientScreenshotData.releaseSession.id
+                ),
+            ],
+            forSessionID: OpenClientScreenshotData.releaseSession.id
+        )
+        let toolUserMessage = OpenCodeMessageEnvelope.local(
+            role: "user",
+            text: "Verify the Activity card without making it taller.",
+            sessionID: OpenClientScreenshotData.followupSession.id
+        )
+        var runningToolMessage = OpenCodeMessageEnvelope.local(
+            role: "assistant",
+            text: "",
+            sessionID: OpenClientScreenshotData.followupSession.id
+        )
+        runningToolMessage.parts = [
+            OpenCodePart(
+                id: "part-activity-running-tool",
+                messageID: runningToolMessage.id,
+                sessionID: OpenClientScreenshotData.followupSession.id,
+                type: "tool",
+                mime: nil,
+                filename: nil,
+                url: nil,
+                reason: nil,
+                tool: "bash",
+                callID: "call-activity-running-tool",
+                state: OpenCodeToolState(
+                    status: "running",
+                    title: "Running Activity tests",
+                    error: nil,
+                    input: OpenCodeToolInput(
+                        command: "xcodebuild test",
+                        description: nil,
+                        filePath: nil,
+                        name: nil,
+                        path: nil,
+                        query: nil,
+                        pattern: nil,
+                        subagentType: nil,
+                        url: nil
+                    ),
+                    output: nil,
+                    metadata: nil
+                ),
+                text: nil
+            ),
+        ]
+        store.applyCanonicalMessages(
+            [
+                toolUserMessage,
+                runningToolMessage,
+            ],
+            forSessionID: OpenClientScreenshotData.followupSession.id
+        )
         return viewModel
     }
 

@@ -11,6 +11,8 @@ struct ProjectListView: View {
     @ObservedObject var configurations: ConfigurationsFacade
     @ObservedObject var games: FunAndGamesFacade
     let bridge: OpenClientBridgeFacade?
+    let isActivitySelected: Bool
+    let onActivityChosen: () -> Void
     let onProjectChosen: () -> Void
     @State private var projectForColorPicker: OpenCodeProject?
     @State private var projectForImagePicker: OpenCodeProject?
@@ -23,6 +25,8 @@ struct ProjectListView: View {
         configurations: ConfigurationsFacade,
         games: FunAndGamesFacade,
         bridge: OpenClientBridgeFacade? = nil,
+        isActivitySelected: Bool = false,
+        onActivityChosen: @escaping () -> Void = {},
         onProjectChosen: @escaping () -> Void
     ) {
         self.facade = facade
@@ -30,6 +34,8 @@ struct ProjectListView: View {
         self.configurations = configurations
         self.games = games
         self.bridge = bridge
+        self.isActivitySelected = isActivitySelected
+        self.onActivityChosen = onActivityChosen
         self.onProjectChosen = onProjectChosen
     }
 
@@ -48,6 +54,36 @@ struct ProjectListView: View {
                 )
             } else {
                 Section {
+                    Button(action: onActivityChosen) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.headline)
+                                .foregroundStyle(isActivitySelected ? Color.accentColor : .secondary)
+                                .frame(width: 32, height: 32)
+                                .background(Color.accentColor.opacity(isActivitySelected ? 0.14 : 0.07), in: RoundedRectangle(cornerRadius: 9))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Activity")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text("Monitor sessions across projects")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("projects.activity")
+                }
+
+                Section {
                     if displayedProjects.isEmpty, !isEditingProjects {
                         Text("No projects are visible. Use the project settings button to show projects.")
                             .font(.subheadline)
@@ -63,7 +99,7 @@ struct ProjectListView: View {
                                 subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
                                 systemImage: project.id == "global" ? "globe" : "folder.fill",
                                 icon: project.icon,
-                                isSelected: facade.isSelected(project),
+                                isSelected: !isActivitySelected && facade.isSelected(project),
                                 isPreparing: facade.isPreparingSelection(project),
                                 subtitleLineLimit: isEditingProjects ? 2 : 1
                             )
@@ -126,11 +162,8 @@ struct ProjectListView: View {
                     .onMove(perform: facade.moveProjects)
                 } header: {
                     ProjectListSectionHeader(
-                        recentSessions: snapshot.recentSessions,
-                        isLoadingRecentSessions: snapshot.isLoadingRecentSessions,
                         isEditingProjects: isEditingProjects,
-                        onToggleEditing: toggleProjectEditing,
-                        onSelectRecentSession: openProjectSession
+                        onToggleEditing: toggleProjectEditing
                     )
                     .textCase(nil)
                 }
@@ -484,18 +517,10 @@ private struct ProjectListBottomBar: View {
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
                 .zIndex(1)
             } else if allowsNewChat {
-                Button(action: onNewChat) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: ProjectListLayout.newChatIconSize, weight: .semibold))
-                        .foregroundStyle(newChatButtonForeground)
-                        .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
-                }
-                .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
-                .opencodePrimaryGlassButton()
-                .buttonBorderShape(.circle)
-                .contentShape(Circle())
-                .accessibilityLabel("New Chat")
-                .accessibilityIdentifier("projects.newChat")
+                OpenCodeNewChatFloatingButton(
+                    accessibilityIdentifier: "projects.newChat",
+                    action: onNewChat
+                )
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
         }
@@ -513,7 +538,28 @@ private struct ProjectListBottomBar: View {
         #endif
     }
 
-    private var newChatButtonForeground: Color {
+}
+
+struct OpenCodeNewChatFloatingButton: View {
+    let accessibilityIdentifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: ProjectListLayout.newChatIconSize, weight: .semibold))
+                .foregroundStyle(foreground)
+                .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
+        }
+        .frame(width: ProjectListLayout.newChatButtonDiameter, height: ProjectListLayout.newChatButtonDiameter)
+        .opencodePrimaryGlassButton()
+        .buttonBorderShape(.circle)
+        .contentShape(Circle())
+        .accessibilityLabel("New Chat")
+        .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    private var foreground: Color {
         #if os(iOS) || targetEnvironment(macCatalyst)
         if #available(iOS 26.0, *) {
             return .white
@@ -1486,172 +1532,33 @@ private struct NewChatInputBar: View {
 }
 
 private struct ProjectListSectionHeader: View {
-    let recentSessions: [RecentProjectSession]
-    let isLoadingRecentSessions: Bool
     let isEditingProjects: Bool
     let onToggleEditing: () -> Void
-    let onSelectRecentSession: (RecentProjectSession) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if isLoadingRecentSessions || !recentSessions.isEmpty {
-                RecentProjectSessionSection(
-                    sessions: recentSessions,
-                    isLoading: isLoadingRecentSessions,
-                    onSelect: onSelectRecentSession
-                )
-            }
-
-            HStack {
-                Label("Projects", systemImage: "folder.fill")
-                    .font(.headline)
-
-                Spacer(minLength: 8)
-
-                Button(action: onToggleEditing) {
-                    Image(systemName: isEditingProjects ? "checkmark" : "ellipsis")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, height: 24)
-                }
-                .opencodeGlassButton(clear: false)
-                .buttonBorderShape(.circle)
-                .accessibilityLabel(isEditingProjects ? "Finish Editing Projects" : "Manage Projects")
-                .accessibilityIdentifier("projects.manage")
-            }
-            .padding(.leading, -16)
-            .padding(.trailing, -29)
-        }
-        .padding(.top, isLoadingRecentSessions || !recentSessions.isEmpty ? 8 : 0)
-        .scrollClipDisabled()
-    }
-}
-
-private struct RecentProjectSessionSection: View {
-    let sessions: [RecentProjectSession]
-    let isLoading: Bool
-    let onSelect: (RecentProjectSession) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Recent Sessions", systemImage: "clock.arrow.circlepath")
+        HStack {
+            Label("Projects", systemImage: "folder.fill")
                 .font(.headline)
-                .padding(.leading, -16)
 
-            RecentProjectSessionRail(sessions: sessions, isLoading: isLoading, onSelect: onSelect)
-        }
-        .padding(.top, 8)
-        .padding(.bottom, 10)
-        .scrollClipDisabled()
-    }
-}
+            Spacer(minLength: 8)
 
-private struct RecentProjectSessionRail: View {
-    let sessions: [RecentProjectSession]
-    let isLoading: Bool
-    let onSelect: (RecentProjectSession) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                if sessions.isEmpty && isLoading {
-                    ForEach(0..<3, id: \.self) { _ in
-                        RecentProjectSessionSkeletonCard()
-                    }
-                } else {
-                    ForEach(sessions) { recent in
-                        Button {
-                            onSelect(recent)
-                        } label: {
-                            RecentProjectSessionCard(recent: recent)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+            Button(action: onToggleEditing) {
+                Image(systemName: isEditingProjects ? "checkmark" : "ellipsis")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
             }
-            .offset(x: -ProjectListLayout.railContentOffset)
+            .opencodeGlassButton(clear: false)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel(isEditingProjects ? "Finish Editing Projects" : "Manage Projects")
+            .accessibilityIdentifier("projects.manage")
         }
-        .scrollClipDisabled()
-        .accessibilityIdentifier("projects.recentSessions")
-    }
-}
-
-private struct RecentProjectSessionSkeletonCard: View {
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.secondary.opacity(0.16))
-                .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.secondary.opacity(0.18))
-                    .frame(width: 94, height: 10)
-
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.secondary.opacity(0.12))
-                    .frame(width: 66, height: 8)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(width: 176, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .redacted(reason: .placeholder)
-        .accessibilityLabel("Loading recent session")
-    }
-}
-
-private struct RecentProjectSessionCard: View {
-    let recent: RecentProjectSession
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            SessionAvatar(title: title)
-                .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                Text(recent.projectTitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            if recent.isBusy {
-                ProgressView()
-                    .controlSize(.small)
-            }
-        }
-        .frame(width: 176, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityLabel("Open recent session \(title) in \(recent.projectTitle)")
-    }
-
-    private var title: String {
-        recent.session.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? recent.session.title ?? "Session"
-            : "Session"
+        .padding(.leading, -16)
+        .padding(.trailing, -29)
     }
 }
 
 private enum ProjectListLayout {
-    static let railContentOffset: CGFloat = 22
     static let sectionTitleFont = Font.system(.footnote, design: .default).weight(.semibold)
     static let roundedSectionTitleFont = Font.system(.footnote, design: .rounded).weight(.semibold)
     static let searchBarHeight: CGFloat = 54

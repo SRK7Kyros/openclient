@@ -9,6 +9,7 @@ final class OpenClientComposition: ObservableObject {
     let bridge: OpenClientBridgeFacade
     let imageContent: OpenClientImageContentCoordinator
     let videoStreams: OpenClientVideoStreamCoordinator
+    let liveActivityBackgroundBridge: LiveActivityBackgroundBridge
 
     var connection: ConnectionFacade { viewModel.connectionFacade }
     var appShell: AppShellFacade { viewModel.appShellFacade }
@@ -18,6 +19,7 @@ final class OpenClientComposition: ObservableObject {
     var commerce: CommerceFacade { viewModel.commerceFacade }
     var projects: ProjectFacade { viewModel.projectFacade }
     var sessions: SessionListFacade { viewModel.sessionListFacade }
+    var activity: ActivityFacade { viewModel.activityFacade }
     var chat: ChatFacade { viewModel.chatFacade }
     var configurations: ConfigurationsFacade { viewModel.configurationsFacade }
     var funAndGames: FunAndGamesFacade { viewModel.funAndGamesFacade }
@@ -28,6 +30,8 @@ final class OpenClientComposition: ObservableObject {
         whatsNew: OpenClientWhatsNewStore? = nil
     ) {
         self.viewModel = viewModel
+        let liveActivityBackgroundBridge = LiveActivityBackgroundBridge()
+        self.liveActivityBackgroundBridge = liveActivityBackgroundBridge
         self.whatsNew = whatsNew ?? OpenClientWhatsNewStore(
             hasExistingConnection: !viewModel.connectionFacade.recentServerConfigs.isEmpty,
             checksForUpdates: ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_MODE"] != "1"
@@ -51,6 +55,16 @@ final class OpenClientComposition: ObservableObject {
         bridge = OpenClientBridgeFacade(store: bridgeStore) { [weak bridgeCoordinator] in
             bridgeCoordinator?.forceConnect()
         }
+        viewModel.eventManager.setManagedEventObserver { [weak liveActivityBackgroundBridge] managed in
+            await MainActor.run {
+                liveActivityBackgroundBridge?.consume(managed)
+            }
+        }
+        viewModel.chatFacade.attachLiveActivityBackgroundBridge(liveActivityBackgroundBridge)
+        viewModel.connectionFacade.attachLiveActivityBackgroundBridge(liveActivityBackgroundBridge)
+        viewModel.sessionListFacade.attachLiveActivityBackgroundBridge(liveActivityBackgroundBridge)
+        viewModel.activityFacade.attachLiveActivityBackgroundBridge(liveActivityBackgroundBridge)
+        viewModel.liveActivityFacade.attachLiveActivityBackgroundBridge(liveActivityBackgroundBridge)
         bridgeCoordinator.start()
     }
 }

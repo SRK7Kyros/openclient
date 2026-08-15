@@ -16,8 +16,58 @@ final class SessionListFacade: ObservableObject {
         var hasPermissionRequest: Bool
         var displayTitle: String
         var shimmersTitle: Bool
+        var projectTitle: String
+        var projectIcon: OpenCodeProject.Icon?
+        var usesGlobalProjectAvatar: Bool
+        var activityNeedsInput: Bool
+        var activityIsWorking: Bool
+        var activityStatusTitle: String
+        var latestUserText: String?
+        var latestAssistantText: String?
+        var runningTools: [ActivityFacade.ToolSnapshot]
+        var updatedAt: Date?
+        var pendingInteractionCount: Int
+        var completedTodoCount: Int
+        var todoCount: Int
 
         var id: String { session.id }
+
+        var activityRow: ActivityFacade.RowSnapshot {
+            var displaySession = OpenCodeSession(
+                id: session.id,
+                title: displayTitle,
+                workspaceID: session.workspaceID,
+                directory: session.directory,
+                projectID: session.projectID,
+                parentID: session.parentID
+            )
+            displaySession.time = session.time
+            return ActivityFacade.RowSnapshot(
+                recent: RecentProjectSession(
+                    session: displaySession,
+                    projectTitle: projectTitle,
+                    preview: preview,
+                    isBusy: activityIsWorking
+                ),
+                projectID: session.projectID ?? session.directory ?? "global",
+                projectIcon: projectIcon,
+                usesGlobalProjectAvatar: usesGlobalProjectAvatar,
+                needsInput: activityNeedsInput,
+                isWorking: activityIsWorking,
+                statusTitle: activityStatusTitle,
+                latestUserText: latestUserText,
+                latestAssistantText: latestAssistantText,
+                runningTools: runningTools,
+                updatedAt: updatedAt,
+                latestUserMessageAt: nil,
+                pendingInteractionCount: pendingInteractionCount,
+                completedTodoCount: completedTodoCount,
+                todoCount: todoCount,
+                isLiveActivityActive: hasLiveActivity,
+                isHydrating: false,
+                hydrationGeneration: 0
+            )
+        }
     }
 
     struct WorkspaceSection: Identifiable, Equatable {
@@ -56,6 +106,8 @@ final class SessionListFacade: ObservableObject {
             errorMessage: nil,
             hasProUnlock: true,
             isReadOnly: false,
+            cardStyle: .simple,
+            showsActivityLastUserMessage: true,
             currentProjectActions: []
         )
 
@@ -71,6 +123,8 @@ final class SessionListFacade: ObservableObject {
         let errorMessage: String?
         let hasProUnlock: Bool
         let isReadOnly: Bool
+        let cardStyle: SessionCardStyle
+        let showsActivityLastUserMessage: Bool
         let currentProjectActions: [ProjectActionSnapshot]
 
         var hasBusySession: Bool {
@@ -106,6 +160,7 @@ final class SessionListFacade: ObservableObject {
     }
 
     private unowned let viewModel: AppViewModel
+    private weak var liveActivityBackgroundBridge: LiveActivityBackgroundBridge?
     @Published private(set) var snapshot = Snapshot.empty
     private var observations: Set<AnyCancellable> = []
     private var activeDirectoryObservations: Set<AnyCancellable> = []
@@ -123,6 +178,7 @@ final class SessionListFacade: ObservableObject {
             viewModel.sessionInteractionStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.composerStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
+            viewModel.appCustomizationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.$draftTitle.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$newSessionWorkspaceSelection.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$newWorkspaceName.map { _ in () }.eraseToAnyPublisher(),
@@ -144,6 +200,10 @@ final class SessionListFacade: ObservableObject {
                 self?.scheduleSnapshotRefresh()
             }
             .store(in: &observations)
+    }
+
+    func attachLiveActivityBackgroundBridge(_ bridge: LiveActivityBackgroundBridge) {
+        liveActivityBackgroundBridge = bridge
     }
 
     private func makeSnapshot() -> Snapshot {
@@ -202,6 +262,8 @@ final class SessionListFacade: ObservableObject {
             errorMessage: isScreenshotScene ? nil : viewModel.errorMessage,
             hasProUnlock: viewModel.commerceFacade.hasProUnlock,
             isReadOnly: isReadOnly,
+            cardStyle: viewModel.appCustomizationStore.sessionCardStyle,
+            showsActivityLastUserMessage: viewModel.appCustomizationStore.showsActivityLastUserMessage,
             currentProjectActions: viewModel.currentProjectActions.map { action in
                 ProjectActionSnapshot(
                     action: action,
@@ -281,6 +343,11 @@ final class SessionListFacade: ObservableObject {
         await viewModel.refreshSessionList()
     }
 
+    func prepareActivityCardsIfNeeded() async {
+        guard viewModel.appCustomizationStore.sessionCardStyle == .activity else { return }
+        await viewModel.activityFacade.prepareForPresentation()
+    }
+
     func loadMoreSessions() async {
         await viewModel.loadMoreSessions()
     }
@@ -347,7 +414,9 @@ final class SessionListFacade: ObservableObject {
     }
     func delete(_ session: OpenCodeSession) async {
         guard !viewModel.isBrowsingLocalCache else { return }
-        await viewModel.deleteSession(session)
+        if await viewModel.deleteSession(session) {
+            liveActivityBackgroundBridge?.cancel(sessionID: session.id, reason: "Session deleted")
+        }
     }
     func toggleLiveActivity(for session: OpenCodeSession) async {
         guard !viewModel.isBrowsingLocalCache else { return }
@@ -396,6 +465,14 @@ final class SessionListFacade: ObservableObject {
     ) -> RowSnapshot {
         let generatedTitle = session.defaultGeneratedTitleDisplayName
         let isBusy = viewModel.sessionStatuses[session.id] == "busy"
+        let directorySnapshot = viewModel.directoryStoreRegistry.snapshot(forSessionID: session.id)
+        let messages = directorySnapshot?.messages ?? []
+        let status = directorySnapshot?.status ?? viewModel.sessionStatuses[session.id]
+        let isWorking = status.map { $0 != "idle" } ?? false
+        let todos = directorySnapshot?.todos ?? []
+        let permissionCount = directorySnapshot?.permissions.count ?? 0
+        let questionCount = directorySnapshot?.questions.count ?? 0
+        let project = viewModel.currentProject
         return RowSnapshot(
             session: session,
             isSelected: viewModel.selectedSession?.id == session.id,
@@ -408,8 +485,84 @@ final class SessionListFacade: ObservableObject {
             hasDraft: viewModel.hasMessageDraft(for: session),
             hasPermissionRequest: hasPermissionRequest ?? viewModel.hasPermissionRequest(for: session),
             displayTitle: generatedTitle ?? session.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled Session",
-            shimmersTitle: generatedTitle != nil && isBusy
+            shimmersTitle: generatedTitle != nil && isBusy,
+            projectTitle: projectTitle(project),
+            projectIcon: project?.icon,
+            usesGlobalProjectAvatar: project?.id == "global" || session.isGlobalScopeSession,
+            activityNeedsInput: permissionCount + questionCount > 0,
+            activityIsWorking: isWorking,
+            activityStatusTitle: activityStatusTitle(
+                status: status,
+                permissionCount: permissionCount,
+                questionCount: questionCount
+            ),
+            latestUserText: activityLatestText(in: messages, role: "user"),
+            latestAssistantText: activityLatestText(in: messages, role: "assistant") ?? viewModel.sessionPreviews[session.id]?.text,
+            runningTools: activityRunningToolSnapshots(in: messages),
+            updatedAt: (session.time?.updated ?? session.time?.created).map { Date(timeIntervalSince1970: $0 / 1_000) }
+                ?? viewModel.sessionPreviews[session.id]?.date,
+            pendingInteractionCount: permissionCount + questionCount,
+            completedTodoCount: todos.lazy.filter { $0.status == "completed" }.count,
+            todoCount: todos.count
         )
+    }
+
+    private func projectTitle(_ project: OpenCodeProject?) -> String {
+        guard let project else { return "Project" }
+        if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        if project.id == "global" { return "Global" }
+        let title = URL(fileURLWithPath: project.worktree).lastPathComponent
+        return title.isEmpty ? project.id : title
+    }
+
+    private func activityLatestText(in messages: [OpenCodeMessageEnvelope], role: String) -> String? {
+        for message in messages.reversed() where message.info.role?.lowercased() == role {
+            let textParts = message.parts.filter { $0.type == "text" }.compactMap(\.text)
+            let fallbackParts = message.parts.filter { $0.type == "reasoning" }.compactMap(\.text)
+            if let text = opencodePreviewText((textParts.isEmpty ? fallbackParts : textParts).joined(separator: " "), limit: nil) {
+                return text
+            }
+        }
+        return nil
+    }
+
+    private func activityStatusTitle(status: String?, permissionCount: Int, questionCount: Int) -> String {
+        if permissionCount + questionCount > 0 { return "Needs input" }
+        switch status?.lowercased() {
+        case "busy", "running", "working", "pending", "in_progress":
+            return "Working"
+        default:
+            return "Idle"
+        }
+    }
+
+    private func activityRunningToolSnapshots(in messages: [OpenCodeMessageEnvelope]) -> [ActivityFacade.ToolSnapshot] {
+        guard let message = messages.last,
+              let part = message.parts.last,
+              let tool = part.tool,
+              ["running", "pending", "in_progress"].contains(part.state?.status?.lowercased() ?? "") else { return [] }
+        return [
+            ActivityFacade.ToolSnapshot(
+                id: part.id ?? part.callID ?? "\(message.id):\(tool)",
+                tool: tool,
+                title: activityToolTitle(part: part, tool: tool),
+                detail: part.state?.input?.command
+                    ?? part.state?.input?.description
+                    ?? part.state?.input?.filePath
+                    ?? part.state?.input?.path
+                    ?? part.state?.input?.query
+                    ?? part.state?.input?.pattern
+            ),
+        ]
+    }
+
+    private func activityToolTitle(part: OpenCodePart, tool: String) -> String {
+        if let title = part.state?.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            return title
+        }
+        return tool.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private var isScreenshotScene: Bool {

@@ -514,7 +514,6 @@ extension AppViewModel {
             }
             try await loadMessages(for: session)
             seedComposerSelectionsForNewSession(session)
-            await maybeAutoStartLiveActivity(for: session)
             recordCreatedSessionForMetering()
             errorMessage = nil
         } catch {
@@ -875,7 +874,6 @@ extension AppViewModel {
                 directoryKey: navigationDirectoryKey
             ) else { return }
             restoreMessageDraftIfComposerIsEmpty(for: session)
-            await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
             guard isSessionNavigationCurrent(
@@ -932,33 +930,36 @@ extension AppViewModel {
         await sendMessage(rawText, agentMentions: draftAgentMentions, attachments: attachments, sessionID: selectedSessionID, userVisible: true, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+    @discardableResult
+    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
         await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+    @discardableResult
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
         await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
-        guard let session = session(matching: sessionID) else { return }
-        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
+    @discardableResult
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
+        guard let session = session(matching: sessionID) else { return false }
+        return await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+    @discardableResult
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
         if isCompactClientCommand(command) {
-            await compactSession(selectedSession, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
-            return
+            return await compactSession(selectedSession, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
         }
 
         guard sessionStatuses[selectedSession.id] != "busy" else {
             appendDebugLog("command blocked busy session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
-            return
+            return false
         }
 
         if userVisible, meterPrompt, !reserveUserPromptIfAllowed() {
             appendDebugLog("command blocked paywall session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
-            return
+            return false
         }
 
         let modelReference = effectiveModelReference(for: selectedSession)
@@ -1006,6 +1007,7 @@ extension AppViewModel {
             try await sessionCoordinator.submitCommand(client: client, submission: commandSubmission)
             appendDebugLog("command accepted session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
             errorMessage = nil
+            return true
         } catch {
             if userVisible {
                 refundReservedUserPromptIfNeeded()
@@ -1025,26 +1027,29 @@ extension AppViewModel {
             sessionStatuses[statusTransition.sessionID] = statusTransition.previousStatus
             appendDebugLog("command error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
-    func stopCurrentSession() async {
+    @discardableResult
+    func stopCurrentSession() async -> Bool {
         if isUsingAppleIntelligence {
             appleIntelligenceResponseTask?.cancel()
             if let selectedSession {
                 sessionStatuses[selectedSession.id] = "idle"
             }
             persistAppleIntelligenceMessages()
-            return
+            return false
         }
 
-        guard let selectedSession else { return }
+        guard let selectedSession else { return false }
         let abortSubmission = sessionCoordinator.prepareAbortSession(
             session: selectedSession,
             selectedDirectory: effectiveSelectedDirectory,
             currentProjectID: currentProject?.id
         )
 
+        var accepted = false
         do {
             appendDebugLog(
                 "abort request session=\(debugSessionLabel(selectedSession)) directory=\(debugDirectoryLabel(abortSubmission.directory)) workspace=\(abortSubmission.workspaceID ?? "nil")"
@@ -1055,6 +1060,7 @@ extension AppViewModel {
             )
             sessionStatuses[selectedSession.id] = "idle"
             appendDebugLog("abort accepted session=\(debugSessionLabel(selectedSession))")
+            accepted = true
         } catch {
             appendDebugLog("abort error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
@@ -1067,6 +1073,7 @@ extension AppViewModel {
             appendDebugLog("post-abort refresh error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
+        return accepted
     }
 
     @discardableResult
@@ -1310,32 +1317,34 @@ extension AppViewModel {
         command.name == "compact"
     }
 
-    func compactSession(sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
-        guard let session = session(matching: sessionID) else { return }
-        await compactSession(session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
+    @discardableResult
+    func compactSession(sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
+        guard let session = session(matching: sessionID) else { return false }
+        return await compactSession(session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func compactSession(_ selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+    @discardableResult
+    func compactSession(_ selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
         guard selectedSession.parentID == nil else {
             appendDebugLog("compact blocked child session=\(debugSessionLabel(selectedSession))")
             errorMessage = "Compact is only available in root sessions."
-            return
+            return false
         }
 
         guard sessionStatuses[selectedSession.id] != "busy" else {
             appendDebugLog("compact blocked busy session=\(debugSessionLabel(selectedSession))")
-            return
+            return false
         }
 
         guard let modelReference = effectiveModelReference(for: selectedSession) else {
             appendDebugLog("compact blocked missing model session=\(debugSessionLabel(selectedSession))")
             errorMessage = "Select a model before compacting this session."
-            return
+            return false
         }
 
         if userVisible, meterPrompt, !reserveUserPromptIfAllowed() {
             appendDebugLog("compact blocked paywall session=\(debugSessionLabel(selectedSession))")
-            return
+            return false
         }
 
         let compactPreparation = sessionCoordinator.prepareCompactSession(
@@ -1377,6 +1386,7 @@ extension AppViewModel {
             appendDebugLog("compact accepted session=\(debugSessionLabel(selectedSession))")
             refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
+            return true
         } catch {
             if userVisible, restoreDraftOnFailure {
                 refundReservedUserPromptIfNeeded()
@@ -1393,6 +1403,7 @@ extension AppViewModel {
             sessionStatuses[statusTransition.sessionID] = statusTransition.previousStatus
             appendDebugLog("compact error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -1849,7 +1860,9 @@ extension AppViewModel {
         }
     }
 
-    func deleteSession(_ session: OpenCodeSession) async {
+    @discardableResult
+    func deleteSession(_ session: OpenCodeSession) async -> Bool {
+        var accepted = false
         do {
             let deleteSubmission = sessionCoordinator.prepareDeleteSession(
                 session: session,
@@ -1857,8 +1870,10 @@ extension AppViewModel {
                 currentProjectID: currentProject?.id
             )
             try await sessionCoordinator.submitDelete(client: client, submission: deleteSubmission)
+            accepted = true
             withAnimation(opencodeSelectionAnimation) {
                 removePinnedSessionIDFromAllScopes(session.id)
+                sessionListStore.removeRecentSession(sessionID: session.id)
             }
             removeSessionPreview(for: session.id)
             if selectedSession?.id == session.id {
@@ -1874,6 +1889,7 @@ extension AppViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+        return accepted
     }
 
     func renameSession(_ session: OpenCodeSession, title: String) async {

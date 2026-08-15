@@ -53,6 +53,10 @@ struct ScreenshotSceneView: View {
                     terminalID: OpenClientScreenshotData.terminal.id
                 )
             }
+        case .activity:
+            NavigationStack {
+                ActivityView(facade: viewModel.activityFacade) {}
+            }
         case .projects, .newSession, .providerSetup, .funGames, .sessions, .terminal, .sessionActions, .sessionPinned, .chat, .permission, .question, .findPlaceGame, .findBugGame, .composerActions:
             rootView
         case .paywall:

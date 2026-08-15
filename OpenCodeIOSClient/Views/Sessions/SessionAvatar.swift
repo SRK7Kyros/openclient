@@ -2,12 +2,13 @@ import SwiftUI
 
 struct SessionAvatar: View {
     let title: String
+    var size: CGFloat = 42
 
     var body: some View {
         Text(initials)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: size * 0.36, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 42, height: 42)
+            .frame(width: size, height: size)
             .background(avatarGradient, in: Circle())
     }
 

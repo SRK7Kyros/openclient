@@ -4,6 +4,18 @@ import XCTest
 
 @MainActor
 final class DirectoryStoreTests: XCTestCase {
+    func testUpsertSessionsPreservesExistingSessionsAndMergesUpdates() {
+        let existing = OpenCodeSession(id: "existing", title: "Old", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)
+        let updated = OpenCodeSession(id: "existing", title: "Updated", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)
+        let added = OpenCodeSession(id: "added", title: "Added", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)
+        let store = DirectoryStore(sessions: [existing], sessionTotal: 1)
+
+        XCTAssertTrue(store.upsertSessions([updated, added]))
+        XCTAssertEqual(store.sessions.map(\.id), [existing.id, added.id])
+        XCTAssertEqual(store.sessions.first?.title, "Updated")
+        XCTAssertEqual(store.sessionTotal, 2)
+    }
+
     func testApplyDirectoryReloadOwnsSessionsCommandsStatusesAndInteractionSyncMaps() {
         let selected = session(id: "ses_selected", directory: "/tmp/project")
         let permission = permission(id: "perm_1", sessionID: selected.id)

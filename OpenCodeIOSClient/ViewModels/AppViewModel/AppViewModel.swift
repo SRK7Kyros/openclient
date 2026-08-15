@@ -307,6 +307,7 @@ final class AppViewModel: ObservableObject {
     }
     let sessionListStore = SessionListStore()
     lazy var sessionListFacade = SessionListFacade(viewModel: self)
+    lazy var activityFacade = ActivityFacade(viewModel: self)
     var sessionPreviews: [String: SessionPreview] {
         get { sessionListStore.previews }
         set {

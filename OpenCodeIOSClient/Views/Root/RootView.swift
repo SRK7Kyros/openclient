@@ -163,9 +163,18 @@ struct RootView<ChatDestination: View>: View {
                 connection: shell.connection,
                 configurations: shell.configurations,
                 games: shell.funAndGames,
-                bridge: bridge
+                bridge: bridge,
+                isActivitySelected: shell.isActivitySelected,
+                onActivityChosen: {
+                    shell.selectActivity()
+                    withAnimation(opencodeSelectionAnimation) {
+                        columnVisibility = .doubleColumn
+                        preferredCompactColumn = .content
+                    }
+                }
             ) {
                 guard shell.hasCurrentProject else { return }
+                shell.selectProjectContent()
 
                 withAnimation(opencodeSelectionAnimation) {
                     showProjectContentOrDetail()
@@ -181,6 +190,12 @@ struct RootView<ChatDestination: View>: View {
                 ProjectContentView(shell: shell) {
                     withAnimation(opencodeSelectionAnimation) {
                         preferredCompactColumn = .detail
+                    }
+                }
+            case .activity:
+                ActivityView(facade: shell.activity) {
+                    withAnimation(opencodeSelectionAnimation) {
+                        showDetailColumn()
                     }
                 }
             }

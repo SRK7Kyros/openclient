@@ -394,6 +394,22 @@ final class DirectoryStore: ObservableObject {
         return changed
     }
 
+    @discardableResult
+    func upsertSessions(_ incomingSessions: [OpenCodeSession]) -> Bool {
+        var nextSessions = sessions
+        for incoming in incomingSessions {
+            if let index = nextSessions.firstIndex(where: { $0.id == incoming.id }) {
+                nextSessions[index] = nextSessions[index].merged(with: incoming)
+            } else {
+                nextSessions.append(incoming)
+            }
+        }
+        guard nextSessions != sessions else { return false }
+        sessions = nextSessions
+        sessionTotal = max(sessionTotal, nextSessions.lazy.filter(\.isRootSession).count)
+        return true
+    }
+
     var hasMoreSessions: Bool {
         sessionTotal > sessions.lazy.filter(\.isRootSession).count
     }

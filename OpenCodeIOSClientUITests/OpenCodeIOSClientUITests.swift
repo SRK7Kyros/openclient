@@ -107,7 +107,7 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             }
 
             if scene == "projects" || scene == "provider-setup" {
-                XCTAssertTrue(app.scrollViews["projects.recentSessions"].waitForExistence(timeout: 10), "Expected recent sessions rail to load")
+                XCTAssertTrue(app.buttons["projects.activity"].waitForExistence(timeout: 10), "Expected Activity link to load")
             }
 
             if scene == "projects" {
@@ -171,6 +171,104 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             snapshot(screenshotName)
             app.terminate()
         }
+    }
+
+    @MainActor
+    func testActivityProjectFilterMenu() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "activity"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.activity"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["activity.newChat"].waitForExistence(timeout: 5))
+        let filter = app.buttons["activity.projectFilter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["activity.session.session-screenshot-release"].exists)
+        XCTAssertTrue(app.buttons["activity.session.session-screenshot-docs"].exists)
+
+        filter.tap()
+
+        XCTAssertTrue(app.buttons["All Projects"].waitForExistence(timeout: 5))
+        let openClientProject = app.buttons["openclient"]
+        XCTAssertTrue(openClientProject.exists)
+        XCTAssertTrue(app.buttons["avatarless-project"].exists)
+        XCTAssertTrue(app.buttons["product-playbook"].exists)
+        let menuScreenshot = XCTAttachment(screenshot: app.screenshot())
+        menuScreenshot.name = "Activity Project Filter"
+        menuScreenshot.lifetime = .keepAlways
+        add(menuScreenshot)
+        openClientProject.tap()
+
+        XCTAssertFalse(app.buttons["activity.session.session-screenshot-release"].exists)
+        XCTAssertTrue(app.buttons["activity.session.session-screenshot-docs"].exists)
+    }
+
+    @MainActor
+    func testActivityLiveActivitySwipeAction() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "activity"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.activity"].waitForExistence(timeout: 10))
+        let row = app.buttons["activity.session.session-screenshot-release"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.swipeLeft()
+
+        XCTAssertTrue(app.buttons["Stop Live"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Delete"].exists)
+    }
+
+    @MainActor
+    func testActivitySettingsHideLastUserMessageAndPersistPreference() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "activity"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.activity"].waitForExistence(timeout: 10))
+        let row = app.buttons["activity.session.session-screenshot-release"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+
+        app.buttons["activity.settings"].tap()
+        XCTAssertTrue(app.navigationBars["Activity Settings"].waitForExistence(timeout: 5))
+        let toggle = app.switches["activity.settings.showLastUserMessage"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if !isSwitchOn(toggle) {
+            toggle.tap()
+        }
+        app.buttons["Done"].tap()
+        let userMessage = app.staticTexts["activity.session.session-screenshot-release.latest-user"]
+        XCTAssertTrue(userMessage.waitForExistence(timeout: 5))
+
+        app.buttons["activity.settings"].tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        app.buttons["Done"].tap()
+        let compactPredicate = NSPredicate { object, _ in
+            guard let element = object as? XCUIElement else { return false }
+            return !element.exists
+        }
+        expectation(for: compactPredicate, evaluatedWith: userMessage)
+        waitForExpectations(timeout: 5)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["screenshot.scene.activity"].waitForExistence(timeout: 10))
+        let restoredRow = app.buttons["activity.session.session-screenshot-release"]
+        XCTAssertTrue(restoredRow.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["activity.session.session-screenshot-release.latest-user"].exists)
+
+        app.buttons["activity.settings"].tap()
+        let restoredToggle = app.switches["activity.settings.showLastUserMessage"]
+        XCTAssertTrue(restoredToggle.waitForExistence(timeout: 5))
+        XCTAssertFalse(isSwitchOn(restoredToggle))
+        restoredToggle.tap()
+        app.buttons["Done"].tap()
+    }
+
+    @MainActor
+    private func isSwitchOn(_ element: XCUIElement) -> Bool {
+        guard let value = element.value as? String else { return false }
+        return ["1", "on", "true"].contains(value.lowercased())
     }
 
     @MainActor

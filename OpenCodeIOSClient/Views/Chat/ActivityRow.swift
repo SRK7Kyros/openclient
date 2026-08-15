@@ -10,6 +10,48 @@ struct ActivityStyle {
     let shimmerTitle: Bool
 }
 
+struct OpenCodeToolActivityAppearance {
+    let icon: String
+    let tint: Color
+
+    static func resolve(_ tool: String) -> OpenCodeToolActivityAppearance {
+        switch tool.lowercased() {
+        case "todowrite", "todo_write":
+            return OpenCodeToolActivityAppearance(icon: "checklist", tint: .blue)
+        case "bash", "shell":
+            return OpenCodeToolActivityAppearance(icon: "terminal.fill", tint: .green)
+        case "read":
+            return OpenCodeToolActivityAppearance(icon: "eyeglasses", tint: .blue)
+        case "list":
+            return OpenCodeToolActivityAppearance(icon: "list.bullet", tint: .indigo)
+        case "glob":
+            return OpenCodeToolActivityAppearance(icon: "magnifyingglass", tint: .teal)
+        case "grep":
+            return OpenCodeToolActivityAppearance(icon: "magnifyingglass.circle", tint: .mint)
+        case "webfetch", "web_fetch":
+            return OpenCodeToolActivityAppearance(icon: "network", tint: .teal)
+        case "websearch", "web_search":
+            return OpenCodeToolActivityAppearance(icon: "globe", tint: .teal)
+        case "codesearch", "code_search":
+            return OpenCodeToolActivityAppearance(icon: "chevron.left.forwardslash.chevron.right", tint: .purple)
+        case "task":
+            return OpenCodeToolActivityAppearance(icon: "square.stack.3d.up.fill", tint: .purple)
+        case "edit", "write":
+            return OpenCodeToolActivityAppearance(icon: "square.and.pencil", tint: .orange)
+        case "apply_patch":
+            return OpenCodeToolActivityAppearance(icon: "hammer.fill", tint: .orange)
+        case "question":
+            return OpenCodeToolActivityAppearance(icon: "questionmark.bubble", tint: .blue)
+        case "skill":
+            return OpenCodeToolActivityAppearance(icon: "brain", tint: .indigo)
+        case "mcp":
+            return OpenCodeToolActivityAppearance(icon: "point.3.connected.trianglepath.dotted", tint: .pink)
+        default:
+            return OpenCodeToolActivityAppearance(icon: "wrench.and.screwdriver.fill", tint: .secondary)
+        }
+    }
+}
+
 struct ActivityRow: View {
     let style: ActivityStyle
     var compact: Bool = false

@@ -95,22 +95,6 @@ struct ConfigurationsSheet: View {
                     ))
                 }
 
-                Section("Project List") {
-                    Toggle("Show Recent Sessions", isOn: Binding(
-                        get: { viewModel.showsRecentSessionsInProjectList },
-                        set: { isEnabled in
-                            viewModel.setShowsRecentSessionsInProjectList(isEnabled)
-                            if isEnabled {
-                                Task { await viewModel.loadRecentProjectSessionsAcrossProjects() }
-                            }
-                        }
-                    ))
-
-                    Text("Show a horizontal stack of recent sessions across projects for quick switching.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
             }
             .navigationTitle("Configurations")
             .opencodeInlineNavigationTitle()

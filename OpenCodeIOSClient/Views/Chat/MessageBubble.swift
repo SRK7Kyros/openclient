@@ -878,6 +878,7 @@ struct MessageBubble: View {
     private func activityStyle(for part: OpenCodePart) -> ActivityStyle? {
         let tool = toolName(for: part)
         let running = isRunning(part)
+        let appearance = OpenCodeToolActivityAppearance.resolve(tool)
 
         switch tool {
         case "", "agent", "step-start", "step-finish", "reasoning", "text":
@@ -886,8 +887,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: todoWriteTitle(for: part, running: running),
                 subtitle: todoWriteSubtitle(for: part),
-                icon: "checklist",
-                tint: .blue,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -896,8 +897,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Shell",
                 subtitle: running ? nil : firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
-                icon: "terminal.fill",
-                tint: .green,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -906,8 +907,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Read",
                 subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
-                icon: "eyeglasses",
-                tint: .blue,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -916,8 +917,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "List",
                 subtitle: firstNonEmpty(filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
-                icon: "list.bullet",
-                tint: .indigo,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -926,8 +927,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Glob",
                 subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
-                icon: "magnifyingglass",
-                tint: .teal,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -936,8 +937,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Grep",
                 subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
-                icon: "magnifyingglass.circle",
-                tint: .mint,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -946,8 +947,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Webfetch",
                 subtitle: running ? nil : firstNonEmpty(part.state?.input?.url, toolSubtitle(for: part, fallback: nil)),
-                icon: "network",
-                tint: .teal,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -956,8 +957,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Web Search",
                 subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
-                icon: "globe",
-                tint: .teal,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -966,8 +967,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Code Search",
                 subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
-                icon: "chevron.left.forwardslash.chevron.right",
-                tint: .purple,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -978,8 +979,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: agent,
                 subtitle: subtitle,
-                icon: "square.stack.3d.up.fill",
-                tint: .purple,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -988,8 +989,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Edit",
                 subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
-                icon: "square.and.pencil",
-                tint: .orange,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -998,8 +999,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Write",
                 subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
-                icon: "square.and.pencil",
-                tint: .orange,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -1010,8 +1011,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Patch",
                 subtitle: firstNonEmpty(fileSummary, toolSubtitle(for: part, fallback: nil)),
-                icon: "hammer.fill",
-                tint: .orange,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -1020,8 +1021,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: "Questions",
                 subtitle: toolSubtitle(for: part, fallback: nil),
-                icon: "questionmark.bubble",
-                tint: .blue,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -1030,8 +1031,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: firstNonEmpty(part.state?.input?.name, "Skill") ?? "Skill",
                 subtitle: toolSubtitle(for: part, fallback: nil),
-                icon: "brain",
-                tint: .indigo,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -1040,8 +1041,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: firstNonEmpty(part.state?.title, "MCP") ?? "MCP",
                 subtitle: toolSubtitle(for: part, fallback: nil),
-                icon: "point.3.connected.trianglepath.dotted",
-                tint: .pink,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false
@@ -1051,8 +1052,8 @@ struct MessageBubble: View {
             return ActivityStyle(
                 title: title,
                 subtitle: firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
-                icon: "wrench.and.screwdriver.fill",
-                tint: .secondary,
+                icon: appearance.icon,
+                tint: appearance.tint,
                 isRunning: running,
                 showsDisclosure: true,
                 shimmerTitle: false

@@ -1,6 +1,6 @@
 import Foundation
 
-func opencodePreviewText(_ text: String, limit: Int = 140) -> String? {
+func opencodePreviewText(_ text: String, limit: Int? = 140) -> String? {
     let normalized = text
         .replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
@@ -14,8 +14,11 @@ func opencodePreviewText(_ text: String, limit: Int = 140) -> String? {
         .map(stripInlineMarkdown)
         .filter { !$0.isEmpty }
 
-    guard let line = lines.last else { return nil }
-    return String(line.prefix(limit))
+    let preview = lines.joined(separator: " · ")
+    guard !preview.isEmpty else { return nil }
+    guard let limit, preview.count > limit else { return preview }
+    guard limit > 1 else { return String(preview.suffix(max(0, limit))) }
+    return "…" + String(preview.suffix(limit - 1))
 }
 
 private func isMarkdownFence(_ line: String) -> Bool {
@@ -23,21 +26,11 @@ private func isMarkdownFence(_ line: String) -> Bool {
 }
 
 private func stripLeadingMarkdown(_ line: String) -> String {
-    var value = line
-
-    while value.hasPrefix("#") {
-        value.removeFirst()
-        value = value.trimmingCharacters(in: .whitespaces)
-    }
-
-    for prefix in ["> ", "- ", "* ", "+ "] {
-        if value.hasPrefix(prefix) {
-            value.removeFirst(prefix.count)
-            return value.trimmingCharacters(in: .whitespaces)
-        }
-    }
-
-    return value
+    var value = replacingMatches(#"^#{1,6}\s*"#, in: line, template: "")
+    value = replacingMatches(#"^>\s*"#, in: value, template: "")
+    value = replacingMatches(#"^(?:[-*+•]|\d+[.)])\s+"#, in: value, template: "")
+    value = replacingMatches(#"^\[[ xX]\]\s+"#, in: value, template: "")
+    return value.trimmingCharacters(in: .whitespaces)
 }
 
 private func stripInlineMarkdown(_ line: String) -> String {

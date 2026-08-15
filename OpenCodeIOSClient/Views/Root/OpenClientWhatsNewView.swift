@@ -18,11 +18,21 @@ struct OpenClientWhatsNewView: View {
                     OpenClientWhatsNewHero(
                         version: release.version,
                         title: release.title,
-                        summary: release.summary
+                        summary: release.summary,
+                        hero: release.hero
                     )
 
-                OpenClientWhatsNewFeatureList(features: release.features)
-                OpenClientWhatsNewSetupSection(connection: connection)
+                    if release.hero == .activity {
+                        OpenClientWhatsNewActivityExamples()
+                    }
+
+                    OpenClientWhatsNewFeatureList(
+                        title: release.featureSectionTitle,
+                        features: release.features
+                    )
+                    if release.showsSetup {
+                        OpenClientWhatsNewSetupSection(connection: connection)
+                    }
                 }
                 .frame(maxWidth: 600)
                 .padding(.horizontal, 18)
@@ -40,10 +50,126 @@ struct OpenClientWhatsNewView: View {
     }
 }
 
+private struct OpenClientWhatsNewActivityExamples: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("SEE WHAT NEEDS YOU")
+                .font(.caption.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 10) {
+                ForEach(Self.rows) { row in
+                    ActivitySessionRow(row: row, showsLastUserMessage: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Activity card examples")
+    }
+
+    // Keep the same precedence as the Activity screen: input, working, then idle.
+    private static let rows: [ActivityFacade.RowSnapshot] = [
+        makeRow(
+            id: "whats-new-input",
+            title: "Ship the TestFlight build",
+            project: "OpenClient",
+            statusTitle: "Needs input",
+            latestUserText: "Upload the new build to TestFlight.",
+            latestAssistantText: "Permission requested for the release command.",
+            needsInput: true,
+            isWorking: true,
+            pendingInteractionCount: 1,
+            completedTodoCount: 2,
+            todoCount: 3,
+            minutesAgo: 2
+        ),
+        makeRow(
+            id: "whats-new-working",
+            title: "Polish Activity cards",
+            project: "Design system",
+            statusTitle: "Working",
+            latestUserText: "Make the Activity page feel native.",
+            latestAssistantText: nil,
+            isWorking: true,
+            runningTools: [
+                ActivityFacade.ToolSnapshot(
+                    id: "whats-new-tool",
+                    tool: "bash",
+                    title: "Running visual checks",
+                    detail: "xcodebuild test"
+                ),
+            ],
+            completedTodoCount: 1,
+            todoCount: 3,
+            minutesAgo: 5
+        ),
+        makeRow(
+            id: "whats-new-idle",
+            title: "Review release notes",
+            project: "OpenClient",
+            statusTitle: "Idle",
+            latestUserText: "Make sure the announcement is ready.",
+            latestAssistantText: "Everything is ready for your next message.",
+            isLiveActivityActive: true,
+            completedTodoCount: 3,
+            todoCount: 3,
+            minutesAgo: 15
+        ),
+    ]
+
+    private static func makeRow(
+        id: String,
+        title: String,
+        project: String,
+        statusTitle: String,
+        latestUserText: String,
+        latestAssistantText: String?,
+        needsInput: Bool = false,
+        isWorking: Bool = false,
+        runningTools: [ActivityFacade.ToolSnapshot] = [],
+        isLiveActivityActive: Bool = false,
+        pendingInteractionCount: Int = 0,
+        completedTodoCount: Int,
+        todoCount: Int,
+        minutesAgo: Double
+    ) -> ActivityFacade.RowSnapshot {
+        let session = OpenCodeSession(
+            id: id,
+            title: title,
+            workspaceID: nil,
+            directory: "/examples/\(project.lowercased().replacingOccurrences(of: " ", with: "-"))",
+            projectID: "whats-new-\(project.lowercased().replacingOccurrences(of: " ", with: "-"))",
+            parentID: nil
+        )
+        return ActivityFacade.RowSnapshot(
+            recent: RecentProjectSession(session: session, projectTitle: project, preview: nil, isBusy: isWorking),
+            projectID: session.projectID ?? "whats-new",
+            projectIcon: nil,
+            usesGlobalProjectAvatar: false,
+            needsInput: needsInput,
+            isWorking: isWorking,
+            statusTitle: statusTitle,
+            latestUserText: latestUserText,
+            latestAssistantText: latestAssistantText,
+            runningTools: runningTools,
+            updatedAt: Date().addingTimeInterval(-minutesAgo * 60),
+            latestUserMessageAt: Date().addingTimeInterval(-minutesAgo * 60),
+            pendingInteractionCount: pendingInteractionCount,
+            completedTodoCount: completedTodoCount,
+            todoCount: todoCount,
+            isLiveActivityActive: isLiveActivityActive,
+            isHydrating: false,
+            hydrationGeneration: 0
+        )
+    }
+}
+
 private struct OpenClientWhatsNewHero: View {
     let version: String
     let title: String
     let summary: String
+    let hero: OpenClientReleaseNotes.Hero
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -80,7 +206,12 @@ private struct OpenClientWhatsNewHero: View {
 
                     Spacer(minLength: 16)
 
-                    OpenClientWhatsNewIconStack()
+                    switch hero {
+                    case .customization:
+                        OpenClientWhatsNewIconStack()
+                    case .activity:
+                        OpenClientWhatsNewActivityMark()
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -104,6 +235,38 @@ private struct OpenClientWhatsNewHero: View {
         }
         .shadow(color: .black.opacity(0.14), radius: 24, y: 12)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct OpenClientWhatsNewActivityMark: View {
+    var body: some View {
+        ZStack {
+            activityCard(tint: .purple, rotation: -7, offset: CGSize(width: -13, height: 6))
+            activityCard(tint: .cyan, rotation: 5, offset: CGSize(width: 13, height: -5))
+        }
+        .frame(width: 94, height: 58)
+        .accessibilityHidden(true)
+    }
+
+    private func activityCard(tint: Color, rotation: Double, offset: CGSize) -> some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(tint.gradient)
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Capsule().fill(.white.opacity(0.9)).frame(width: 35, height: 5)
+                Capsule().fill(.white.opacity(0.38)).frame(width: 45, height: 4)
+            }
+        }
+        .padding(9)
+        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(.white.opacity(0.32), lineWidth: 1)
+        }
+        .rotationEffect(.degrees(rotation))
+        .offset(offset)
     }
 }
 
@@ -138,6 +301,7 @@ private struct OpenClientWhatsNewMiniIcon: View {
 }
 
 private struct OpenClientWhatsNewFeatureList: View {
+    let title: String
     let features: [OpenClientReleaseNotes.Feature]
 
     var body: some View {
@@ -148,7 +312,7 @@ private struct OpenClientWhatsNewFeatureList: View {
                     .tracking(0.8)
                     .foregroundStyle(.secondary)
 
-                Text("Small changes, right where they count")
+                Text(title)
                     .font(.title2.bold())
             }
 

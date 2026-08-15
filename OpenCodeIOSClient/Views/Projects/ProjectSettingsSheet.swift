@@ -12,6 +12,25 @@ struct ProjectSettingsSheet: View {
         NavigationStack {
             Form {
                 Section("Sessions") {
+                    Picker("Card Style", selection: Binding(
+                        get: { facade.settingsSnapshot.sessionCardStyle },
+                        set: { facade.setSessionCardStyle($0) }
+                    )) {
+                        ForEach(SessionCardStyle.allCases) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("project.settings.sessionCardStyle")
+
+                    if snapshot.sessionCardStyle == .activity {
+                        Toggle("Show Last User Message", isOn: Binding(
+                            get: { facade.settingsSnapshot.showsActivityLastUserMessage },
+                            set: { facade.setShowsActivityLastUserMessage($0) }
+                        ))
+                        .accessibilityIdentifier("project.settings.showActivityLastUserMessage")
+                    }
+
                     Toggle("Auto-start Live Activity", isOn: Binding(
                         get: { facade.settingsSnapshot.isLiveActivityAutoStartEnabled },
                         set: { facade.setLiveActivityAutoStartEnabled($0) }

@@ -127,6 +127,7 @@ final class ChatFacade: ObservableObject {
     let mcpFacade: MCPFacade
 
     private unowned let viewModel: AppViewModel
+    private weak var liveActivityBackgroundBridge: LiveActivityBackgroundBridge?
     private var observations: Set<AnyCancellable> = []
     private var activeDirectoryObservations: Set<AnyCancellable> = []
 
@@ -166,6 +167,10 @@ final class ChatFacade: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &observations)
+    }
+
+    func attachLiveActivityBackgroundBridge(_ bridge: LiveActivityBackgroundBridge) {
+        liveActivityBackgroundBridge = bridge
     }
 
     func directoryStore(forSessionID sessionID: String) -> DirectoryStore {
@@ -444,36 +449,44 @@ final class ChatFacade: ObservableObject {
         viewModel.reserveUserPromptIfAllowed()
     }
 
+    @discardableResult
     func compactSession(
         sessionID: String,
         userVisible: Bool,
         meterPrompt: Bool = true,
         restoreDraftOnFailure: Bool = true
-    ) async {
-        guard !isReadOnly else { return }
-        await viewModel.compactSession(
+    ) async -> Bool {
+        guard !isReadOnly else { return false }
+        let intent = armLiveActivityBackgroundBridge(sessionID: sessionID, userVisible: userVisible)
+        let accepted = await viewModel.compactSession(
             sessionID: sessionID,
             userVisible: userVisible,
             meterPrompt: meterPrompt,
             restoreDraftOnFailure: restoreDraftOnFailure
         )
+        resolveLiveActivityBackgroundBridge(intent, accepted: accepted, sessionID: sessionID)
+        return accepted
     }
 
+    @discardableResult
     func sendCommand(
         _ command: OpenCodeCommand,
         sessionID: String,
         userVisible: Bool,
         meterPrompt: Bool = true,
         restoreDraftOnFailure: Bool = true
-    ) async {
-        guard !isReadOnly else { return }
-        await viewModel.sendCommand(
+    ) async -> Bool {
+        guard !isReadOnly else { return false }
+        let intent = armLiveActivityBackgroundBridge(sessionID: sessionID, userVisible: userVisible)
+        let accepted = await viewModel.sendCommand(
             command,
             sessionID: sessionID,
             userVisible: userVisible,
             meterPrompt: meterPrompt,
             restoreDraftOnFailure: restoreDraftOnFailure
         )
+        resolveLiveActivityBackgroundBridge(intent, accepted: accepted, sessionID: sessionID)
+        return accepted
     }
 
     func loadMCPStatusIfNeeded() async {
@@ -553,7 +566,8 @@ final class ChatFacade: ObservableObject {
         meterPrompt: Bool = true
     ) async -> Bool {
         guard !isReadOnly else { return false }
-        return await viewModel.sendMessage(
+        let intent = armLiveActivityBackgroundBridge(sessionID: session.id, userVisible: userVisible)
+        let accepted = await viewModel.sendMessage(
             text,
             agentMentions: agentMentions,
             attachments: attachments,
@@ -564,6 +578,8 @@ final class ChatFacade: ObservableObject {
             appendOptimisticMessage: appendOptimisticMessage,
             meterPrompt: meterPrompt
         )
+        resolveLiveActivityBackgroundBridge(intent, accepted: accepted, sessionID: session.id)
+        return accepted
     }
 
     func removeOptimisticUserMessage(messageID: String, sessionID: String) {
@@ -572,7 +588,33 @@ final class ChatFacade: ObservableObject {
 
     func stopCurrentSession() async {
         guard !isReadOnly else { return }
-        await viewModel.stopCurrentSession()
+        let sessionID = viewModel.selectedSession?.id
+        let accepted = await viewModel.stopCurrentSession()
+        if accepted, let sessionID {
+            liveActivityBackgroundBridge?.cancel(sessionID: sessionID, reason: "Stopped")
+        }
+    }
+
+    private func armLiveActivityBackgroundBridge(
+        sessionID: String,
+        userVisible: Bool
+    ) -> LiveActivityBackgroundBridge.Intent? {
+        guard userVisible,
+              viewModel.backendMode == .server,
+              !viewModel.isUsingAppleIntelligence else { return nil }
+        return liveActivityBackgroundBridge?.arm(sessionID: sessionID)
+    }
+
+    private func resolveLiveActivityBackgroundBridge(
+        _ intent: LiveActivityBackgroundBridge.Intent?,
+        accepted: Bool,
+        sessionID: String
+    ) {
+        liveActivityBackgroundBridge?.resolve(
+            intent,
+            accepted: accepted,
+            hasLiveActivity: viewModel.liveActivityFacade.isActive(sessionID: sessionID)
+        )
     }
 
     func leaveAppleIntelligenceSession() {

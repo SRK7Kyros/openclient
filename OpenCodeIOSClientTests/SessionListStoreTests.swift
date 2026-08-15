@@ -82,4 +82,55 @@ final class SessionListStoreTests: XCTestCase {
         XCTAssertEqual(sessions.count, 1)
         XCTAssertEqual(sessions.first?.title, "Updated")
     }
+
+    func testRecentSessionPrefersExplicitDirectoryProjectOverRepositoryProjectID() {
+        let store = SessionListStore()
+        let repository = OpenCodeProject(id: "repo", worktree: "/tmp/repo", vcs: "git", name: "opencode", sandboxes: nil, icon: nil, time: nil)
+        let general = OpenCodeProject(id: "local:/tmp/repo/general", worktree: "/tmp/repo/general", vcs: nil, name: "General", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "session", title: "General work", workspaceID: nil, directory: general.worktree, projectID: repository.id, parentID: nil)
+        store.setRecentSessions([session], for: general.worktree)
+
+        let recent = store.recentProjectSessions(projects: [repository, general], previews: [:], statuses: [:])
+
+        XCTAssertEqual(recent.first?.projectTitle, "General")
+    }
+
+    func testBareSessionScopeAttributesRepositorySessionToGlobalProject() {
+        let store = SessionListStore()
+        let global = OpenCodeProject(id: "global", worktree: "/", vcs: nil, name: nil, sandboxes: nil, icon: nil, time: nil)
+        let repository = OpenCodeProject(id: "repo", worktree: "/tmp/repo", vcs: "git", name: "opencode", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "session", title: "Freeing up disk space", workspaceID: nil, directory: "/tmp/repo/subdirectory", projectID: repository.id, parentID: nil)
+        store.setRecentSessions([session], for: nil)
+
+        let recent = store.recentProjectSessions(projects: [global, repository], previews: [:], statuses: [:])
+
+        XCTAssertEqual(recent.first?.projectTitle, "Global")
+        XCTAssertEqual(recent.first?.session.projectID, "global")
+    }
+
+    func testExplicitScopeWinsWhenSessionAlsoAppearsInBareScope() {
+        let store = SessionListStore()
+        let global = OpenCodeProject(id: "global", worktree: "/", vcs: nil, name: nil, sandboxes: nil, icon: nil, time: nil)
+        let repository = OpenCodeProject(id: "repo", worktree: "/tmp/repo", vcs: "git", name: "opencode", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "session", title: "Repository work", workspaceID: nil, directory: repository.worktree, projectID: repository.id, parentID: nil)
+        store.setRecentSessions([session], for: nil)
+        store.setRecentSessions([session], for: repository.worktree)
+
+        let recent = store.recentProjectSessions(projects: [global, repository], previews: [:], statuses: [:])
+
+        XCTAssertEqual(recent.count, 1)
+        XCTAssertEqual(recent.first?.projectTitle, "opencode")
+        XCTAssertEqual(recent.first?.session.projectID, repository.id)
+    }
+
+    func testRemovingRecentSessionClearsEverySourceScope() {
+        let store = SessionListStore()
+        let session = OpenCodeSession(id: "session", title: "Delete me", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)
+        store.setRecentSessions([session], for: nil)
+        store.setRecentSessions([session], for: session.directory)
+
+        XCTAssertTrue(store.removeRecentSession(sessionID: session.id))
+        XCTAssertTrue(store.recentSessionsByDirectory.values.allSatisfy(\.isEmpty))
+        XCTAssertFalse(store.removeRecentSession(sessionID: session.id))
+    }
 }

@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ConnectionFacade: ObservableObject {
     private unowned let viewModel: AppViewModel
+    private weak var liveActivityBackgroundBridge: LiveActivityBackgroundBridge?
     private var observations: Set<AnyCancellable> = []
     private var activeDirectoryObservation: AnyCancellable?
 
@@ -27,6 +28,10 @@ final class ConnectionFacade: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &observations)
+    }
+
+    func attachLiveActivityBackgroundBridge(_ bridge: LiveActivityBackgroundBridge) {
+        liveActivityBackgroundBridge = bridge
     }
 
     var config: OpenCodeServerConfig {
@@ -94,6 +99,7 @@ final class ConnectionFacade: ObservableObject {
     }
 
     func disconnect() {
+        liveActivityBackgroundBridge?.cancelAll(reason: "Disconnected")
         viewModel.disconnect()
     }
 

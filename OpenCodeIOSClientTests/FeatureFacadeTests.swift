@@ -8,6 +8,14 @@ import UIKit
 
 @MainActor
 final class FeatureFacadeTests: XCTestCase {
+    func testSessionRelativeTimeNeverUsesSeconds() {
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        XCTAssertEqual(SessionRelativeTimeText.label(for: now.addingTimeInterval(-20), at: now), "Now")
+        XCTAssertEqual(SessionRelativeTimeText.label(for: now.addingTimeInterval(-90), at: now), "1m ago")
+        XCTAssertEqual(SessionRelativeTimeText.label(for: now.addingTimeInterval(-3_600), at: now), "1h ago")
+    }
+
     func testSessionListShimmersGeneratedTitleOnlyWhileSessionIsBusy() {
         let session = OpenCodeSession(
             id: "session",
@@ -25,6 +33,30 @@ final class FeatureFacadeTests: XCTestCase {
 
         XCTAssertFalse(idleViewModel.sessionListFacade.snapshot.unpinnedRows[0].shimmersTitle)
         XCTAssertTrue(busyViewModel.sessionListFacade.snapshot.unpinnedRows[0].shimmersTitle)
+    }
+
+    func testSessionListProjectsPreviewIntoSelectedActivityCardStyle() {
+        let viewModel = AppViewModel()
+        let previousStyle = viewModel.appCustomizationStore.sessionCardStyle
+        defer { viewModel.appCustomizationStore.setSessionCardStyle(previousStyle) }
+        let session = OpenCodeSession(
+            id: "session-activity-card",
+            title: "Detailed session",
+            workspaceID: nil,
+            directory: "/tmp/project",
+            projectID: "project",
+            parentID: nil
+        )
+        viewModel.appCustomizationStore.setSessionCardStyle(.activity)
+        viewModel.allSessions = [session]
+        viewModel.sessionPreviews[session.id] = SessionPreview(text: "Latest assistant reply", date: Date())
+
+        let snapshot = viewModel.sessionListFacade.snapshot
+        let row = snapshot.unpinnedRows[0]
+
+        XCTAssertEqual(snapshot.cardStyle, .activity)
+        XCTAssertEqual(row.activityRow.latestAssistantText, "Latest assistant reply")
+        XCTAssertEqual(row.activityRow.recent.session.id, session.id)
     }
 
     func testStableUIKitMenuCoordinatorReusesUnchangedMenu() {

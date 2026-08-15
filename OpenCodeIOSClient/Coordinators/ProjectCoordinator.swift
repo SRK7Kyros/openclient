@@ -221,7 +221,7 @@ final class ProjectCoordinator {
         return RecentSessionNavigationResult(
             projects: nextProjects,
             currentProject: currentProject,
-            routeDirectory: routeDirectory(forRecentSession: session),
+            routeDirectory: routeDirectory(forRecentSession: session, project: currentProject),
             shouldPreserveMissingSession: session.isGlobalScopeSession
         )
     }
@@ -304,11 +304,18 @@ final class ProjectCoordinator {
         return directory
     }
 
-    private func routeDirectory(forRecentSession session: OpenCodeSession) -> String? {
-        session.isGlobalScopeSession ? nil : session.directory
+    private func routeDirectory(forRecentSession session: OpenCodeSession, project: OpenCodeProject?) -> String? {
+        project?.id == "global" ? nil : session.directory
     }
 
     private func projectForRecentSession(_ session: OpenCodeSession, projects: [OpenCodeProject]) -> OpenCodeProject? {
+        if session.projectID == "global" {
+            return projects.first { $0.id == "global" }
+        }
+        if let directory = session.directory,
+           let project = projects.first(where: { $0.worktree == directory }) {
+            return project
+        }
         if let projectID = session.projectID,
            let project = projects.first(where: { $0.id == projectID }) {
             return project
@@ -320,9 +327,7 @@ final class ProjectCoordinator {
             return projects.first { $0.id == "global" }
         }
 
-        return projects.first { project in
-            project.worktree == directory || (project.sandboxes ?? []).contains(directory)
-        }
+        return projects.first { ($0.sandboxes ?? []).contains(directory) }
     }
 
     private func globalProject(in projects: [OpenCodeProject]) -> OpenCodeProject {

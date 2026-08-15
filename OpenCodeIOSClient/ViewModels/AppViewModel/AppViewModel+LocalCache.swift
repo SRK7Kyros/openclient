@@ -61,9 +61,20 @@ extension AppViewModel {
               directoryStoreRegistry.contains(targetStore, forKey: targetKey),
               targetStore.sessions == initialSessions else { return nil }
 
-        let scopedSessions = sessionListStore.applyDirectoryReloadSessions(snapshot.sessions, scopedTo: directory)
-        if targetStore.applyCachedSessions(scopedSessions), targetStore === directoryStore {
-            objectWillChange.send()
+        if initialSessions.isEmpty {
+            let scopedSessions = sessionListStore.applyDirectoryReloadSessions(snapshot.sessions, scopedTo: directory)
+            if targetStore.applyCachedSessions(scopedSessions), targetStore === directoryStore {
+                objectWillChange.send()
+            }
+        }
+        if let statuses = snapshot.statuses {
+            _ = targetStore.applySessionStatuses(statuses)
+        }
+        if let permissions = snapshot.permissions {
+            _ = targetStore.applyPermissions(permissions, ifUnchangedSince: targetStore.permissionRevision)
+        }
+        if let questions = snapshot.questions {
+            _ = targetStore.applyQuestions(questions, ifUnchangedSince: targetStore.questionRevision)
         }
         localCacheDirectoryRefreshedAtByKey[localCacheRuntimeKey(serverID: serverID, value: targetKey)] = snapshot.refreshedAt
         return snapshot
@@ -78,6 +89,13 @@ extension AppViewModel {
         let repository = localCacheRepository
         let serverID = config.recentServerID
         let sessions = store.sessions
+        let statuses = store.sessionStatuses
+        let permissions = store.syncState.permissionsBySessionID.values
+            .flatMap { $0 }
+            .sorted { $0.id < $1.id }
+        let questions = store.syncState.questionsBySessionID.values
+            .flatMap { $0 }
+            .sorted { $0.id < $1.id }
         let runtimeKey = localCacheRuntimeKey(
             serverID: serverID,
             value: DirectoryStoreRegistry.key(for: directory)
@@ -92,6 +110,15 @@ extension AppViewModel {
         Task {
             try? await repository.saveDirectorySessions(
                 sessions,
+                serverID: serverID,
+                directory: directory,
+                refreshedAt: refreshedAt,
+                writtenAt: writtenAt
+            )
+            try? await repository.saveDirectoryMetadata(
+                statuses: statuses,
+                permissions: permissions,
+                questions: questions,
                 serverID: serverID,
                 directory: directory,
                 refreshedAt: refreshedAt,
@@ -323,6 +350,27 @@ extension AppViewModel {
         sessionID: String?
     ) {
         guard usesLocalCache else { return }
+
+        switch managed.typed {
+        case .sessionStatus,
+             .sessionIdle,
+             .permissionAsked,
+             .permissionReplied,
+             .questionAsked,
+             .questionReplied,
+             .questionRejected:
+            for application in applications {
+                let directory = directoryStoreRegistry.key(for: application.store)
+                    .flatMap(DirectoryStoreRegistry.directory(forKey:))
+                persistDirectoryToLocalCache(
+                    application.store,
+                    directory: directory,
+                    marksValidated: false
+                )
+            }
+        default:
+            break
+        }
 
         switch managed.typed {
         case let .sessionDeleted(session):

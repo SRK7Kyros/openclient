@@ -10,6 +10,7 @@ final class LiveActivityFacade: ObservableObject {
     private static let refreshDelay: Duration = .milliseconds(350)
 
     private unowned let viewModel: AppViewModel
+    private weak var liveActivityBackgroundBridge: LiveActivityBackgroundBridge?
     private var observations: Set<AnyCancellable> = []
 
     init(viewModel: AppViewModel) {
@@ -22,6 +23,10 @@ final class LiveActivityFacade: ObservableObject {
         ])
         .sink { [weak self] _ in self?.objectWillChange.send() }
         .store(in: &observations)
+    }
+
+    func attachLiveActivityBackgroundBridge(_ bridge: LiveActivityBackgroundBridge) {
+        liveActivityBackgroundBridge = bridge
     }
 
     var activeSessionIDs: Set<String> { viewModel.activeLiveActivitySessionIDs }
@@ -95,6 +100,7 @@ final class LiveActivityFacade: ObservableObject {
         }
         viewModel.activeLiveActivitySessionIDs.remove(sessionID)
         viewModel.liveActivityStore.setLastState(nil, for: sessionID)
+        liveActivityBackgroundBridge?.cancel(sessionID: sessionID, reason: "Live Activity stopped")
         #endif
     }
 

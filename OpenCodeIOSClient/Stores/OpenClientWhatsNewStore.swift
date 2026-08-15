@@ -2,6 +2,11 @@ import Combine
 import Foundation
 
 struct OpenClientReleaseNotes: Identifiable, Equatable {
+    enum Hero: Equatable {
+        case customization
+        case activity
+    }
+
     struct Feature: Identifiable, Equatable {
         let title: String
         let detail: String
@@ -14,8 +19,29 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
     let title: String
     let summary: String
     let features: [Feature]
+    let hero: Hero
+    let featureSectionTitle: String
+    let showsSetup: Bool
 
     var id: String { version }
+
+    init(
+        version: String,
+        title: String,
+        summary: String,
+        features: [Feature],
+        hero: Hero = .customization,
+        featureSectionTitle: String = "Small changes, right where they count",
+        showsSetup: Bool = true
+    ) {
+        self.version = version
+        self.title = title
+        self.summary = summary
+        self.features = features
+        self.hero = hero
+        self.featureSectionTitle = featureSectionTitle
+        self.showsSetup = showsSetup
+    }
 }
 
 enum OpenClientReleaseNotesCatalog {
@@ -46,6 +72,36 @@ enum OpenClientReleaseNotesCatalog {
                     systemImage: "bolt.horizontal.circle.fill"
                 ),
             ]
+        ),
+        OpenClientReleaseNotes(
+            version: "1.0.16",
+            title: "Activity, at a glance",
+            summary: "A calm command center for every chat that is working, waiting, or ready for your next move.",
+            features: [
+                OpenClientReleaseNotes.Feature(
+                    title: "One view across projects",
+                    detail: "Open Activity from Projects to follow working sessions, requests that need input, and recent conversations together.",
+                    systemImage: "waveform.path.ecg"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "The latest context, live",
+                    detail: "See the newest exchange, active tool, todo progress, and Live Activity status without opening every chat.",
+                    systemImage: "bolt.horizontal.circle.fill"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Cards that fit your flow",
+                    detail: "Choose Compact, Default, or Activity cards for each project’s session list, with optional last-user-message context.",
+                    systemImage: "rectangle.3.group.fill"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Start from anywhere",
+                    detail: "The floating New Chat button starts an unscoped conversation and lets you choose its project when you are ready.",
+                    systemImage: "square.and.pencil"
+                ),
+            ],
+            hero: .activity,
+            featureSectionTitle: "Every conversation, in motion",
+            showsSetup: false
         ),
     ]
 }
@@ -107,14 +163,20 @@ final class OpenClientWhatsNewStore: ObservableObject {
         let previousVersion = defaults.string(forKey: Self.lastOpenedVersionKey)
         defaults.set(currentVersion, forKey: Self.lastOpenedVersionKey)
 
+        guard let release = release(for: currentVersion) else { return }
+
+        if previousVersion == nil, !hasExistingConnection {
+            defaults.set(release.id, forKey: Self.lastPresentedReleaseKey)
+            return
+        }
+
         let isEligibleUpdate = if let previousVersion {
-            previousVersion.compare(currentVersion, options: .numeric) == .orderedAscending
+            previousVersion.compare(currentVersion, options: .numeric) != .orderedDescending
         } else {
             hasExistingConnection
         }
 
         guard isEligibleUpdate,
-              let release = release(for: currentVersion),
               defaults.string(forKey: Self.lastPresentedReleaseKey) != release.id else { return }
 
         // Consume before presentation so an interrupted launch cannot show the same release twice.

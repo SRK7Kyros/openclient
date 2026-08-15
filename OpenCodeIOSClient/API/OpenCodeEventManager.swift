@@ -111,6 +111,13 @@ private actor OpenCodeStreamHeartbeat {
 final class OpenCodeEventManager {
     private static let heartbeatTimeoutSeconds: TimeInterval = 15
     private var task: Task<Void, Never>?
+    private var managedEventObserver: (@Sendable (OpenCodeManagedEvent) async -> Void)?
+
+    func setManagedEventObserver(
+        _ observer: (@Sendable (OpenCodeManagedEvent) async -> Void)?
+    ) {
+        managedEventObserver = observer
+    }
 
     nonisolated static func decodeManagedEvent(from rawData: String) -> OpenCodeManagedEventDecodeResult {
         guard let data = rawData.data(using: .utf8) else {
@@ -153,13 +160,17 @@ final class OpenCodeEventManager {
         onEvent: @escaping @Sendable (OpenCodeManagedEvent) async -> Void
     ) {
         stop()
+        let managedEventObserver = self.managedEventObserver
         task = Task.detached {
             await Self.runStreamLoop(
                 client: client,
                 onStatus: onStatus,
                 onRawLine: onRawLine,
                 onDroppedEvent: onDroppedEvent,
-                onEvent: onEvent
+                onEvent: { managed in
+                    await onEvent(managed)
+                    await managedEventObserver?(managed)
+                }
             )
         }
     }

@@ -282,13 +282,31 @@ final class SessionListStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func removeRecentSession(sessionID: String) -> Bool {
+        var next = recentSessionsByDirectory
+        var changed = false
+        for (directory, sessions) in recentSessionsByDirectory {
+            let filtered = sessions.filter { $0.id != sessionID }
+            if filtered.count != sessions.count {
+                next[directory] = filtered
+                changed = true
+            }
+        }
+        guard changed else { return false }
+        recentSessionsByDirectory = next
+        return true
+    }
+
     func setPendingActionRun(_ run: PendingOpenCodeActionRun?) {
         guard let run else { return }
         pendingActionRunsBySessionID[run.sessionID] = run
     }
 
     func setRecentSessions(_ sessions: [OpenCodeSession], for directory: String?) {
-        recentSessionsByDirectory[Self.recentDirectoryKey(directory)] = sessions
+        recentSessionsByDirectory[Self.recentDirectoryKey(directory)] = sessions.map {
+            Self.session($0, attributedToSourceDirectory: directory)
+        }
     }
 
     func clearRecentSessions() {
@@ -308,8 +326,7 @@ final class SessionListStore: ObservableObject {
         }
         var seen = Set<String>()
 
-        return recentSessionsByDirectory.values
-            .flatMap { $0 }
+        return deduplicatedRecentSessions()
             .filter { $0.isRootSession && !$0.isArchived }
             .sorted { lhs, rhs in
                 let lhsTime = Self.sortTime(for: lhs, preview: previews[lhs.id])
@@ -354,8 +371,7 @@ final class SessionListStore: ObservableObject {
         }
         var seen = Set<String>()
 
-        return recentSessionsByDirectory.values
-            .flatMap { $0 }
+        return deduplicatedRecentSessions()
             .filter { $0.isRootSession && !$0.isArchived }
             .compactMap { session -> RecentProjectSession? in
                 let key = "\(Self.recentDirectoryKey(session.directory)):\(session.id)"
@@ -399,6 +415,13 @@ final class SessionListStore: ObservableObject {
     }
 
     private static func project(for session: OpenCodeSession, projects: [OpenCodeProject], projectsByID: [String: OpenCodeProject]) -> OpenCodeProject? {
+        if session.projectID == "global" {
+            return projectsByID["global"]
+        }
+        if let directory = session.directory,
+           let project = projects.first(where: { $0.worktree == directory }) {
+            return project
+        }
         if let projectID = session.projectID, let project = projectsByID[projectID] {
             return project
         }
@@ -407,9 +430,33 @@ final class SessionListStore: ObservableObject {
             return projects.first { $0.id == "global" }
         }
 
-        return projects.first { project in
-            project.worktree == directory || (project.sandboxes ?? []).contains(directory)
+        return projects.first { ($0.sandboxes ?? []).contains(directory) }
+    }
+
+    private func deduplicatedRecentSessions() -> [OpenCodeSession] {
+        let orderedScopes = recentSessionsByDirectory.keys.sorted { lhs, rhs in
+            if lhs == Self.recentDirectoryKey(nil) { return false }
+            if rhs == Self.recentDirectoryKey(nil) { return true }
+            return lhs < rhs
         }
+        var seen = Set<String>()
+        return orderedScopes.flatMap { recentSessionsByDirectory[$0] ?? [] }.filter {
+            seen.insert($0.id).inserted
+        }
+    }
+
+    private static func session(_ session: OpenCodeSession, attributedToSourceDirectory directory: String?) -> OpenCodeSession {
+        guard directory == nil else { return session }
+        var attributed = OpenCodeSession(
+            id: session.id,
+            title: session.title,
+            workspaceID: session.workspaceID,
+            directory: session.directory,
+            projectID: "global",
+            parentID: session.parentID
+        )
+        attributed.time = session.time
+        return attributed
     }
 
     private static func projectTitle(_ project: OpenCodeProject) -> String {

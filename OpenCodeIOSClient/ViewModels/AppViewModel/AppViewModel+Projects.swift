@@ -790,7 +790,7 @@ extension AppViewModel {
     }
 
     func loadRecentProjectSessionsAcrossProjects() async {
-        guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        guard backendMode == .server, isConnected else { return }
         if let recentProjectSessionsLoadTask {
             await recentProjectSessionsLoadTask.value
             return
@@ -808,13 +808,17 @@ extension AppViewModel {
     }
 
     private func performRecentProjectSessionsLoad(generation: Int) async {
-        guard backendMode == .server, showsRecentSessionsInProjectList else { return }
+        guard backendMode == .server else { return }
         if ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] != nil, !recentProjectSessions.isEmpty {
             sessionListStore.isLoadingRecentProjectSessions = false
             return
         }
 
-        let directories = recentSessionDirectoriesToLoad()
+        let directories = projectCoordinator.recentSessionDirectories(
+            projects: projects,
+            currentProject: currentProject,
+            selectedDirectory: selectedDirectory
+        )
         guard !directories.isEmpty else { return }
 
         objectWillChange.send()
@@ -849,7 +853,7 @@ extension AppViewModel {
     }
 
     func beginRecentProjectSessionsLoadingIfPossible() {
-        guard backendMode == .server, isConnected, showsRecentSessionsInProjectList else { return }
+        guard backendMode == .server, isConnected else { return }
         guard recentProjectSessionsLoadTask == nil else { return }
 
         let generation = recentProjectSessionsLoadGeneration
@@ -984,14 +988,6 @@ extension AppViewModel {
     func persistProjectActionsByScope() {
         guard let data = try? JSONEncoder().encode(projectActionsByScope) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.projectActionsByScope)
-    }
-
-    private func recentSessionDirectoriesToLoad() -> [String?] {
-        projectCoordinator.recentSessionDirectories(
-            projects: projects,
-            currentProject: currentProject,
-            selectedDirectory: selectedDirectory
-        )
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
@@ -1334,15 +1330,11 @@ extension AppViewModel {
             return SessionPreview(text: "No messages yet", date: nil)
         }
 
-        var segments: [String] = []
-        var remainingCharacterBudget = 240
-        for part in message.parts {
-            guard remainingCharacterBudget > 0, let rawText = part.text else { continue }
-            let segment = String(rawText.prefix(remainingCharacterBudget))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !segment.isEmpty else { continue }
-            segments.append(segment)
-            remainingCharacterBudget -= segment.count
+        let segments = message.parts.compactMap { part -> String? in
+            guard let rawText = part.text else { return nil }
+            let segment = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !segment.isEmpty else { return nil }
+            return segment
         }
         let text = segments.joined(separator: "\n")
         let previewText = opencodePreviewText(text, limit: 120)

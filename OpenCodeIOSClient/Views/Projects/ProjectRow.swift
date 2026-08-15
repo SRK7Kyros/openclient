@@ -45,12 +45,13 @@ struct ProjectRow: View {
     }
 }
 
-private struct ProjectAvatar: View {
+struct ProjectAvatar: View {
     let title: String
     let systemImage: String
     let icon: OpenCodeProject.Icon?
     let usesSystemImageFallback: Bool
     let isSelected: Bool
+    var size: CGFloat = 30
 
     var body: some View {
         ZStack {
@@ -60,10 +61,10 @@ private struct ProjectAvatar: View {
                 fallbackAvatar
             }
         }
-        .frame(width: 30, height: 30)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: isSelected ? 2 : 1)
         }
     }
@@ -80,11 +81,11 @@ private struct ProjectAvatar: View {
             colors.background
             if usesSystemImageFallback || title == "Global" {
                 Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: size * 0.47, weight: .semibold))
                     .foregroundStyle(colors.foreground)
             } else {
                 Text(projectInitial)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: size * 0.43, weight: .bold, design: .rounded))
                     .foregroundStyle(colors.foreground)
             }
         }

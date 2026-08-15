@@ -1,26 +1,54 @@
 import Combine
 import Foundation
 
+enum SessionCardStyle: String, Codable, CaseIterable, Identifiable {
+    case compact
+    case simple
+    case activity
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .compact: "Compact"
+        case .simple: "Default"
+        case .activity: "Activity"
+        }
+    }
+
+    static var allCases: [SessionCardStyle] { [.compact, .simple, .activity] }
+}
+
 struct AppCustomizationPreferences: Codable, Equatable {
     var showsChatActivityShimmer: Bool
+    var showsActivityLastUserMessage: Bool
+    var sessionCardStyle: SessionCardStyle
     var autoConnectServerID: String?
 
     init(
         showsChatActivityShimmer: Bool = true,
+        showsActivityLastUserMessage: Bool = true,
+        sessionCardStyle: SessionCardStyle = .simple,
         autoConnectServerID: String? = nil
     ) {
         self.showsChatActivityShimmer = showsChatActivityShimmer
+        self.showsActivityLastUserMessage = showsActivityLastUserMessage
+        self.sessionCardStyle = sessionCardStyle
         self.autoConnectServerID = autoConnectServerID
     }
 
     private enum CodingKeys: String, CodingKey {
         case showsChatActivityShimmer
+        case showsActivityLastUserMessage
+        case sessionCardStyle
         case autoConnectServerID
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         showsChatActivityShimmer = try container.decodeIfPresent(Bool.self, forKey: .showsChatActivityShimmer) ?? true
+        showsActivityLastUserMessage = try container.decodeIfPresent(Bool.self, forKey: .showsActivityLastUserMessage) ?? true
+        sessionCardStyle = try container.decodeIfPresent(String.self, forKey: .sessionCardStyle)
+            .flatMap(SessionCardStyle.init(rawValue:)) ?? .simple
         autoConnectServerID = try container.decodeIfPresent(String.self, forKey: .autoConnectServerID)
     }
 }
@@ -54,9 +82,29 @@ final class AppCustomizationStore: ObservableObject {
         preferences.autoConnectServerID
     }
 
+    var showsActivityLastUserMessage: Bool {
+        preferences.showsActivityLastUserMessage
+    }
+
+    var sessionCardStyle: SessionCardStyle {
+        preferences.sessionCardStyle
+    }
+
     func setShowsChatActivityShimmer(_ shows: Bool) {
         guard preferences.showsChatActivityShimmer != shows else { return }
         preferences.showsChatActivityShimmer = shows
+        persist()
+    }
+
+    func setShowsActivityLastUserMessage(_ shows: Bool) {
+        guard preferences.showsActivityLastUserMessage != shows else { return }
+        preferences.showsActivityLastUserMessage = shows
+        persist()
+    }
+
+    func setSessionCardStyle(_ style: SessionCardStyle) {
+        guard preferences.sessionCardStyle != style else { return }
+        preferences.sessionCardStyle = style
         persist()
     }
 

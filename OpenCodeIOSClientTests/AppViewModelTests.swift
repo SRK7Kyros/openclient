@@ -659,6 +659,21 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.streamDirectory, session.directory)
     }
 
+    func testPrepareRecentSessionPrefersExplicitDirectoryProjectOverRepositoryProjectID() {
+        let viewModel = AppViewModel()
+        let repository = OpenCodeProject(id: "repo", worktree: "/tmp/repo", vcs: "git", name: "opencode", sandboxes: nil, icon: nil, time: nil)
+        let general = OpenCodeProject(id: "local:/tmp/repo/general", worktree: "/tmp/repo/general", vcs: nil, name: "General", sandboxes: nil, icon: nil, time: nil)
+        let session = OpenCodeSession(id: "ses_general", title: "General work", workspaceID: nil, directory: general.worktree, projectID: repository.id, parentID: nil)
+        let recent = RecentProjectSession(session: session, projectTitle: "General", preview: nil, isBusy: false)
+        viewModel.projects = [repository, general]
+
+        viewModel.prepareRecentProjectSessionSelection(recent)
+
+        XCTAssertEqual(viewModel.currentProject, general)
+        XCTAssertEqual(viewModel.selectedDirectory, general.worktree)
+        XCTAssertEqual(viewModel.selectedSession, session)
+    }
+
     func testProjectListPreferencesPersistPerServer() {
         var scoped = ServerScopedProjectListPreferences()
         scoped.preferencesByBaseURL["http://one.example"] = ProjectListPreferences(showsRecentSessions: false)
