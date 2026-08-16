@@ -865,10 +865,17 @@ struct ProjectNewChatSheet: View, Equatable {
 
     @ViewBuilder
     private var destinationSubtitle: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             destinationLine
+            Divider()
+                .padding(.leading, 16)
             composerSettingsLine
         }
+        .frame(maxWidth: 320)
+        .background(
+            OpenCodePlatformColor.secondaryGroupedBackground,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -876,11 +883,13 @@ struct ProjectNewChatSheet: View, Equatable {
 
     @ViewBuilder
     private var destinationLine: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 0) {
             selectionField("Project") {
                 projectSelectTrigger
             }
             if showsWorkspacePicker {
+                Divider()
+                    .padding(.leading, 16)
                 selectionField("Workspace") {
                     workspaceSelectTrigger
                 }
@@ -890,14 +899,18 @@ struct ProjectNewChatSheet: View, Equatable {
 
     @ViewBuilder
     private var composerSettingsLine: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 0) {
             selectionField("Agent") {
                 agentSelectTrigger
             }
+            Divider()
+                .padding(.leading, 16)
             selectionField("Model") {
                 modelSelectTrigger
             }
             if showsReasoningPicker {
+                Divider()
+                    .padding(.leading, 16)
                 selectionField("Reasoning") {
                     reasoningSelectTrigger
                 }
@@ -914,7 +927,9 @@ struct ProjectNewChatSheet: View, Equatable {
             Spacer(minLength: 12)
             content()
         }
-        .frame(maxWidth: 320)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

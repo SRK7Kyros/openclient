@@ -1072,7 +1072,7 @@ struct MessageComposer: View {
         )
         .frame(minHeight: ComposerTextViewMetrics.minimumHeight)
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .opencodeGlassSurface(isInteractive: true, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityIdentifier("chat.input")
         #else
         TextField("Message", text: textBinding, axis: .vertical)
@@ -1080,7 +1080,7 @@ struct MessageComposer: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .frame(minHeight: composerActionSlotHeight)
-            .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .opencodeGlassSurface(isInteractive: true, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .accessibilityIdentifier("chat.input")
             .simultaneousGesture(TapGesture().onEnded {
                 dismissAccessoryMenu()
