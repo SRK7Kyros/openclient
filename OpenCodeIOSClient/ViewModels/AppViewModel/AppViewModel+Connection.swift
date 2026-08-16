@@ -29,18 +29,18 @@ extension AppViewModel {
             case let .unavailable(reason):
                 switch reason {
                 case .deviceNotEligible:
-                    return "Requires an Apple Intelligence-capable device."
+                    return String(localized: "Requires an Apple Intelligence-capable device.")
                 case .appleIntelligenceNotEnabled:
-                    return "Turn on Apple Intelligence to try the on-device demo."
+                    return String(localized: "Turn on Apple Intelligence to try the on-device demo.")
                 case .modelNotReady:
-                    return "Apple Intelligence is still preparing on this device."
+                    return String(localized: "Apple Intelligence is still preparing on this device.")
                 @unknown default:
-                    return "Apple Intelligence is unavailable on this device right now."
+                    return String(localized: "Apple Intelligence is unavailable on this device right now.")
                 }
             }
         }
 #endif
-        return "Requires a device that supports Apple Intelligence."
+        return String(localized: "Requires a device that supports Apple Intelligence.")
     }
 
     func connect() async {
@@ -270,7 +270,7 @@ extension AppViewModel {
         do {
             let resolvedURL = try resolveAppleIntelligenceWorkspaceURL(workspace)
             guard (try resolvedURL.resourceValues(forKeys: [.isDirectoryKey])).isDirectory == true else {
-                throw NSError(domain: "AppleIntelligence", code: 5, userInfo: [NSLocalizedDescriptionKey: "The saved Apple Intelligence folder is no longer available. Please pick it again."])
+                throw NSError(domain: "AppleIntelligence", code: 5, userInfo: [NSLocalizedDescriptionKey: String(localized: "The saved Apple Intelligence folder is no longer available. Please pick it again.")])
             }
 
             await openAppleIntelligenceWorkspace(workspace, resolvedURL: resolvedURL)
@@ -351,7 +351,7 @@ extension AppViewModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         let fileExists = FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
         if !didAccess && !fileExists {
-            throw NSError(domain: "AppleIntelligence", code: 6, userInfo: [NSLocalizedDescriptionKey: "Unable to access the selected folder."])
+            throw NSError(domain: "AppleIntelligence", code: 6, userInfo: [NSLocalizedDescriptionKey: String(localized: "Unable to access the selected folder.")])
         }
 
         activeAppleIntelligenceWorkspaceURL = url

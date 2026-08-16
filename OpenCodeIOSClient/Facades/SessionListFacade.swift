@@ -484,7 +484,7 @@ final class SessionListFacade: ObservableObject {
             hasLiveActivity: viewModel.isLiveActivityActive(for: session),
             hasDraft: viewModel.hasMessageDraft(for: session),
             hasPermissionRequest: hasPermissionRequest ?? viewModel.hasPermissionRequest(for: session),
-            displayTitle: generatedTitle ?? session.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled Session",
+            displayTitle: generatedTitle ?? session.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Untitled Session"),
             shimmersTitle: generatedTitle != nil && isBusy,
             projectTitle: projectTitle(project),
             projectIcon: project?.icon,
@@ -508,11 +508,11 @@ final class SessionListFacade: ObservableObject {
     }
 
     private func projectTitle(_ project: OpenCodeProject?) -> String {
-        guard let project else { return "Project" }
+        guard let project else { return String(localized: "Project") }
         if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        if project.id == "global" { return "Global" }
+        if project.id == "global" { return String(localized: "Global") }
         let title = URL(fileURLWithPath: project.worktree).lastPathComponent
         return title.isEmpty ? project.id : title
     }
@@ -529,12 +529,12 @@ final class SessionListFacade: ObservableObject {
     }
 
     private func activityStatusTitle(status: String?, permissionCount: Int, questionCount: Int) -> String {
-        if permissionCount + questionCount > 0 { return "Needs input" }
+        if permissionCount + questionCount > 0 { return String(localized: "Needs input") }
         switch status?.lowercased() {
         case "busy", "running", "working", "pending", "in_progress":
-            return "Working"
+            return String(localized: "Working")
         default:
-            return "Idle"
+            return String(localized: "Idle")
         }
     }
 

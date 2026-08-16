@@ -28,23 +28,23 @@ enum OpenClientPaywallReason: Identifiable, Equatable {
 
     var title: String {
         switch self {
-        case .promptLimit: "Daily Prompt Limit Reached"
-        case .sessionLimit: "Create Unlimited Sessions"
-        case .actions: "Unlock Actions"
-        case .manual: "OpenClient Pro"
+        case .promptLimit: String(localized: "Daily Prompt Limit Reached")
+        case .sessionLimit: String(localized: "Create Unlimited Sessions")
+        case .actions: String(localized: "Unlock Actions")
+        case .manual: String(localized: "OpenClient Pro")
         }
     }
 
     var message: String {
         switch self {
         case .promptLimit:
-            "Upgrade once to send unlimited prompts and support continued development of the open-source app."
+            String(localized: "Upgrade once to send unlimited prompts and support continued development of the open-source app.")
         case .sessionLimit:
-            "Free users can create one session. Upgrade once for unlimited sessions and prompts."
+            String(localized: "Free users can create one session. Upgrade once for unlimited sessions and prompts.")
         case .actions:
-            "Actions run project commands in temporary sessions and only surface when they need your attention."
+            String(localized: "Actions run project commands in temporary sessions and only surface when they need your attention.")
         case .manual:
-            "Unlock unlimited prompts and sessions, plus support the signed App Store build."
+            String(localized: "Unlock unlimited prompts and sessions, plus support the signed App Store build.")
         }
     }
 }
@@ -131,10 +131,10 @@ enum OpenClientDebugEntitlementOverride: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "System"
-        case .free: "Free"
-        case .unlocked: "Unlocked"
-        case .limitReached: "Limit Reached"
+        case .system: String(localized: "System")
+        case .free: String(localized: "Free")
+        case .unlocked: String(localized: "Unlocked")
+        case .limitReached: String(localized: "Limit Reached")
         }
     }
 }
@@ -179,7 +179,7 @@ final class OpenClientPurchaseManager: ObservableObject {
         }
 
         guard let proProduct else {
-            purchaseError = "OpenClient Pro is not available yet."
+            purchaseError = String(localized: "OpenClient Pro is not available yet.")
             return
         }
 

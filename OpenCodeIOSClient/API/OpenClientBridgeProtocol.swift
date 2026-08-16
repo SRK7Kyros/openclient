@@ -177,13 +177,13 @@ enum OpenClientBridgeProtocolError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsupportedVersion(let version):
-            return "Unsupported OpenClient bridge protocol version \(version)."
+            return String(localized: "Unsupported OpenClient bridge protocol version \(version).")
         case .unsupportedMessage:
-            return "The OpenClient bridge sent an unsupported message."
+            return String(localized: "The OpenClient bridge sent an unsupported message.")
         case .invalidField(let field):
-            return "The OpenClient bridge message has an invalid \(field) field."
+            return String(localized: "The OpenClient bridge message has an invalid \(field) field.")
         case .unknownTool(let toolID):
-            return "This OpenClient app does not support \(toolID)."
+            return String(localized: "This OpenClient app does not support \(toolID).")
         }
     }
 }

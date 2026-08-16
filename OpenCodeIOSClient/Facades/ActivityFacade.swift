@@ -448,7 +448,7 @@ final class ActivityFacade: ObservableObject {
         if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        if project.id == "global" { return "Global" }
+        if project.id == "global" { return String(localized: "Global") }
         let title = URL(fileURLWithPath: project.worktree).lastPathComponent
         return title.isEmpty ? project.id : title
     }
@@ -532,7 +532,7 @@ final class ActivityFacade: ObservableObject {
         if let title = part.state?.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
             return title
         }
-        return "Running \(tool.replacingOccurrences(of: "_", with: " ").capitalized)"
+        return String(localized: "Running \(tool.replacingOccurrences(of: "_", with: " ").capitalized)")
     }
 
     private func toolDetail(_ input: OpenCodeToolInput?) -> String? {
@@ -550,16 +550,16 @@ final class ActivityFacade: ObservableObject {
     }
 
     private func statusTitle(status: String?, permissionCount: Int, questionCount: Int) -> String {
-        if permissionCount + questionCount > 0 { return "Needs input" }
+        if permissionCount + questionCount > 0 { return String(localized: "Needs input") }
         switch status {
         case "busy":
-            return "Working"
+            return String(localized: "Working")
         case "retry":
-            return "Retrying"
+            return String(localized: "Retrying")
         case .some(let status) where status != "idle":
-            return "Working"
+            return String(localized: "Working")
         default:
-            return "Idle"
+            return String(localized: "Idle")
         }
     }
 

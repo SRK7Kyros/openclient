@@ -254,7 +254,7 @@ final class LiveActivityFacade: ObservableObject {
 
     private func sessionTitle(for session: OpenCodeSession) -> String {
         let title = viewModel.childSessionTitle(for: session).trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "Session" : title
+        return title.isEmpty ? String(localized: "Session") : title
     }
 
     private func sessionSnapshot(for sessionID: String) -> OpenCodeSession? {

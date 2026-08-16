@@ -63,7 +63,7 @@ struct ExcalidrawDrawingSheet: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(isExporting ? "Exporting..." : "Attach") {
+                Button(isExporting ? LocalizedStringResource("Exporting...") : LocalizedStringResource("Attach")) {
                     exportDrawing()
                 }
                 .disabled(!isWebViewReady || isExporting)
@@ -290,7 +290,7 @@ struct ExcalidrawWebView: UIViewRepresentable {
                         hasReportedReady = true
                         parent.onReady()
                     } else {
-                        parent.onError(.javascript("The drawing app loaded, but the exporter did not initialize."))
+                        parent.onError(.javascript(String(localized: "The drawing app loaded, but the exporter did not initialize.")))
                     }
                 }
             }
@@ -359,14 +359,19 @@ struct ExcalidrawWebView: UIViewRepresentable {
             case "not-ready":
                 parent.onError(.notReady)
             case "runtime-error":
-                parent.onError(.javascript(message ?? "The drawing app failed to initialize."))
+                parent.onError(.javascript(message ?? String(localized: "The drawing app failed to initialize.")))
             default:
-                parent.onError(.exportFailed(message ?? "Unable to export drawing."))
+                parent.onError(.exportFailed(message ?? String(localized: "Unable to export drawing.")))
             }
         }
 
-        static let errorReportingUserScript = WKUserScript(
-            source: """
+        static var errorReportingUserScript: WKUserScript {
+            let failedMessage = javaScriptLiteral(String(localized: "The drawing app failed to initialize."))
+            let resourcePlaceholder = "{{resource}}"
+            let resourceMessage = javaScriptLiteral(String(localized: "Unable to load \(resourcePlaceholder)."))
+            let resourcePlaceholderLiteral = javaScriptLiteral(resourcePlaceholder)
+            return WKUserScript(
+                source: """
             (function() {
               if (window.__openClientExcalidrawErrorReporterInstalled) { return; }
               window.__openClientExcalidrawErrorReporterInstalled = true;
@@ -377,20 +382,30 @@ struct ExcalidrawWebView: UIViewRepresentable {
               }
               window.addEventListener('error', function(event) {
                 var target = event.target;
-                var message = event.message || 'The drawing app failed to initialize.';
+                var message = event.message || \(failedMessage);
                 if (target && target !== window) {
-                  message = 'Unable to load ' + (target.src || target.href || target.tagName || 'a drawing app resource') + '.';
+                  var resource = target.src || target.href || target.tagName || \(javaScriptLiteral(String(localized: "a drawing app resource")));
+                  message = \(resourceMessage).replace(\(resourcePlaceholderLiteral), resource);
                 }
                 post({ type: 'error', code: 'runtime-error', message: message });
               }, true);
               window.addEventListener('unhandledrejection', function(event) {
-                post({ type: 'error', code: 'runtime-error', message: (event.reason && event.reason.message) || 'The drawing app failed to initialize.' });
+                post({ type: 'error', code: 'runtime-error', message: (event.reason && event.reason.message) || \(failedMessage) });
               });
             })();
             """,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
-        )
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        }
+
+        private static func javaScriptLiteral(_ value: String) -> String {
+            guard let data = try? JSONSerialization.data(withJSONObject: [value]),
+                  let encoded = String(data: data, encoding: .utf8) else {
+                return "\"\""
+            }
+            return String(encoded.dropFirst().dropLast())
+        }
     }
 }
 
@@ -412,23 +427,23 @@ enum ExcalidrawDrawingError: LocalizedError, Identifiable {
     var errorDescription: String? {
         switch self {
         case .emptyScene:
-            return "Draw something before attaching."
+            return String(localized: "Draw something before attaching.")
         case let .exportFailed(message):
             return message
         case .invalidBase64:
-            return "The exported drawing data could not be decoded."
+            return String(localized: "The exported drawing data could not be decoded.")
         case .invalidMessage:
-            return "The drawing tool returned an unexpected response."
+            return String(localized: "The drawing tool returned an unexpected response.")
         case .invalidPNG:
-            return "The exported drawing was not a valid PNG image."
+            return String(localized: "The exported drawing was not a valid PNG image.")
         case let .javascript(message):
-            return "The drawing export script failed: \(message)"
+            return String(localized: "The drawing export script failed: \(message)")
         case .missingBundle:
-            return "The bundled Excalidraw app could not be found. Rebuild the iOS app resources."
+            return String(localized: "The bundled Excalidraw app could not be found. Rebuild the iOS app resources.")
         case .notReady:
-            return "Excalidraw is still loading. Try again in a moment."
+            return String(localized: "Excalidraw is still loading. Try again in a moment.")
         case let .webView(message):
-            return "The drawing tool failed to load: \(message)"
+            return String(localized: "The drawing tool failed to load: \(message)")
         }
     }
 }

@@ -81,7 +81,7 @@ struct TodoInspectorView: View {
         .opencodeInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .opencodeTrailing) {
-                Button(isLoading ? "Refreshing..." : "Refresh") {
+                Button(isLoading ? LocalizedStringResource("Refreshing...") : LocalizedStringResource("Refresh")) {
                     Task { await refresh() }
                 }
                 .disabled(isLoading)

@@ -72,11 +72,11 @@ private struct OpenClientWhatsNewActivityExamples: View {
     private static let rows: [ActivityFacade.RowSnapshot] = [
         makeRow(
             id: "whats-new-input",
-            title: "Ship the TestFlight build",
-            project: "OpenClient",
-            statusTitle: "Needs input",
-            latestUserText: "Upload the new build to TestFlight.",
-            latestAssistantText: "Permission requested for the release command.",
+            title: String(localized: "Ship the TestFlight build"),
+            project: String(localized: "OpenClient"),
+            statusTitle: String(localized: "Needs input"),
+            latestUserText: String(localized: "Upload the new build to TestFlight."),
+            latestAssistantText: String(localized: "Permission requested for the release command."),
             needsInput: true,
             isWorking: true,
             pendingInteractionCount: 1,
@@ -86,17 +86,17 @@ private struct OpenClientWhatsNewActivityExamples: View {
         ),
         makeRow(
             id: "whats-new-working",
-            title: "Polish Activity cards",
-            project: "Design system",
-            statusTitle: "Working",
-            latestUserText: "Make the Activity page feel native.",
+            title: String(localized: "Polish Activity cards"),
+            project: String(localized: "Design system"),
+            statusTitle: String(localized: "Working"),
+            latestUserText: String(localized: "Make the Activity page feel native."),
             latestAssistantText: nil,
             isWorking: true,
             runningTools: [
                 ActivityFacade.ToolSnapshot(
                     id: "whats-new-tool",
                     tool: "bash",
-                    title: "Running visual checks",
+                    title: String(localized: "Running visual checks"),
                     detail: "xcodebuild test"
                 ),
             ],
@@ -106,11 +106,11 @@ private struct OpenClientWhatsNewActivityExamples: View {
         ),
         makeRow(
             id: "whats-new-idle",
-            title: "Review release notes",
-            project: "OpenClient",
-            statusTitle: "Idle",
-            latestUserText: "Make sure the announcement is ready.",
-            latestAssistantText: "Everything is ready for your next message.",
+            title: String(localized: "Review release notes"),
+            project: String(localized: "OpenClient"),
+            statusTitle: String(localized: "Idle"),
+            latestUserText: String(localized: "Make sure the announcement is ready."),
+            latestAssistantText: String(localized: "Everything is ready for your next message."),
             isLiveActivityActive: true,
             completedTodoCount: 3,
             todoCount: 3,
@@ -138,8 +138,8 @@ private struct OpenClientWhatsNewActivityExamples: View {
             id: id,
             title: title,
             workspaceID: nil,
-            directory: "/examples/\(project.lowercased().replacingOccurrences(of: " ", with: "-"))",
-            projectID: "whats-new-\(project.lowercased().replacingOccurrences(of: " ", with: "-"))",
+            directory: "/examples/\(id)",
+            projectID: "whats-new-\(id)",
             parentID: nil
         )
         return ActivityFacade.RowSnapshot(
@@ -196,7 +196,7 @@ private struct OpenClientWhatsNewHero: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Label("NEW IN \(version)", systemImage: "sparkles")
+                    Label(String(localized: "NEW IN \(version)"), systemImage: "sparkles")
                         .font(.caption.weight(.bold))
                         .tracking(0.6)
                         .foregroundStyle(.white.opacity(0.92))
@@ -467,7 +467,7 @@ private struct OpenClientWhatsNewIconOption: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isSelected)
-        .accessibilityLabel("Use \(icon.displayName) app icon")
+        .accessibilityLabel(Text("Use \(icon.displayName) app icon"))
     }
 
     private var iconBackground: Color {
@@ -548,6 +548,19 @@ private struct OpenClientWhatsNewAutoConnectPicker: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                if connection.autoConnectServerID != nil {
+                    Picker("Open After Auto-Connect", selection: Binding(
+                        get: { connection.autoConnectLandingDestination },
+                        set: { connection.setAutoConnectLandingDestination($0) }
+                    )) {
+                        ForEach(AutoConnectLandingDestination.allCases) { destination in
+                            Text(destination.title).tag(destination)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("new-features.auto-connect-landing-destination")
+                }
             }
         }
         .padding(16)

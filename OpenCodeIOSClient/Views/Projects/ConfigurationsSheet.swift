@@ -61,7 +61,10 @@ struct ConfigurationsSheet: View {
                                 ProviderConfigurationRow(
                                     providerID: provider.id,
                                     providerName: provider.name,
-                                    subtitle: "\(viewModel.providerSourceTitle(provider)) • \(provider.models.count) models"
+                                    subtitle: providerSummary(
+                                        source: viewModel.providerSourceTitle(provider),
+                                        modelCount: provider.models.count
+                                    )
                                 )
                             }
                             .swipeActions(edge: .trailing) {
@@ -153,7 +156,7 @@ struct ConfigurationsSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func configurationRow(title: String, value: String) -> some View {
+    private func configurationRow(title: LocalizedStringResource, value: String) -> some View {
         HStack {
             Text(title)
             Spacer()
@@ -201,7 +204,7 @@ private struct PluginsConfigurationView: View {
                 )
             } else {
                 List {
-                    Section("\(store.plugins.count) Plugins") {
+                    Section(pluginCountTitle(store.plugins.count)) {
                         ForEach(store.plugins) { plugin in
                             if let bridge, isOpenClientPlugin(plugin.specifier) {
                                 NavigationLink {
@@ -484,7 +487,7 @@ private struct ProviderModelVisibilityView: View {
             reloadSnapshot()
         }
         .searchable(text: $query, prompt: "Search models")
-        .navigationTitle(provider?.name ?? "Provider")
+        .navigationTitle(provider?.name ?? String(localized: "Provider"))
         .opencodeInlineNavigationTitle()
     }
 
@@ -556,12 +559,12 @@ private struct AddProviderView: View {
 
     private func providerSubtitle(_ provider: OpenCodeProvider) -> String {
         let labels = viewModel.authMethods(for: provider).map { method in
-            if method.type == "api" { return "API Key" }
-            if method.type == "oauth" { return method.label.isEmpty ? "OAuth" : method.label }
+            if method.type == "api" { return String(localized: "API Key") }
+            if method.type == "oauth" { return method.label.isEmpty ? String(localized: "OAuth") : method.label }
             return method.label.isEmpty ? method.type.capitalized : method.label
         }
         let unique = Array(NSOrderedSet(array: labels)) as? [String] ?? labels
-        return "\(unique.joined(separator: ", ")) • \(provider.models.count) models"
+        return providerSummary(source: unique.formatted(), modelCount: provider.models.count)
     }
 }
 
@@ -597,7 +600,7 @@ private struct ProviderConnectView: View {
     }
 
     private func methodLabel(_ method: OpenCodeProviderAuthMethod) -> String {
-        if method.type == "api" { return "API Key" }
+        if method.type == "api" { return String(localized: "API Key") }
         return method.label
     }
 }
@@ -677,7 +680,7 @@ private struct ProviderOAuthConnectView: View {
                 Section {
                     HStack {
                         ProgressView()
-                        Text(isAuthorizing ? "Starting OAuth..." : "Preparing OAuth...")
+                        Text(isAuthorizing ? LocalizedStringResource("Starting OAuth...") : LocalizedStringResource("Preparing OAuth..."))
                             .foregroundStyle(.secondary)
                     }
                 } footer: {
@@ -806,7 +809,7 @@ private struct ProviderOAuthConnectView: View {
             if authorization.method == "auto" {
                 HStack {
                     ProgressView()
-                    Text(isCompleting ? "Waiting for authorization..." : "Ready to complete")
+                    Text(isCompleting ? LocalizedStringResource("Waiting for authorization...") : LocalizedStringResource("Ready to complete"))
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -850,7 +853,7 @@ private struct ProviderOAuthConnectView: View {
             authorization = result
             presentAuthorizationURLIfNeeded(result)
         } else {
-            errorMessage = viewModel.errorMessage ?? "OAuth authorization failed."
+            errorMessage = viewModel.errorMessage ?? String(localized: "OAuth authorization failed.")
         }
     }
 
@@ -862,7 +865,7 @@ private struct ProviderOAuthConnectView: View {
             browserURL = nil
             returnToRoot()
         } else {
-            errorMessage = viewModel.errorMessage ?? "OAuth authorization did not complete."
+            errorMessage = viewModel.errorMessage ?? String(localized: "OAuth authorization did not complete.")
         }
         isCompleting = false
     }
@@ -944,9 +947,11 @@ private struct ProviderOAuthBrowserSheet: View {
             } actions: {
                 Link("Open Authorization Page", destination: url)
                 if let confirmationCode {
-                    Button(didCopyCode ? "Code Copied" : "Copy Confirmation Code") {
+                    Button {
                         OpenCodeClipboard.copy(confirmationCode)
                         didCopyCode = true
+                    } label: {
+                        Text(didCopyCode ? LocalizedStringResource("Code Copied") : LocalizedStringResource("Copy Confirmation Code"))
                     }
                 }
             }
@@ -1066,7 +1071,7 @@ private struct ProviderAPIKeyConnectView: View {
                     }
 
                     if providerModels.count > 12 {
-                        Text("\(providerModels.count - 12) more models")
+                        Text(additionalModelCountTitle(providerModels.count - 12))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -1238,7 +1243,7 @@ private struct AgentDefaultSelectionView: View {
                 Button {
                     viewModel.setNewSessionDefaultAgent(nil as String?)
                 } label: {
-                    selectionRow(title: "Use System Default", isSelected: viewModel.newSessionDefaults.agentName == nil)
+                    selectionRow(title: String(localized: "Use System Default"), isSelected: viewModel.newSessionDefaults.agentName == nil)
                 }
                 .buttonStyle(.plain)
             }
@@ -1268,7 +1273,7 @@ private struct ModelDefaultSelectionView: View {
                 Button {
                     viewModel.setNewSessionDefaultModel(nil as OpenCodeModelReference?)
                 } label: {
-                    selectionRow(title: "Use System Default", isSelected: viewModel.newSessionDefaultModelReference() == nil)
+                    selectionRow(title: String(localized: "Use System Default"), isSelected: viewModel.newSessionDefaultModelReference() == nil)
                 }
                 .buttonStyle(.plain)
             }
@@ -1301,7 +1306,7 @@ private struct ReasoningDefaultSelectionView: View {
                 Button {
                     viewModel.setNewSessionDefaultReasoning(nil as String?)
                 } label: {
-                    selectionRow(title: "Use System Default", isSelected: viewModel.newSessionDefaults.reasoningVariant == nil)
+                    selectionRow(title: String(localized: "Use System Default"), isSelected: viewModel.newSessionDefaults.reasoningVariant == nil)
                 }
                 .buttonStyle(.plain)
             }
@@ -1340,4 +1345,19 @@ private func selectionRow(title: String, isSelected: Bool) -> some View {
         Spacer()
     }
     .contentShape(Rectangle())
+}
+
+private func providerSummary(source: String, modelCount: Int) -> String {
+    if modelCount == 1 {
+        return String(localized: "\(source) • 1 model")
+    }
+    return String(localized: "\(source) • \(modelCount) models")
+}
+
+private func pluginCountTitle(_ count: Int) -> String {
+    count == 1 ? String(localized: "1 Plugin") : String(localized: "\(count) Plugins")
+}
+
+private func additionalModelCountTitle(_ count: Int) -> LocalizedStringResource {
+    count == 1 ? "1 more model" : LocalizedStringResource("\(count) more models")
 }

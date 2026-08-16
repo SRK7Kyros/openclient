@@ -55,7 +55,7 @@ extension AppViewModel {
         if let serverID = request.serverID,
            config.recentServerID != serverID {
             guard let serverConfig = recentServerConfigs.first(where: { $0.recentServerID == serverID }) else {
-                errorMessage = "Open the app once before sharing to this connection."
+                errorMessage = String(localized: "Open the app once before sharing to this connection.")
                 return
             }
             await connect(to: serverConfig)
@@ -112,7 +112,7 @@ extension AppViewModel {
         }
 
         guard let project = resolveWidgetDeepLinkProject(request) else {
-            errorMessage = "Project is no longer available. Open the app to sync widget settings."
+            errorMessage = String(localized: "Project is no longer available. Open the app to sync widget settings.")
             return
         }
 
@@ -159,7 +159,7 @@ extension AppViewModel {
     private func ensureWidgetDeepLinkServerConnection(serverID: String?) async -> Bool {
         if let serverID, config.recentServerID != serverID {
             guard let serverConfig = recentServerConfigs.first(where: { $0.recentServerID == serverID }) else {
-                errorMessage = "Open the app to reconnect the server used by this widget."
+                errorMessage = String(localized: "Open the app to reconnect the server used by this widget.")
                 return false
             }
             await connect(to: serverConfig)
@@ -222,7 +222,7 @@ extension AppViewModel {
         composerSelection: NewProjectChatComposerSelection?
     ) async -> Bool {
         guard backendMode == .server, isConnected else {
-            errorMessage = "Connect to an OpenCode server before starting a session."
+            errorMessage = String(localized: "Connect to an OpenCode server before starting a session.")
             return false
         }
         guard canCreateSessionOrPresentPaywall() else { return false }

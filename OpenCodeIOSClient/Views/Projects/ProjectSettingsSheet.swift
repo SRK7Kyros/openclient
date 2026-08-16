@@ -17,7 +17,7 @@ struct ProjectSettingsSheet: View {
                         set: { facade.setSessionCardStyle($0) }
                     )) {
                         ForEach(SessionCardStyle.allCases) { style in
-                            Text(style.title).tag(style)
+                            Text(sessionCardStyleTitle(style)).tag(style)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -111,7 +111,7 @@ struct ProjectSettingsSheet: View {
         }
 
         if snapshot.addableCommands.isEmpty {
-            Text(snapshot.eligibleCommands.isEmpty ? "No project commands are available yet." : "All available commands are already configured as Actions.")
+            Text(snapshot.eligibleCommands.isEmpty ? LocalizedStringResource("No project commands are available yet.") : LocalizedStringResource("All available commands are already configured as Actions."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         } else {
@@ -161,7 +161,7 @@ struct ProjectSettingsSheet: View {
         .padding(.vertical, 4)
     }
 
-    private func workspacesDescription(_ snapshot: ProjectFacade.SettingsSnapshot) -> String {
+    private func workspacesDescription(_ snapshot: ProjectFacade.SettingsSnapshot) -> LocalizedStringResource {
         if snapshot.hasGitProject {
             return "Group sessions by the main worktree and any OpenCode sandbox worktrees for this project."
         }
@@ -192,7 +192,7 @@ private struct ProjectActionSettingsRow: View {
                     .font(.subheadline.weight(.semibold))
 
                 if let phase {
-                    Text(phase.title)
+                    Text(actionSettingsPhaseTitle(phase))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if command == nil {
@@ -219,6 +219,21 @@ private struct ProjectActionSettingsRow: View {
             }
             .buttonStyle(.borderless)
         }
+    }
+}
+
+private func sessionCardStyleTitle(_ style: SessionCardStyle) -> LocalizedStringResource {
+    switch style {
+    case .compact: "Compact"
+    case .simple: "Default"
+    case .activity: "Activity"
+    }
+}
+
+private func actionSettingsPhaseTitle(_ phase: OpenCodeActionRunPhase) -> LocalizedStringResource {
+    switch phase {
+    case .runningCommand: "Running command"
+    case .checkingResult: "Checking result"
     }
 }
 

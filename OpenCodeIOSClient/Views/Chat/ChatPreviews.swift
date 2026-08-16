@@ -180,7 +180,7 @@ private struct ChatViewPreviewHost: View {
 }
 
 #Preview("Activity Row") {
-    ActivityRow(style: ActivityStyle(title: "Shell", subtitle: "Build for simulator", icon: "terminal.fill", tint: .green, isRunning: false, showsDisclosure: true, shimmerTitle: false))
+    ActivityRow(style: ActivityStyle(title: .localized("Shell"), subtitle: .localized("Build for simulator"), icon: "terminal.fill", tint: .green, isRunning: false, showsDisclosure: true, shimmerTitle: false))
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }

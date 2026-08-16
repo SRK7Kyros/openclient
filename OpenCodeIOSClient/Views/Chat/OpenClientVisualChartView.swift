@@ -57,8 +57,8 @@ struct OpenClientVisualChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OpenClientVisualChartHeader(
-                title: activity.payload.title ?? activity.payload.chartType.displayName,
-                subtitle: activity.payload.summary,
+                title: activity.payload.headerTitle,
+                subtitle: Text(activity.payload.summary),
                 isRunning: activity.isRunning
             )
             .padding(12)
@@ -88,8 +88,8 @@ struct OpenClientVisualChartView: View {
 }
 
 private struct OpenClientVisualChartHeader: View {
-    let title: String
-    let subtitle: String
+    let title: Text
+    let subtitle: Text
     let isRunning: Bool
 
     var body: some View {
@@ -101,10 +101,10 @@ private struct OpenClientVisualChartHeader: View {
                 .background(.indigo.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                title
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
-                Text(subtitle)
+                subtitle
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -190,39 +190,39 @@ private struct OpenClientTypedCartesianChart<X: Plottable & Hashable>: View {
         case .line:
             Chart(data) { datum in
                 LineMark(
-                    x: .value(payload.xAxis.title ?? "X", datum.x),
-                    y: .value(payload.yAxis.title ?? "Y", datum.y),
-                    series: .value("Series ID", datum.seriesID)
+                    x: .value(payload.xAxis.title ?? String(localized: "X"), datum.x),
+                    y: .value(payload.yAxis.title ?? String(localized: "Y"), datum.y),
+                    series: .value(String(localized: "Series ID"), datum.seriesID)
                 )
-                .foregroundStyle(by: .value("Series", datum.seriesName))
+                .foregroundStyle(by: .value(String(localized: "Series"), datum.seriesName))
             }
             .chartPresentation(payload: payload)
         case .area:
             Chart(data) { datum in
                 AreaMark(
-                    x: .value(payload.xAxis.title ?? "X", datum.x),
-                    y: .value(payload.yAxis.title ?? "Y", datum.y),
-                    series: .value("Series ID", datum.seriesID)
+                    x: .value(payload.xAxis.title ?? String(localized: "X"), datum.x),
+                    y: .value(payload.yAxis.title ?? String(localized: "Y"), datum.y),
+                    series: .value(String(localized: "Series ID"), datum.seriesID)
                 )
-                .foregroundStyle(by: .value("Series", datum.seriesName))
+                .foregroundStyle(by: .value(String(localized: "Series"), datum.seriesName))
             }
             .chartPresentation(payload: payload)
         case .bar:
             Chart(data) { datum in
                 BarMark(
-                    x: .value(payload.xAxis.title ?? "X", datum.x),
-                    y: .value(payload.yAxis.title ?? "Y", datum.y)
+                    x: .value(payload.xAxis.title ?? String(localized: "X"), datum.x),
+                    y: .value(payload.yAxis.title ?? String(localized: "Y"), datum.y)
                 )
-                .foregroundStyle(by: .value("Series", datum.seriesName))
+                .foregroundStyle(by: .value(String(localized: "Series"), datum.seriesName))
             }
             .chartPresentation(payload: payload)
         case .scatter:
             Chart(data) { datum in
                 PointMark(
-                    x: .value(payload.xAxis.title ?? "X", datum.x),
-                    y: .value(payload.yAxis.title ?? "Y", datum.y)
+                    x: .value(payload.xAxis.title ?? String(localized: "X"), datum.x),
+                    y: .value(payload.yAxis.title ?? String(localized: "Y"), datum.y)
                 )
-                .foregroundStyle(by: .value("Series", datum.seriesName))
+                .foregroundStyle(by: .value(String(localized: "Series"), datum.seriesName))
             }
             .chartPresentation(payload: payload)
         case .pie, .donut:
@@ -259,11 +259,11 @@ private struct OpenClientSectorChart: View {
     var body: some View {
         Chart(data) { datum in
             SectorMark(
-                angle: .value(payload.yAxis.title ?? "Value", datum.value),
+                angle: .value(payload.yAxis.title ?? String(localized: "Value"), datum.value),
                 innerRadius: .ratio(payload.chartType == .donut ? 0.55 : 0),
                 angularInset: 1.5
             )
-            .foregroundStyle(by: .value("Category", datum.category))
+            .foregroundStyle(by: .value(String(localized: "Category"), datum.category))
             .cornerRadius(3)
         }
         .chartLegend(.visible)
@@ -271,9 +271,17 @@ private struct OpenClientSectorChart: View {
 }
 
 private extension OpenClientVisualChartPayload {
-    var summary: String {
-        let points = pointCount == 1 ? "1 point" : "\(pointCount) points"
-        return "\(chartType.displayName) · \(points)"
+    var headerTitle: Text {
+        if let title {
+            return Text(title)
+        }
+        return Text(chartType.displayName)
+    }
+
+    var summary: LocalizedStringResource {
+        let chartName = String(localized: chartType.displayName)
+        if pointCount == 1 { return "\(chartName) · 1 point" }
+        return "\(chartName) · \(pointCount) points"
     }
 
     func cartesianData<X: Plottable & Hashable>(
@@ -298,7 +306,7 @@ private extension OpenClientVisualChartPayload {
 }
 
 private extension OpenClientVisualChartType {
-    var displayName: String {
+    var displayName: LocalizedStringResource {
         switch self {
         case .line: "Line chart"
         case .area: "Area chart"

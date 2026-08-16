@@ -18,17 +18,20 @@ final class AppCustomizationStoreTests: XCTestCase {
         XCTAssertTrue(store.showsActivityLastUserMessage)
         XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertNil(store.autoConnectServerID)
+        XCTAssertEqual(store.autoConnectLandingDestination, .projects)
 
         store.setShowsChatActivityShimmer(false)
         store.setShowsActivityLastUserMessage(false)
         store.setSessionCardStyle(.activity)
         store.setAutoConnectServerID("server-one")
+        store.setAutoConnectLandingDestination(.activity)
 
         let restored = AppCustomizationStore(defaults: defaults)
         XCTAssertFalse(restored.showsChatActivityShimmer)
         XCTAssertFalse(restored.showsActivityLastUserMessage)
         XCTAssertEqual(restored.sessionCardStyle, .activity)
         XCTAssertEqual(restored.autoConnectServerID, "server-one")
+        XCTAssertEqual(restored.autoConnectLandingDestination, .activity)
     }
 
     func testExistingPreferencesDecodeWithoutRemovedCachePreference() throws {
@@ -49,9 +52,10 @@ final class AppCustomizationStoreTests: XCTestCase {
         XCTAssertTrue(store.showsActivityLastUserMessage)
         XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertEqual(store.autoConnectServerID, "server-one")
+        XCTAssertEqual(store.autoConnectLandingDestination, .projects)
     }
 
-    func testUnknownSessionCardStyleFallsBackToSimpleWithoutDiscardingOtherPreferences() throws {
+    func testUnknownPreferenceValuesFallBackWithoutDiscardingOtherPreferences() throws {
         let suiteName = "AppCustomizationStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -60,6 +64,7 @@ final class AppCustomizationStoreTests: XCTestCase {
                 "showsChatActivityShimmer": false,
                 "sessionCardStyle": "future-style",
                 "autoConnectServerID": "server-one",
+                "autoConnectLandingDestination": "future-destination",
             ]),
             forKey: "appCustomizationPreferences"
         )
@@ -69,6 +74,7 @@ final class AppCustomizationStoreTests: XCTestCase {
         XCTAssertFalse(store.showsChatActivityShimmer)
         XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertEqual(store.autoConnectServerID, "server-one")
+        XCTAssertEqual(store.autoConnectLandingDestination, .projects)
     }
 
     func testAutoConnectServerSelectionMigratesAndReconciles() {

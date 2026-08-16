@@ -1,0 +1,155 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Create an OpenClient session with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Create an OpenClient session with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Crie uma sessão no OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Get OpenClient connection with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Get OpenClient connection with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Consulte a conexão do OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Get OpenClient models with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Get OpenClient models with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Veja os modelos do OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Get OpenClient projects with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Get OpenClient projects with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Veja os projetos do OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Get OpenClient sessions with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Get OpenClient sessions with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Veja as sessões do OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Send a message to OpenClient with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Send a message to OpenClient with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Envie uma mensagem para o OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Send an OpenClient message with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Send an OpenClient message with ${applicationName}",
+              "Start an OpenClient session with ${applicationName}"
+            ]
+          }
+        },
+        "pt-BR" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Envie uma mensagem no OpenClient com ${applicationName}",
+              "Inicie uma sessão no OpenClient com ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

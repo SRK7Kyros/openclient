@@ -97,6 +97,19 @@ final class AppShellFacadeTests: XCTestCase {
         XCTAssertEqual(shell.detailRoute(isCompact: false), .gitFile)
     }
 
+    func testAutomaticConnectionLandingDestinationSelectsConfiguredContent() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+
+        shell.selectAutomaticConnectionLandingDestination(.activity)
+        XCTAssertTrue(shell.isActivitySelected)
+        XCTAssertEqual(shell.contentRoute(isCompact: true), .activity)
+
+        shell.selectAutomaticConnectionLandingDestination(.projects)
+        XCTAssertFalse(shell.isActivitySelected)
+        XCTAssertEqual(shell.contentRoute(isCompact: true), .selectProject)
+    }
+
     func testProjectToolbarNewSessionPresentsCurrentContext() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade

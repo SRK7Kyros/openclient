@@ -127,7 +127,18 @@ struct RootView<ChatDestination: View>: View {
             guard !isShowing else { return }
 
             if isWaitingForAutomaticConnection {
+                isWaitingForAutomaticConnection = false
                 didFinishAutomaticConnection = true
+
+                if shell.isConnected {
+                    shell.selectAutomaticConnectionLandingDestination(
+                        shell.connection.autoConnectLandingDestination
+                    )
+                    withAnimation(opencodeSelectionAnimation) {
+                        showCurrentRoute()
+                    }
+                    return
+                }
             }
 
             withAnimation(opencodeSelectionAnimation) {
@@ -193,7 +204,7 @@ struct RootView<ChatDestination: View>: View {
                     }
                 }
             case .activity:
-                ActivityView(facade: shell.activity) {
+                ActivityView(facade: shell.activity, connection: shell.connection) {
                     withAnimation(opencodeSelectionAnimation) {
                         showDetailColumn()
                     }
@@ -265,6 +276,12 @@ struct RootView<ChatDestination: View>: View {
     }
 
     private func showCurrentRoute() {
+        if shell.isActivitySelected {
+            columnVisibility = .doubleColumn
+            preferredCompactColumn = .content
+            return
+        }
+
         if shell.selectedSessionID != nil {
             showDetailColumn()
             return
@@ -412,7 +429,7 @@ private struct RootDeepLinkProgressOverlay: View {
 }
 
 private struct CompactRouteLoadingView: View {
-    let title: String
+    let title: LocalizedStringResource
     @State private var showsIndicator = false
 
     var body: some View {
@@ -438,6 +455,6 @@ private struct CompactRouteLoadingView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        .accessibilityLabel(Text(title))
     }
 }

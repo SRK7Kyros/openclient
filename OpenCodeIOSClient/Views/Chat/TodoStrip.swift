@@ -353,7 +353,7 @@ struct AttachmentCard: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text(attachmentLabel)
+                    attachmentLabel
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -366,12 +366,12 @@ struct AttachmentCard: View {
         }
     }
 
-    private var attachmentLabel: String {
-        if attachment.isImage { return "Image" }
-        if attachment.mime == "application/pdf" { return "PDF" }
-        if attachment.mime.lowercased().contains("text") { return "Text File" }
-        if attachment.filename.lowercased().hasSuffix(".txt") { return "Text File" }
-        return attachment.mime
+    private var attachmentLabel: Text {
+        if attachment.isImage { return Text("Image") }
+        if attachment.mime == "application/pdf" { return Text("PDF") }
+        if attachment.mime.lowercased().contains("text") { return Text("Text File") }
+        if attachment.filename.lowercased().hasSuffix(".txt") { return Text("Text File") }
+        return Text(attachment.mime)
     }
 }
 
@@ -435,7 +435,7 @@ struct AttachmentPreviewSheet: View {
         .opencodeInlineNavigationTitle()
     }
 
-    private func attachmentDetailRow(title: String, value: String) -> some View {
+    private func attachmentDetailRow(title: LocalizedStringResource, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption.weight(.semibold))
@@ -543,9 +543,15 @@ private struct StackAttachmentCard: View {
                             Text(attachment.filename)
                                 .font(.subheadline.weight(.medium))
                                 .lineLimit(1)
-                            Text(attachment.isImage ? "Image" : "Attachment")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Group {
+                                if attachment.isImage {
+                                    Text("Image")
+                                } else {
+                                    Text("Attachment")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .clipped()
@@ -563,7 +569,7 @@ private func fileSymbol(for attachment: OpenCodeComposerAttachment) -> String {
     return "doc"
 }
 
-private func shortFileLabel(for attachment: OpenCodeComposerAttachment) -> String {
+private func shortFileLabel(for attachment: OpenCodeComposerAttachment) -> LocalizedStringResource {
     if attachment.isImage { return "Image" }
     if attachment.mime == "application/pdf" { return "PDF" }
     if attachment.mime.lowercased().contains("text") { return "TXT" }

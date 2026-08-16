@@ -157,7 +157,7 @@ private extension OpenClientDeviceToolProvider {
             ) { arguments, _ in
                 try requireKeys(arguments, allowed: ["address"])
                 let address = try requiredString(arguments, key: "address", maximumLength: 2_048)
-                let page = try await withBrowserActivity(browserStore, status: "Navigating browser") {
+                let page = try await withBrowserActivity(browserStore, status: String(localized: "Navigating browser")) {
                     try await browserStore.automationNavigate(to: address)
                 }
                 return try browserResult(
@@ -174,7 +174,7 @@ private extension OpenClientDeviceToolProvider {
                 )
             ) { arguments, _ in
                 try requireKeys(arguments, allowed: [])
-                let snapshot = try await withBrowserActivity(browserStore, status: "Inspecting page") {
+                let snapshot = try await withBrowserActivity(browserStore, status: String(localized: "Inspecting page")) {
                     try await browserStore.automationSnapshot()
                 }
                 return try browserResult(
@@ -197,7 +197,7 @@ private extension OpenClientDeviceToolProvider {
             ) { arguments, _ in
                 try requireKeys(arguments, allowed: ["ref"])
                 let ref = try requiredString(arguments, key: "ref", maximumLength: 80)
-                let page = try await withBrowserActivity(browserStore, status: "Interacting with page") {
+                let page = try await withBrowserActivity(browserStore, status: String(localized: "Interacting with page")) {
                     try await browserStore.automationClick(ref: ref)
                 }
                 return try browserResult(
@@ -234,7 +234,7 @@ private extension OpenClientDeviceToolProvider {
                 let text = try requiredString(arguments, key: "text", maximumLength: 16_384, allowsEmpty: true)
                 let clear = try optionalBool(arguments, key: "clear") ?? true
                 let submit = try optionalBool(arguments, key: "submit") ?? false
-                let page = try await withBrowserActivity(browserStore, status: "Entering text") {
+                let page = try await withBrowserActivity(browserStore, status: String(localized: "Entering text")) {
                     try await browserStore.automationType(
                         ref: ref,
                         text: text,
@@ -265,7 +265,7 @@ private extension OpenClientDeviceToolProvider {
             ) { arguments, _ in
                 try requireKeys(arguments, allowed: ["action"])
                 let action = try requiredString(arguments, key: "action", maximumLength: 16)
-                let page = try await withBrowserActivity(browserStore, status: "Updating browser history") {
+                let page = try await withBrowserActivity(browserStore, status: String(localized: "Updating browser history")) {
                     try await browserStore.automationHistory(action: action)
                 }
                 return try browserResult(

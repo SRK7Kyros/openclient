@@ -15,7 +15,7 @@ enum OpenCodeWidgetSessionStatus: String, Codable, Hashable, Sendable {
     case ready
     case watching
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .needsAction:
             return "Needs Action"
@@ -34,14 +34,14 @@ enum OpenCodeWidgetSummaryKind: String, Codable, Hashable, Sendable {
     case question
     case snippet
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .permission:
-            return "Permission"
+            return "PERMISSION"
         case .question:
-            return "Question"
+            return "QUESTION"
         case .snippet:
-            return "Latest"
+            return "LATEST"
         }
     }
 }

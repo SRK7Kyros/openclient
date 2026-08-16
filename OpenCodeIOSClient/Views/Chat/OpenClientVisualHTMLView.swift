@@ -73,8 +73,8 @@ struct OpenClientVisualHTMLView: View {
         .accessibilityValue(activity.payload.accessibilityLabel)
         .accessibilityHint(
             activity.isRunning
-                ? "The interactive preview will be available when rendering finishes"
-                : "Opens an interactive preview with zoom and text selection"
+                ? LocalizedStringResource("The interactive preview will be available when rendering finishes")
+                : LocalizedStringResource("Opens an interactive preview with zoom and text selection")
         )
         .accessibilityIdentifier("chat.tool.visual-html")
     }
@@ -280,9 +280,9 @@ private enum OpenClientStaticHTMLRuleError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .storeUnavailable:
-            "Content rule store is unavailable"
+            String(localized: "Content rule store is unavailable")
         case .compilationFailed:
-            "Content rules did not compile"
+            String(localized: "Content rules did not compile")
         }
     }
 }
@@ -344,7 +344,7 @@ final class OpenClientStaticHTMLCoordinator: NSObject, WKNavigationDelegate, WKU
             && (navigationAction.request.url == nil || navigationAction.request.url?.scheme == "about")
         allowsInitialAction = false
         if !isInitialMainFrame {
-            didFailSecureLoad?("Blocked unexpected navigation to \(navigationAction.request.url?.absoluteString ?? "unknown URL")")
+            didFailSecureLoad?(String(localized: "Blocked unexpected navigation to \(navigationAction.request.url?.absoluteString ?? String(localized: "unknown URL"))"))
         }
         decisionHandler(isInitialMainFrame ? .allow : .cancel, preferences)
     }
@@ -358,7 +358,7 @@ final class OpenClientStaticHTMLCoordinator: NSObject, WKNavigationDelegate, WKU
         didUpdateLoadStage?("navigation-response")
         allowsInitialResponse = false
         if !isInitialMainFrame {
-            didFailSecureLoad?("Blocked unexpected navigation response")
+            didFailSecureLoad?(String(localized: "Blocked unexpected navigation response"))
         }
         decisionHandler(isInitialMainFrame ? .allow : .cancel)
     }

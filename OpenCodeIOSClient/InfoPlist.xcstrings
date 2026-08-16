@@ -1,0 +1,86 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient"
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient connects to your OpenCode server and its device-tool bridge on your local network."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenClient se conecta ao seu servidor OpenCode e à ponte de ferramentas do dispositivo pela rede local."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient uses the microphone to dictate chat messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenClient usa o microfone para ditar mensagens no chat."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient uses your photo library to show recent photos and attach selected images to messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenClient usa sua fototeca para mostrar fotos recentes e anexar as imagens selecionadas às mensagens."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClient uses speech recognition to transcribe dictated chat messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenClient usa o reconhecimento de fala para transcrever mensagens ditadas no chat."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

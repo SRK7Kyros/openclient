@@ -85,7 +85,7 @@ struct SessionRow: View, Equatable {
                     }
                 }
 
-                Text(preview?.text ?? "No messages yet")
+                Text(preview?.text ?? String(localized: "No messages yet"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

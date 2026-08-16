@@ -20,9 +20,9 @@ struct ForkSessionSheet: View {
         List {
             if messages.isEmpty {
                 ContentUnavailableView(
-                    searchText.isEmpty ? "No User Messages" : "No Matches",
+                    searchText.isEmpty ? LocalizedStringResource("No User Messages") : LocalizedStringResource("No Matches"),
                     systemImage: "arrow.triangle.branch",
-                    description: Text(searchText.isEmpty ? "Send a message before forking this session." : "Try a different search.")
+                    description: Text(searchText.isEmpty ? LocalizedStringResource("Send a message before forking this session.") : LocalizedStringResource("Try a different search."))
                 )
                 .listRowBackground(Color.clear)
             } else {

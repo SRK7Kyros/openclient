@@ -156,19 +156,19 @@ enum WidgetSnapshotBuilder {
         }
         if let project { return projectTitle(project) }
         if let directory = session.directory, let component = lastPathComponent(directory), !component.isEmpty { return component }
-        return "Global"
+        return String(localized: "Global")
     }
 
     private static func projectTitle(_ project: OpenCodeProject) -> String {
         if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty { return name }
         if let component = lastPathComponent(project.worktree), !component.isEmpty { return component }
-        return project.id == "global" ? "Global" : project.id
+        return project.id == "global" ? String(localized: "Global") : project.id
     }
 
     private static func sessionTitle(for session: OpenCodeSession, input: WidgetSnapshotInput) -> String {
         let title = (input.sessionTitlesByID[session.id] ?? session.displayTitle())
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "Session" : title
+        return title.isEmpty ? String(localized: "Session") : title
     }
 
     private static func status(
@@ -199,7 +199,7 @@ enum WidgetSnapshotBuilder {
         if let preview = input.previews[session.id] {
             return (.snippet, preview.text, preview.date)
         }
-        return (.snippet, "No messages yet", nil)
+        return (.snippet, String(localized: "No messages yet"), nil)
     }
 
     private static func lastPathComponent(_ path: String) -> String? {

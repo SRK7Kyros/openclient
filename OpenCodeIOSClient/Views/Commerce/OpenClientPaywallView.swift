@@ -18,11 +18,11 @@ struct OpenClientPaywallView: View {
                 PaywallAppIcon()
 
                 VStack(spacing: 10) {
-                    Text(reason.title)
+                    Text(reasonTitle)
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
 
-                    Text(reason.message)
+                    Text(reasonMessage)
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -105,7 +105,7 @@ struct OpenClientPaywallView: View {
         }
     }
 
-    private var purchaseButtonTitle: String {
+    private var purchaseButtonTitle: LocalizedStringResource {
         if isScreenshotScene {
             return "Unlock for $9.99"
         }
@@ -113,7 +113,10 @@ struct OpenClientPaywallView: View {
             return "Loading..."
         }
         if let price = commerce.proDisplayPrice {
-            return "Unlock for \(price)"
+            return LocalizedStringResource(
+                "Unlock for \(price)",
+                comment: "Purchase button. The variable is a StoreKit-formatted localized price."
+            )
         }
         return "Unlock Pro"
     }
@@ -122,10 +125,32 @@ struct OpenClientPaywallView: View {
         ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] == "paywall"
     }
 
+    private var reasonTitle: LocalizedStringResource {
+        switch reason {
+        case .promptLimit: "Daily Prompt Limit Reached"
+        case .sessionLimit: "Create Unlimited Sessions"
+        case .actions: "Unlock Actions"
+        case .manual: "OpenClient Pro"
+        }
+    }
+
+    private var reasonMessage: LocalizedStringResource {
+        switch reason {
+        case .promptLimit:
+            "Upgrade once to send unlimited prompts and support continued development of the open-source app."
+        case .sessionLimit:
+            "Free users can create one session. Upgrade once for unlimited sessions and prompts."
+        case .actions:
+            "Actions run project commands in temporary sessions and only surface when they need your attention."
+        case .manual:
+            "Unlock unlimited prompts and sessions, plus support the signed App Store build."
+        }
+    }
+
 }
 
 private struct PaywallBenefitRow: View {
-    let title: String
+    let title: LocalizedStringResource
     let systemImage: String
     let tint: Color
 

@@ -96,9 +96,10 @@ struct ProjectListView: View {
                         HStack(spacing: 8) {
                             ProjectRow(
                                 title: title,
-                                subtitle: project.id == "global" ? "Shared sessions across the current server context" : project.worktree,
+                                subtitle: project.id == "global" ? String(localized: "Shared sessions across the current server context") : project.worktree,
                                 systemImage: project.id == "global" ? "globe" : "folder.fill",
                                 icon: project.icon,
+                                usesSystemImageFallback: project.id == "global",
                                 isSelected: !isActivitySelected && facade.isSelected(project),
                                 isPreparing: facade.isPreparingSelection(project),
                                 subtitleLineLimit: isEditingProjects ? 2 : 1
@@ -115,7 +116,7 @@ struct ProjectListView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("Show \(title)")
-                                .accessibilityValue(isVisible ? "On" : "Off")
+                                .accessibilityValue(isVisible ? String(localized: "On") : String(localized: "Off"))
                                 .accessibilityIdentifier("projects.visibility.\(project.id)")
                             }
                         }
@@ -171,8 +172,8 @@ struct ProjectListView: View {
                 if games.showsSection, !facade.isReadOnly {
                     Section {
                         ProjectRow(
-                            title: "Find the Place",
-                            subtitle: "Guess a secret city from live weather clues",
+                            title: String(localized: "Find the Place"),
+                            subtitle: String(localized: "Guess a secret city from live weather clues"),
                             systemImage: "map.fill",
                             usesSystemImageFallback: true,
                             isSelected: false
@@ -183,8 +184,8 @@ struct ProjectListView: View {
                         }
 
                         ProjectRow(
-                            title: "Find the Bug",
-                            subtitle: "Spot the hidden bug in a generated code snippet",
+                            title: String(localized: "Find the Bug"),
+                            subtitle: String(localized: "Spot the hidden bug in a generated code snippet"),
                             systemImage: "ladybug.fill",
                             usesSystemImageFallback: true,
                             isSelected: false
@@ -347,7 +348,7 @@ struct ProjectListView: View {
 
     private func projectTitle(_ project: OpenCodeProject) -> String {
         if project.id == "global" {
-            return "Global"
+            return String(localized: "Global", comment: "Name of the special project containing sessions shared across the server context.")
         }
         return project.name ?? project.worktree.split(separator: "/").last.map(String.init) ?? project.worktree
     }
@@ -449,7 +450,7 @@ private struct ProjectSessionSearchRow: View {
 
     private var title: String {
         let trimmed = recent.session.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed?.isEmpty == false ? trimmed ?? "Session" : "Session"
+        return trimmed?.isEmpty == false ? trimmed ?? String(localized: "Session") : String(localized: "Session")
     }
 }
 
@@ -833,7 +834,7 @@ struct ProjectNewChatSheet: View, Equatable {
 
     private var visibleChatTitle: String {
         let trimmedTitle = chatTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedTitle.isEmpty ? "New Session" : trimmedTitle
+        return trimmedTitle.isEmpty ? String(localized: "New Session") : trimmedTitle
     }
 
     private var submittedChatTitle: String {
@@ -875,77 +876,45 @@ struct ProjectNewChatSheet: View, Equatable {
 
     @ViewBuilder
     private var destinationLine: some View {
-        ViewThatFits(in: .horizontal) {
-            destinationLineContent
-
-            VStack(spacing: 4) {
-                HStack(spacing: 7) {
-                    Text("New session in")
-                    projectSelectTrigger
-                }
-                if showsWorkspacePicker {
-                    HStack(spacing: 7) {
-                        Text("in")
-                        workspaceSelectTrigger
-                        Text("workspace")
-                    }
-                }
+        VStack(spacing: 5) {
+            selectionField("Project") {
+                projectSelectTrigger
             }
-        }
-    }
-
-    private var destinationLineContent: some View {
-        HStack(spacing: 7) {
-            Text("New session in")
-            projectSelectTrigger
             if showsWorkspacePicker {
-                Text("in")
-                workspaceSelectTrigger
-                Text("workspace")
+                selectionField("Workspace") {
+                    workspaceSelectTrigger
+                }
             }
         }
     }
 
     @ViewBuilder
     private var composerSettingsLine: some View {
-        ViewThatFits(in: .horizontal) {
-            composerSettingsLineContent
-
-            VStack(spacing: 4) {
-                HStack(spacing: 7) {
-                    Text("With")
-                    agentSelectTrigger
-                    Text("agent")
-                }
-                HStack(spacing: 7) {
-                    Text("on")
-                    modelSelectTrigger
-                    Text("model")
-                }
-                if showsReasoningPicker {
-                    HStack(spacing: 7) {
-                        reasoningSelectTrigger
-                        Text("reasoning")
-                    }
+        VStack(spacing: 5) {
+            selectionField("Agent") {
+                agentSelectTrigger
+            }
+            selectionField("Model") {
+                modelSelectTrigger
+            }
+            if showsReasoningPicker {
+                selectionField("Reasoning") {
+                    reasoningSelectTrigger
                 }
             }
         }
     }
 
-    private var composerSettingsLineContent: some View {
-        HStack(spacing: 7) {
-            Text("With")
-            agentSelectTrigger
-            Text("agent on")
-            modelSelectTrigger
-            if showsReasoningPicker {
-                Text("model,")
-                reasoningSelectTrigger
-                Text("reasoning")
-            } else {
-                Text("model")
-            }
+    private func selectionField<Content: View>(
+        _ label: LocalizedStringResource,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+            Spacer(minLength: 12)
+            content()
         }
+        .frame(maxWidth: 320)
     }
 
     @ViewBuilder
@@ -975,7 +944,7 @@ struct ProjectNewChatSheet: View, Equatable {
     @ViewBuilder
     private var projectSelectTrigger: some View {
         if request.locksProject {
-            Text(selectedProject.map(projectTitle) ?? "Project")
+            Text(selectedProject.map(projectTitle) ?? String(localized: "Project"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -983,12 +952,12 @@ struct ProjectNewChatSheet: View, Equatable {
         } else {
             StablePickerMenu(
                 elements: quickPickerMenuElements(.project),
-                accessibilityLabel: "Project",
-                accessibilityValue: selectedProject.map(projectTitle) ?? "Project",
+                accessibilityLabel: String(localized: "Project"),
+                accessibilityValue: selectedProject.map(projectTitle) ?? String(localized: "Project"),
                 accessibilityIdentifier: "projects.newChat.project",
                 onSelect: { selectQuickPickerOption($0, in: .project) }
             ) {
-                InlineSubtitleSelectTrigger(title: selectedProject.map(projectTitle) ?? "Project")
+                InlineSubtitleSelectTrigger(title: selectedProject.map(projectTitle) ?? String(localized: "Project"))
             }
         }
     }
@@ -996,7 +965,7 @@ struct ProjectNewChatSheet: View, Equatable {
     private var workspaceSelectTrigger: some View {
         StablePickerMenu(
             elements: quickPickerMenuElements(.workspace),
-            accessibilityLabel: "Workspace",
+            accessibilityLabel: String(localized: "Workspace"),
             accessibilityValue: workspaceSelectionTitle,
             accessibilityIdentifier: "projects.newChat.worktree",
             onSelect: { selectQuickPickerOption($0, in: .workspace) }
@@ -1008,7 +977,7 @@ struct ProjectNewChatSheet: View, Equatable {
     private var agentSelectTrigger: some View {
         StablePickerMenu(
             elements: quickPickerMenuElements(.agent),
-            accessibilityLabel: "Agent",
+            accessibilityLabel: String(localized: "Agent"),
             accessibilityValue: agentTitle,
             accessibilityIdentifier: "projects.newChat.agent",
             onSelect: { selectQuickPickerOption($0, in: .agent) }
@@ -1020,7 +989,7 @@ struct ProjectNewChatSheet: View, Equatable {
     private var modelSelectTrigger: some View {
         StablePickerMenu(
             elements: quickPickerMenuElements(.model),
-            accessibilityLabel: "Model",
+            accessibilityLabel: String(localized: "Model"),
             accessibilityValue: modelTitle,
             accessibilityIdentifier: "projects.newChat.model",
             onSelect: { selectQuickPickerOption($0, in: .model) }
@@ -1032,7 +1001,7 @@ struct ProjectNewChatSheet: View, Equatable {
     private var reasoningSelectTrigger: some View {
         StablePickerMenu(
             elements: quickPickerMenuElements(.reasoning),
-            accessibilityLabel: "Reasoning",
+            accessibilityLabel: String(localized: "Reasoning"),
             accessibilityValue: reasoningTitle,
             accessibilityIdentifier: "projects.newChat.reasoning",
             onSelect: { selectQuickPickerOption($0, in: .reasoning) }
@@ -1076,7 +1045,7 @@ struct ProjectNewChatSheet: View, Equatable {
             }
             options.append(.action(
                 id: "create",
-                title: "Create new worktree",
+                title: String(localized: "Create new worktree"),
                 systemImage: "plus.rectangle.on.folder",
                 isSelected: workspaceSelection == .createNew
             ))
@@ -1085,7 +1054,7 @@ struct ProjectNewChatSheet: View, Equatable {
         case .agent:
             let options = [StablePickerMenuElement.action(
                 id: "default",
-                title: "Default",
+                title: String(localized: "Default"),
                 systemImage: "sparkles",
                 isSelected: selectedAgentName == nil
             )] + viewModel.selectableAgents.map { agent in
@@ -1128,7 +1097,7 @@ struct ProjectNewChatSheet: View, Equatable {
         case .reasoning:
             let options = [StablePickerMenuElement.action(
                 id: "default",
-                title: "Default",
+                title: String(localized: "Default"),
                 systemImage: "sparkles",
                 isSelected: selectedReasoningVariant == nil
             )] + reasoningVariants.map { variant in
@@ -1191,7 +1160,7 @@ struct ProjectNewChatSheet: View, Equatable {
     }
 
     private var agentTitle: String {
-        selectedAgentName?.capitalized ?? "Default"
+        selectedAgentName?.capitalized ?? String(localized: "Default")
     }
 
     private var modelTitle: String {
@@ -1203,19 +1172,19 @@ struct ProjectNewChatSheet: View, Equatable {
            let model = viewModel.model(for: defaultModelReference) {
             return model.name
         }
-        return "Default"
+        return String(localized: "Default")
     }
 
     private var modelDefaultOptionTitle: String {
         if let defaultModelReference = viewModel.defaultModelReference(),
            let model = viewModel.model(for: defaultModelReference) {
-            return "Default (\(model.name))"
+            return String(localized: "Default (\(model.name))", comment: "Default model picker option. The variable is a server-provided model name.")
         }
-        return "Default"
+        return String(localized: "Default")
     }
 
     private var reasoningTitle: String {
-        selectedReasoningVariant.map(viewModel.formattedVariantTitle) ?? "Default"
+        selectedReasoningVariant.map(viewModel.formattedVariantTitle) ?? String(localized: "Default")
     }
 
     private var composerSettingsSourceSignature: String {
@@ -1400,7 +1369,7 @@ struct ProjectNewChatSheet: View, Equatable {
     }
 
     private func startingPreviewSubtitle(for project: OpenCodeProject) -> String {
-        guard project.id != "global" else { return "Global" }
+        guard project.id != "global" else { return String(localized: "Global", comment: "Name of the special project containing sessions shared across the server context.") }
         let workspace = workspaceSelectionTitle
         return "\(projectTitle(project)) • \(workspace)"
     }
@@ -1416,14 +1385,14 @@ struct ProjectNewChatSheet: View, Equatable {
     }
 
     private var workspaceSelectionTitle: String {
-        guard let selectedProject else { return "Workspace" }
+        guard let selectedProject else { return String(localized: "Workspace") }
         switch workspaceSelection {
         case .main:
             return workspaceTitle(selectedProject.worktree)
         case let .directory(directory):
             return workspaceTitle(directory)
         case .createNew:
-            return "New worktree"
+            return String(localized: "New worktree")
         }
     }
 
@@ -1458,7 +1427,7 @@ struct ProjectNewChatSheet: View, Equatable {
     }
 
     private func projectTitle(_ project: OpenCodeProject) -> String {
-        if project.id == "global" { return "Global" }
+        if project.id == "global" { return String(localized: "Global", comment: "Name of the special project containing sessions shared across the server context.") }
         let trimmedName = project.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmedName, !trimmedName.isEmpty { return trimmedName }
         return URL(fileURLWithPath: project.worktree).lastPathComponent
@@ -1550,11 +1519,15 @@ private struct ProjectListSectionHeader: View {
             }
             .opencodeGlassButton(clear: false)
             .buttonBorderShape(.circle)
-            .accessibilityLabel(isEditingProjects ? "Finish Editing Projects" : "Manage Projects")
+            .accessibilityLabel(Text(projectEditingAccessibilityLabel))
             .accessibilityIdentifier("projects.manage")
         }
         .padding(.leading, -16)
         .padding(.trailing, -29)
+    }
+
+    private var projectEditingAccessibilityLabel: LocalizedStringResource {
+        isEditingProjects ? "Finish Editing Projects" : "Manage Projects"
     }
 }
 
@@ -1597,7 +1570,7 @@ private struct ProjectColorPickerSheet: View {
                         } label: {
                             VStack(spacing: 8) {
                                 ProjectColorSwatch(color: color, title: project.name ?? project.worktree)
-                                Text(color.capitalized)
+                                Text(projectColorTitle(color))
                                     .font(.caption.weight(.medium))
                             }
                             .frame(maxWidth: .infinity)
@@ -1624,6 +1597,17 @@ private struct ProjectColorPickerSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+private func projectColorTitle(_ color: String) -> LocalizedStringResource {
+    switch color {
+    case "pink": "Pink"
+    case "mint": "Mint"
+    case "orange": "Orange"
+    case "purple": "Purple"
+    case "cyan": "Cyan"
+    default: "Lime"
     }
 }
 
@@ -1887,7 +1871,7 @@ private struct FindBugModelSelectionSheet: View {
                     }
                 }
             }
-            .navigationTitle(viewModel.pendingFindBugLanguage?.title ?? "Model")
+            .navigationTitle(viewModel.pendingFindBugLanguage?.title ?? String(localized: "Model"))
             .opencodeInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .opencodeLeading) {

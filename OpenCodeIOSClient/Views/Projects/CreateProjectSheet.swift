@@ -36,8 +36,10 @@ struct CreateProjectSheet: View {
                             .buttonStyle(.plain)
                             .disabled(snapshot.isLoading)
 
-                            Button(snapshot.isLoading ? "Selecting..." : "Select") {
+                            Button {
                                 Task { await facade.createProject(from: selectedDirectory) }
+                            } label: {
+                                Text(snapshot.isLoading ? LocalizedStringResource("Selecting...") : LocalizedStringResource("Select"))
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(snapshot.isLoading)

@@ -14,13 +14,13 @@ enum OpenClientProjectContentTab: String, CaseIterable {
     var title: String {
         switch self {
         case .sessions:
-            return "Sessions"
+            return String(localized: "Sessions")
         case .git:
-            return "Files"
+            return String(localized: "Files")
         case .terminal:
-            return "Terminal"
+            return String(localized: "Terminal")
         case .mcp:
-            return "MCP"
+            return String(localized: "MCP")
         }
     }
 

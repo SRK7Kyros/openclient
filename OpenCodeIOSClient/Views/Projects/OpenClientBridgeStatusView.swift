@@ -45,9 +45,9 @@ struct OpenClientBridgeStatusView: View {
                     .foregroundStyle(snapshot.isConnected ? .green : .secondary)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(snapshot.isConnected ? "Connected" : snapshot.statusTitle)
+                    Text(bridgeStatusTitle(snapshot))
                         .font(.title3.weight(.semibold))
-                    Text(snapshot.isConnected ? "Plugin tools are ready in OpenCode." : "OpenClient will reconnect automatically.")
+                    Text(snapshot.isConnected ? LocalizedStringResource("Plugin tools are ready in OpenCode.") : LocalizedStringResource("OpenClient will reconnect automatically."))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -84,7 +84,7 @@ struct OpenClientBridgeDiagnosticsView: View {
                     bridge.forceConnect()
                 } label: {
                     Label(
-                        snapshot.isConnected ? "Reconnect Now" : "Force Connect",
+                        snapshot.isConnected ? LocalizedStringResource("Reconnect Now") : LocalizedStringResource("Force Connect"),
                         systemImage: "arrow.clockwise"
                     )
                 }
@@ -107,7 +107,7 @@ private struct OpenClientBridgeDiagnosticsConnectionSection: View {
             HStack(spacing: 12) {
                 Text("Status")
                 Spacer()
-                Label(snapshot.statusTitle, systemImage: snapshot.toolbarSystemImage)
+                Label(bridgeStatusTitle(snapshot), systemImage: snapshot.toolbarSystemImage)
                     .foregroundStyle(snapshot.isConnected ? .green : .secondary)
             }
 
@@ -132,6 +132,15 @@ private struct OpenClientBridgeDiagnosticsConnectionSection: View {
                 }
             }
         }
+    }
+}
+
+private func bridgeStatusTitle(_ snapshot: OpenClientBridgeSnapshot) -> LocalizedStringResource {
+    switch snapshot.phase {
+    case .idle: "Disconnected"
+    case .searching: "Searching"
+    case .connecting: "Connecting"
+    case .connected: "Connected"
     }
 }
 

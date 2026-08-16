@@ -91,7 +91,7 @@ struct CreateSessionSheet: View {
 
             if !snapshot.hasProUnlock {
                 Section("Free Plan") {
-                    Text(snapshot.canCreateFreeSession ? "Your first session is included. Upgrade for unlimited sessions and prompts." : "Upgrade to create more sessions.")
+                    Text(snapshot.canCreateFreeSession ? LocalizedStringResource("Your first session is included. Upgrade for unlimited sessions and prompts.") : LocalizedStringResource("Upgrade to create more sessions."))
                         .foregroundStyle(.secondary)
 
                     Button("Upgrade to Pro") {
@@ -122,7 +122,7 @@ struct CreateSessionSheet: View {
         }
     }
 
-    private var createButtonTitle: String {
+    private var createButtonTitle: LocalizedStringResource {
         let snapshot = facade.createSessionSnapshot
         if snapshot.isLoading, snapshot.workspaceSelection == .createNew {
             return "Creating Worktree..."
@@ -150,7 +150,7 @@ struct CreateSessionSheet: View {
 
     private var submittedTitle: String {
         let title = facade.createSessionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "New Session" : title
+        return title.isEmpty ? String(localized: "New Session") : title
     }
 }
 
@@ -160,7 +160,7 @@ enum NewSessionStartingPhase: Equatable {
     case sendingMessage
     case waitingForOpenCode
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .creatingWorktree:
             return "Creating worktree"
@@ -173,7 +173,7 @@ enum NewSessionStartingPhase: Equatable {
         }
     }
 
-    var detail: String {
+    var detail: LocalizedStringResource {
         switch self {
         case .creatingWorktree:
             return "Preparing a fresh workspace before the session opens."
@@ -296,7 +296,13 @@ struct NewSessionStartingPreview: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private var attachmentLabel: String {
-        snapshot.attachmentCount == 1 ? "1 attachment" : "\(snapshot.attachmentCount) attachments"
+    private var attachmentLabel: LocalizedStringResource {
+        if snapshot.attachmentCount == 1 {
+            return "1 attachment"
+        }
+        return LocalizedStringResource(
+            "\(snapshot.attachmentCount) attachments",
+            comment: "Attachment count shown while a new session starts."
+        )
     }
 }

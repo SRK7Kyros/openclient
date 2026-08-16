@@ -54,20 +54,31 @@ struct FindPlaceWeatherSummary: Codable, Hashable, Sendable {
 enum FindPlaceGame {
     static let setupMarker = "[[OPENCLIENT_FIND_PLACE_SETUP]]"
     static let winMarker = "[[OPENCLIENT_FIND_PLACE_CORRECT]]"
-    static let weatherAttribution = "Weather data provided by  Weather. Legal source: https://weatherkit.apple.com/legal-attribution.html"
+    static let secretCityPrefix = "OPENCLIENT_SECRET_CITY:"
+    static let coordinatesPrefix = "OPENCLIENT_COORDINATES:"
+    static let cluePrefix = "OPENCLIENT_CLUE:"
+    static let weatherDiagnosticPrefix = "OPENCLIENT_WEATHER_DIAGNOSTIC:"
+    static var weatherAttribution: String {
+        String(localized: "Weather data provided by  Weather. Legal source: https://weatherkit.apple.com/legal-attribution.html")
+    }
 
     static func randomCity() -> FindPlaceGameCity {
         cities.randomElement() ?? cities[0]
     }
 
     static func starterPrompt(city: FindPlaceGameCity, weather: FindPlaceWeatherSummary) -> String {
-        let weatherDiagnostic = weather.errorDescription.map { "WeatherKit diagnostic: \($0)" } ?? "WeatherKit diagnostic: success"
+        let weatherDiagnostic = weather.errorDescription ?? "success"
 
-        return """
+        let metadata = """
         \(setupMarker)
-        <!-- \(weatherDiagnostic) -->
+        <!-- \(secretCityPrefix) \(city.name), \(city.country) -->
+        <!-- \(coordinatesPrefix) \(city.latitude), \(city.longitude) -->
+        <!-- \(cluePrefix) \(weather.text) -->
+        <!-- \(weatherDiagnosticPrefix) \(weatherDiagnostic) -->
+        """
 
-        We are playing a private OpenClient game called Find the Place.
+        let instructions = String(localized: """
+        We are playing an OpenClient game called Find the Place.
 
         Secret city: \(city.name), \(city.country)
         Coordinates: \(city.latitude), \(city.longitude)
@@ -84,7 +95,8 @@ enum FindPlaceGame {
         - Until the user guesses correctly, answer direct guesses with only "Yes" or "No" plus at most one short clue sentence.
         - Accept minor typos, missing accents, and close spellings as correct.
         - When the user guesses correctly, reply with exactly this marker and no other text: \(winMarker)
-        """
+        """)
+        return "\(metadata)\n\n\(instructions)"
     }
 
     static let cities: [FindPlaceGameCity] = [
@@ -143,22 +155,16 @@ enum FindPlaceWeatherProvider {
                 let fahrenheit = current.temperature.converted(to: .fahrenheit).value
                 let windKPH = current.wind.speed.converted(to: .kilometersPerHour).value
                 let humidity = Int((current.humidity * 100).rounded())
-                let text = String(
-                    format: "%.0f°C / %.0f°F, %@, humidity %d%%, wind %.0f km/h",
-                    celsius,
-                    fahrenheit,
-                    String(describing: current.condition),
-                    humidity,
-                    windKPH
-                )
+                let condition = String(describing: current.condition)
+                let text = String(localized: "\(celsius, format: .number.precision(.fractionLength(0)))°C / \(fahrenheit, format: .number.precision(.fractionLength(0)))°F, \(condition), humidity \(humidity)%, wind \(windKPH, format: .number.precision(.fractionLength(0))) km/h")
                 return FindPlaceWeatherSummary(text: text, provider: "WeatherKit", requestedAt: requestedAt, errorDescription: nil)
             } catch {
                 return fallbackSummary(for: city, requestedAt: requestedAt, error: error)
             }
         }
-        return fallbackSummary(for: city, requestedAt: requestedAt, reason: "WeatherKit requires iOS 16.0 or newer.")
+        return fallbackSummary(for: city, requestedAt: requestedAt, reason: String(localized: "WeatherKit requires iOS 16.0 or newer."))
 #else
-        return fallbackSummary(for: city, requestedAt: requestedAt, reason: "WeatherKit is not available in this build target.")
+        return fallbackSummary(for: city, requestedAt: requestedAt, reason: String(localized: "WeatherKit is not available in this build target."))
 #endif
     }
 
@@ -167,7 +173,7 @@ enum FindPlaceWeatherProvider {
         return fallbackSummary(
             for: city,
             requestedAt: requestedAt,
-            reason: "WeatherKit request failed: \(error)",
+            reason: String(localized: "WeatherKit request failed: \(error.localizedDescription)"),
             errorDomain: nsError.domain,
             errorCode: nsError.code
         )
@@ -180,18 +186,18 @@ enum FindPlaceWeatherProvider {
         errorDomain: String? = nil,
         errorCode: Int? = nil
     ) -> FindPlaceWeatherSummary {
-        let hemisphere = city.latitude >= 0 ? "Northern Hemisphere" : "Southern Hemisphere"
+        let hemisphere = city.latitude >= 0 ? String(localized: "Northern Hemisphere") : String(localized: "Southern Hemisphere")
         let zone: String
         switch abs(city.latitude) {
         case 0..<23.5:
-            zone = "tropical latitude"
+            zone = String(localized: "tropical latitude")
         case 23.5..<45:
-            zone = "temperate/subtropical latitude"
+            zone = String(localized: "temperate/subtropical latitude")
         default:
-            zone = "cooler high-latitude region"
+            zone = String(localized: "cooler high-latitude region")
         }
         return FindPlaceWeatherSummary(
-            text: "Location clue: \(zone) in the \(hemisphere).",
+            text: String(localized: "Location clue: \(zone) in the \(hemisphere)."),
             provider: "Fallback",
             requestedAt: requestedAt,
             errorDomain: errorDomain,

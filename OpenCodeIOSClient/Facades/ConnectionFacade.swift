@@ -47,6 +47,9 @@ final class ConnectionFacade: ObservableObject {
     var appIconStore: AppIconStore { viewModel.appIconStore }
     var showsChatActivityShimmer: Bool { viewModel.appCustomizationStore.showsChatActivityShimmer }
     var autoConnectServerID: String? { viewModel.appCustomizationStore.autoConnectServerID }
+    var autoConnectLandingDestination: AutoConnectLandingDestination {
+        viewModel.appCustomizationStore.autoConnectLandingDestination
+    }
     var isBrowsingLocalCache: Bool { viewModel.backendMode == .cachedServer }
     var errorMessage: String? { viewModel.errorMessage }
     var isLoading: Bool { viewModel.isLoading }
@@ -76,6 +79,10 @@ final class ConnectionFacade: ObservableObject {
 
     func setAutoConnectServerID(_ serverID: String?) {
         viewModel.appCustomizationStore.setAutoConnectServerID(serverID)
+    }
+
+    func setAutoConnectLandingDestination(_ destination: AutoConnectLandingDestination) {
+        viewModel.appCustomizationStore.setAutoConnectLandingDestination(destination)
     }
 
     func cancelConnectionAttempt() {

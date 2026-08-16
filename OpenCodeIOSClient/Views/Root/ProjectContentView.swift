@@ -55,7 +55,7 @@ struct ProjectContentView: View {
                     Button(action: toolbarAction) {
                         Image(systemName: toolbarIcon)
                     }
-                    .accessibilityLabel(toolbarLabel)
+                    .accessibilityLabel(Text(toolbarLabel))
                     .accessibilityIdentifier(toolbarIdentifier)
                     .disabled(toolbarDisabled)
                 }
@@ -122,14 +122,14 @@ struct ProjectContentView: View {
         TabView(selection: selectedTab) {
             SessionListView(facade: shell.sessions, onSessionChosen: onDetailChosen)
                 .tabItem {
-                    Label(OpenClientProjectContentTab.sessions.title, systemImage: OpenClientProjectContentTab.sessions.systemImage)
+                    Label(projectTabTitle(.sessions), systemImage: OpenClientProjectContentTab.sessions.systemImage)
                 }
                 .tag(OpenClientProjectContentTab.sessions)
 
             if snapshot.availableTabs.contains(.git) {
                 GitStatusView(facade: shell.projectFiles, onFileChosen: onDetailChosen)
                     .tabItem {
-                        Label(OpenClientProjectContentTab.git.title, systemImage: OpenClientProjectContentTab.git.systemImage)
+                        Label(projectTabTitle(.git), systemImage: OpenClientProjectContentTab.git.systemImage)
                     }
                     .tag(OpenClientProjectContentTab.git)
             }
@@ -137,7 +137,7 @@ struct ProjectContentView: View {
             if snapshot.isTerminalAvailable {
                 TerminalProjectView(facade: shell.terminal, onTerminalChosen: onDetailChosen)
                     .tabItem {
-                        Label(OpenClientProjectContentTab.terminal.title, systemImage: OpenClientProjectContentTab.terminal.systemImage)
+                        Label(projectTabTitle(.terminal), systemImage: OpenClientProjectContentTab.terminal.systemImage)
                     }
                     .tag(OpenClientProjectContentTab.terminal)
             }
@@ -145,7 +145,7 @@ struct ProjectContentView: View {
             if snapshot.availableTabs.contains(.mcp) {
                 MCPListView(facade: shell.mcp)
                     .tabItem {
-                        Label(OpenClientProjectContentTab.mcp.title, systemImage: OpenClientProjectContentTab.mcp.systemImage)
+                        Label(projectTabTitle(.mcp), systemImage: OpenClientProjectContentTab.mcp.systemImage)
                     }
                     .tag(OpenClientProjectContentTab.mcp)
             }
@@ -157,7 +157,7 @@ struct ProjectContentView: View {
     private var nativeRoleTabContent: some View {
         TabView(selection: nativeTabSelection) {
             Tab(
-                OpenClientProjectContentTab.sessions.title,
+                projectTabTitle(.sessions),
                 systemImage: OpenClientProjectContentTab.sessions.systemImage,
                 value: ProjectNativeTab.sessions
             ) {
@@ -166,7 +166,7 @@ struct ProjectContentView: View {
 
             if snapshot.availableTabs.contains(.git) {
                 Tab(
-                    OpenClientProjectContentTab.git.title,
+                    projectTabTitle(.git),
                     systemImage: OpenClientProjectContentTab.git.systemImage,
                     value: ProjectNativeTab.git
                 ) {
@@ -177,7 +177,7 @@ struct ProjectContentView: View {
 
             if snapshot.isTerminalAvailable {
                 Tab(
-                    OpenClientProjectContentTab.terminal.title,
+                    projectTabTitle(.terminal),
                     systemImage: OpenClientProjectContentTab.terminal.systemImage,
                     value: ProjectNativeTab.terminal
                 ) {
@@ -187,7 +187,7 @@ struct ProjectContentView: View {
 
             if snapshot.availableTabs.contains(.mcp) {
                 Tab(
-                    OpenClientProjectContentTab.mcp.title,
+                    projectTabTitle(.mcp),
                     systemImage: OpenClientProjectContentTab.mcp.systemImage,
                     value: ProjectNativeTab.mcp
                 ) {
@@ -271,8 +271,13 @@ struct ProjectContentView: View {
         snapshot.toolbarIcon
     }
 
-    private var toolbarLabel: String {
-        snapshot.toolbarLabel
+    private var toolbarLabel: LocalizedStringResource {
+        switch snapshot.selectedTab {
+        case .sessions: "Create Session"
+        case .git: snapshot.filesMode == .tree ? "Refresh File Tree" : "Refresh Files"
+        case .mcp: "Refresh MCP Servers"
+        case .terminal: "New Terminal"
+        }
     }
 
     private var toolbarIdentifier: String {
@@ -299,7 +304,7 @@ struct ProjectContentTabSelector: View {
     var body: some View {
         Picker("Project Content", selection: $selection.animation(opencodeSelectionAnimation)) {
             ForEach(tabs, id: \.self) { tab in
-                Label(tab.title, systemImage: systemImage(for: tab))
+                Label(projectTabTitle(tab), systemImage: systemImage(for: tab))
                     .labelStyle(.titleAndIcon)
                     .tag(tab)
             }
@@ -314,6 +319,15 @@ struct ProjectContentTabSelector: View {
 
     private func systemImage(for tab: OpenClientProjectContentTab) -> String {
         tab.systemImage
+    }
+}
+
+private func projectTabTitle(_ tab: OpenClientProjectContentTab) -> LocalizedStringKey {
+    switch tab {
+    case .sessions: "Sessions"
+    case .git: "Files"
+    case .terminal: "Terminal"
+    case .mcp: "MCP"
     }
 }
 

@@ -44,7 +44,10 @@ private struct MCPListContent: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("MCP Servers")
                             .font(.headline)
-                        Text("\(snapshot.connectedServerCount) of \(snapshot.servers.count) enabled")
+                        Text(
+                            "\(snapshot.connectedServerCount) of \(snapshot.servers.count) enabled",
+                            comment: "MCP server summary. The first value is the enabled count and the second is the total server count."
+                        )
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -69,7 +72,7 @@ private struct MCPListContent: View {
                 if snapshot.isLoading && snapshot.servers.isEmpty {
                     ProgressView("Loading MCP servers")
                 } else if filteredServers.isEmpty {
-                    Text(snapshot.servers.isEmpty ? "No configured MCP servers." : "No MCP servers match your search.")
+                    Text(snapshot.servers.isEmpty ? LocalizedStringResource("No configured MCP servers.") : LocalizedStringResource("No MCP servers match your search."))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(filteredServers) { server in
@@ -109,7 +112,7 @@ private struct MCPServerRow: View {
                         .font(.body.weight(.medium))
                         .lineLimit(1)
 
-                    Text(server.status.displayStatus)
+                    statusText
                         .font(.caption)
                         .foregroundStyle(statusColor)
                         .padding(.horizontal, 7)
@@ -155,6 +158,17 @@ private struct MCPServerRow: View {
             return .orange
         default:
             return .secondary
+        }
+    }
+
+    private var statusText: Text {
+        switch server.status.status {
+        case "connected": Text("Connected")
+        case "disabled": Text("Disabled")
+        case "failed": Text("Failed")
+        case "needs_auth": Text("Needs Auth")
+        case "needs_client_registration": Text("Needs Registration")
+        default: Text(server.status.displayStatus)
         }
     }
 }

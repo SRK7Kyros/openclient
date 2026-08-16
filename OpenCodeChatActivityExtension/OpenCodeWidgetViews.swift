@@ -101,7 +101,6 @@ private struct OpenCodeWidgetHeroSessionCard: View {
                 Text(session.summaryKind.title)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
                 Text(session.summaryText)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(4)
@@ -156,8 +155,8 @@ private struct OpenCodeWidgetSessionRow: View {
 }
 
 private struct OpenCodeWidgetEmptyState: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
 
     var body: some View {
         VStack(spacing: 7) {

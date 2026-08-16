@@ -82,10 +82,10 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
     var defaultGeneratedTitleDisplayName: String? {
         guard let title else { return nil }
         if title.range(of: #"^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"#, options: .regularExpression) != nil {
-            return "New session"
+            return String(localized: "New session")
         }
         if title.range(of: #"^Child session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"#, options: .regularExpression) != nil {
-            return "Child session"
+            return String(localized: "Child session")
         }
         return nil
     }
@@ -94,7 +94,7 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
         defaultGeneratedTitleDisplayName != nil
     }
 
-    func displayTitle(fallback: String = "Untitled Session") -> String {
+    func displayTitle(fallback: String = String(localized: "Untitled Session")) -> String {
         if let defaultGeneratedTitleDisplayName { return defaultGeneratedTitleDisplayName }
         if let title, !title.isEmpty { return title }
         return fallback
@@ -133,9 +133,9 @@ enum OpenCodeActionRunPhase: String, Equatable, Sendable {
     var title: String {
         switch self {
         case .runningCommand:
-            return "Running command"
+            return String(localized: "Running command")
         case .checkingResult:
-            return "Checking result"
+            return String(localized: "Checking result")
         }
     }
 }
@@ -1620,15 +1620,15 @@ struct OpenCodeMCPStatus: Codable, Hashable, Sendable {
     var displayStatus: String {
         switch status {
         case "connected":
-            return "Connected"
+            return String(localized: "Connected")
         case "disabled":
-            return "Disabled"
+            return String(localized: "Disabled")
         case "failed":
-            return "Failed"
+            return String(localized: "Failed")
         case "needs_auth":
-            return "Needs Auth"
+            return String(localized: "Needs Auth")
         case "needs_client_registration":
-            return "Needs Registration"
+            return String(localized: "Needs Registration")
         default:
             return status.replacingOccurrences(of: "_", with: " ").capitalized
         }
@@ -1689,9 +1689,9 @@ enum OpenCodeProjectFilesMode: String, CaseIterable, Hashable, Sendable {
     var title: String {
         switch self {
         case .changes:
-            return "Changes"
+            return String(localized: "Changes")
         case .tree:
-            return "Tree"
+            return String(localized: "Tree")
         }
     }
 }
@@ -1703,9 +1703,9 @@ enum OpenCodeVCSDiffMode: String, CaseIterable, Codable, Hashable, Sendable {
     var title: String {
         switch self {
         case .git:
-            return "Working Tree"
+            return String(localized: "Working Tree")
         case .branch:
-            return "Branch"
+            return String(localized: "Branch")
         }
     }
 }
@@ -3419,16 +3419,16 @@ enum OpenCodeAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "The server URL is invalid."
+            return String(localized: "The server URL is invalid.")
         case .invalidResponse:
-            return "The server returned an invalid response."
+            return String(localized: "The server returned an invalid response.")
         case .timedOut:
-            return "The server took too long to respond. Check that the URL is reachable, then try again."
+            return String(localized: "The server took too long to respond. Check that the URL is reachable, then try again.")
         case let .httpError(code, body):
             if body.isEmpty {
-                return "The server request failed with status \(code)."
+                return String(localized: "The server request failed with status \(code).")
             }
-            return "The server request failed with status \(code): \(body)"
+            return String(localized: "The server request failed with status \(code): \(body)")
         }
     }
 }

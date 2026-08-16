@@ -13,7 +13,7 @@ private enum DebugProbeLogFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .deltaFlush:
             return "Delta"
@@ -31,15 +31,15 @@ private enum DebugProbeLogFilter: String, CaseIterable, Identifiable {
     var emptyMessage: String {
         switch self {
         case .deltaFlush:
-            return "No delta flush lines yet. Start the probe and stream a response."
+            return String(localized: "No delta flush lines yet. Start the probe and stream a response.")
         case .stream:
-            return "No stream event lines match the current filter."
+            return String(localized: "No stream event lines match the current filter.")
         case .drops:
-            return "No drop or error lines match the current filter."
+            return String(localized: "No drop or error lines match the current filter.")
         case .breadcrumbs:
-            return "No breadcrumb lines match the current filter."
+            return String(localized: "No breadcrumb lines match the current filter.")
         case .all:
-            return "No log lines match the current filter."
+            return String(localized: "No log lines match the current filter.")
         }
     }
 
@@ -53,7 +53,7 @@ private enum DebugProbeLogFilter: String, CaseIterable, Identifiable {
         case .drops:
             return lowerLine.contains("drop") || lowerLine.contains("error") || lowerLine.contains("failed")
         case .breadcrumbs:
-            return sectionTitle == "Chat Breadcrumbs"
+            return sectionTitle == String(localized: "Chat Breadcrumbs")
         case .all:
             return true
         }
@@ -75,13 +75,13 @@ struct ChatDebugProbeSheet: View {
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 12) {
-                        Button(chatFacade.isRunningDebugProbe ? "Running..." : "Start Probe") {
+                        Button(chatFacade.isRunningDebugProbe ? LocalizedStringResource("Running...") : LocalizedStringResource("Start Probe")) {
                             Task { await chatFacade.startDebugProbe() }
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(chatFacade.isRunningDebugProbe)
 
-                        Button(copiedDebugLog ? "Copied" : "Copy Filtered") {
+                        Button(copiedDebugLog ? LocalizedStringResource("Copied") : LocalizedStringResource("Copy Filtered")) {
                             OpenCodeClipboard.copy(filteredDebugText)
                             copiedDebugLog = true
                         }
@@ -163,10 +163,13 @@ struct ChatDebugProbeSheet: View {
 
     private var filteredLineSummary: String {
         let total = filteredSections.reduce(0) { $0 + $1.lines.count }
+        let filterTitle = String(localized: selectedFilter.title)
         if filterQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Showing \(total) line\(total == 1 ? "" : "s") for \(selectedFilter.title)."
+            if total == 1 { return String(localized: "Showing 1 line for \(filterTitle).") }
+            return String(localized: "Showing \(total) lines for \(filterTitle).")
         }
-        return "Showing \(total) line\(total == 1 ? "" : "s") for \(selectedFilter.title) matching \"\(filterQuery)\"."
+        if total == 1 { return String(localized: "Showing 1 line for \(filterTitle) matching \"\(filterQuery)\".") }
+        return String(localized: "Showing \(total) lines for \(filterTitle) matching \"\(filterQuery)\".")
     }
 
     private var filteredSections: [(title: String, lines: [String])] {
@@ -183,8 +186,8 @@ struct ChatDebugProbeSheet: View {
 
     private var rawSections: [(title: String, lines: [String])] {
         [
-            ("Probe Log", lines(from: chatFacade.copyDebugProbeLog())),
-            ("Chat Breadcrumbs", lines(from: chatFacade.copyChatBreadcrumbs())),
+            (String(localized: "Probe Log"), lines(from: chatFacade.copyDebugProbeLog())),
+            (String(localized: "Chat Breadcrumbs"), lines(from: chatFacade.copyChatBreadcrumbs())),
         ]
     }
 
