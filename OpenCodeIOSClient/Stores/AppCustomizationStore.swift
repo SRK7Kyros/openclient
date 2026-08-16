@@ -9,13 +9,26 @@ enum SessionCardStyle: String, Codable, CaseIterable, Identifiable {
     var id: Self { self }
     var title: String {
         switch self {
-        case .compact: "Compact"
-        case .simple: "Default"
-        case .activity: "Activity"
+        case .compact: String(localized: "Compact")
+        case .simple: String(localized: "Default")
+        case .activity: String(localized: "Activity")
         }
     }
 
     static var allCases: [SessionCardStyle] { [.compact, .simple, .activity] }
+}
+
+enum AutoConnectLandingDestination: String, Codable, CaseIterable, Identifiable {
+    case projects
+    case activity
+
+    var id: Self { self }
+    var title: LocalizedStringResource {
+        switch self {
+        case .projects: "Projects"
+        case .activity: "Activity"
+        }
+    }
 }
 
 struct AppCustomizationPreferences: Codable, Equatable {
@@ -23,17 +36,20 @@ struct AppCustomizationPreferences: Codable, Equatable {
     var showsActivityLastUserMessage: Bool
     var sessionCardStyle: SessionCardStyle
     var autoConnectServerID: String?
+    var autoConnectLandingDestination: AutoConnectLandingDestination
 
     init(
         showsChatActivityShimmer: Bool = true,
         showsActivityLastUserMessage: Bool = true,
         sessionCardStyle: SessionCardStyle = .simple,
-        autoConnectServerID: String? = nil
+        autoConnectServerID: String? = nil,
+        autoConnectLandingDestination: AutoConnectLandingDestination = .projects
     ) {
         self.showsChatActivityShimmer = showsChatActivityShimmer
         self.showsActivityLastUserMessage = showsActivityLastUserMessage
         self.sessionCardStyle = sessionCardStyle
         self.autoConnectServerID = autoConnectServerID
+        self.autoConnectLandingDestination = autoConnectLandingDestination
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -41,6 +57,7 @@ struct AppCustomizationPreferences: Codable, Equatable {
         case showsActivityLastUserMessage
         case sessionCardStyle
         case autoConnectServerID
+        case autoConnectLandingDestination
     }
 
     init(from decoder: Decoder) throws {
@@ -50,6 +67,8 @@ struct AppCustomizationPreferences: Codable, Equatable {
         sessionCardStyle = try container.decodeIfPresent(String.self, forKey: .sessionCardStyle)
             .flatMap(SessionCardStyle.init(rawValue:)) ?? .simple
         autoConnectServerID = try container.decodeIfPresent(String.self, forKey: .autoConnectServerID)
+        autoConnectLandingDestination = try container.decodeIfPresent(String.self, forKey: .autoConnectLandingDestination)
+            .flatMap(AutoConnectLandingDestination.init(rawValue:)) ?? .projects
     }
 }
 
@@ -82,6 +101,10 @@ final class AppCustomizationStore: ObservableObject {
         preferences.autoConnectServerID
     }
 
+    var autoConnectLandingDestination: AutoConnectLandingDestination {
+        preferences.autoConnectLandingDestination
+    }
+
     var showsActivityLastUserMessage: Bool {
         preferences.showsActivityLastUserMessage
     }
@@ -111,6 +134,12 @@ final class AppCustomizationStore: ObservableObject {
     func setAutoConnectServerID(_ serverID: String?) {
         guard preferences.autoConnectServerID != serverID else { return }
         preferences.autoConnectServerID = serverID
+        persist()
+    }
+
+    func setAutoConnectLandingDestination(_ destination: AutoConnectLandingDestination) {
+        guard preferences.autoConnectLandingDestination != destination else { return }
+        preferences.autoConnectLandingDestination = destination
         persist()
     }
 

@@ -129,7 +129,7 @@ extension AppViewModel {
     func connectProviderWithAPIKey(providerID: String, key: String) async -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            errorMessage = "API key is required."
+            errorMessage = String(localized: "API key is required.")
             return false
         }
 
@@ -185,7 +185,7 @@ extension AppViewModel {
             guard didComplete else {
                 objectWillChange.send()
                 modelConfigurationStore.connectingProviderID = nil
-                errorMessage = "OAuth authorization did not complete."
+                errorMessage = String(localized: "OAuth authorization did not complete.")
                 return false
             }
             try? await client.disposeGlobal()
@@ -203,7 +203,7 @@ extension AppViewModel {
 
     func disconnectProvider(_ provider: OpenCodeProvider) async -> Bool {
         guard canDisconnectProvider(provider) else {
-            errorMessage = "\(provider.name) is managed by environment variables on the server."
+            errorMessage = String(localized: "\(provider.name) is managed by environment variables on the server.")
             return false
         }
 
@@ -236,24 +236,24 @@ extension AppViewModel {
         let baseURL = draft.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard providerID.range(of: #"^[a-z0-9][a-z0-9-_]*$"#, options: .regularExpression) != nil else {
-            errorMessage = "Provider ID must use lowercase letters, numbers, dashes, or underscores."
+            errorMessage = String(localized: "Provider ID must use lowercase letters, numbers, dashes, or underscores.")
             return false
         }
-        guard !name.isEmpty else { errorMessage = "Provider name is required."; return false }
-        guard baseURL.hasPrefix("http://") || baseURL.hasPrefix("https://") else { errorMessage = "Base URL must start with http:// or https://."; return false }
+        guard !name.isEmpty else { errorMessage = String(localized: "Provider name is required."); return false }
+        guard baseURL.hasPrefix("http://") || baseURL.hasPrefix("https://") else { errorMessage = String(localized: "Base URL must start with http:// or https://."); return false }
 
         let modelPairs = draft.models.map { ($0.modelID.trimmingCharacters(in: .whitespacesAndNewlines), $0.name.trimmingCharacters(in: .whitespacesAndNewlines)) }
         guard !modelPairs.isEmpty, modelPairs.allSatisfy({ !$0.0.isEmpty && !$0.1.isEmpty }) else {
-            errorMessage = "Each custom model needs an ID and name."
+            errorMessage = String(localized: "Each custom model needs an ID and name.")
             return false
         }
-        guard Set(modelPairs.map(\.0)).count == modelPairs.count else { errorMessage = "Custom model IDs must be unique."; return false }
+        guard Set(modelPairs.map(\.0)).count == modelPairs.count else { errorMessage = String(localized: "Custom model IDs must be unique."); return false }
 
         let headers = draft.headers
             .map { ($0.key.trimmingCharacters(in: .whitespacesAndNewlines), $0.value.trimmingCharacters(in: .whitespacesAndNewlines)) }
             .filter { !$0.0.isEmpty || !$0.1.isEmpty }
-        guard headers.allSatisfy({ !$0.0.isEmpty && !$0.1.isEmpty }) else { errorMessage = "Each custom header needs a key and value."; return false }
-        guard Set(headers.map { $0.0.lowercased() }).count == headers.count else { errorMessage = "Custom header keys must be unique."; return false }
+        guard headers.allSatisfy({ !$0.0.isEmpty && !$0.1.isEmpty }) else { errorMessage = String(localized: "Each custom header needs a key and value."); return false }
+        guard Set(headers.map { $0.0.lowercased() }).count == headers.count else { errorMessage = String(localized: "Custom header keys must be unique."); return false }
 
         do {
             let disabled = try await disabledProviders().filter { $0 != providerID }

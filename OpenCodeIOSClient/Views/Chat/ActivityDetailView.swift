@@ -44,7 +44,7 @@ struct ActivityDetailView: View {
                 if let tool = effectivePart.tool {
                     LabeledContent("Tool", value: tool)
                 }
-                LabeledContent("Role", value: effectiveMessage.info.role ?? "unknown")
+                LabeledContent("Role", value: effectiveMessage.info.role ?? String(localized: "Unknown"))
                 LabeledContent("Message ID", value: effectiveMessage.info.id)
                 if let partID = effectivePart.id {
                     LabeledContent("Part ID", value: partID)
@@ -101,7 +101,7 @@ struct ActivityDetailView: View {
             }
 
             if !patchDiffs.isEmpty {
-                Section(patchDiffs.count == 1 ? "Patch Diff" : "Patch Diffs") {
+                Section(patchDiffs.count == 1 ? LocalizedStringResource("Patch Diff") : LocalizedStringResource("Patch Diffs")) {
                     ForEach(Array(patchDiffs.enumerated()), id: \.offset) { _, diff in
                         VStack(alignment: .leading, spacing: 12) {
                             Text(diff.file)

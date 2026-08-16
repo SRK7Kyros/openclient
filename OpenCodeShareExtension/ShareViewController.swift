@@ -32,20 +32,20 @@ final class ShareViewController: UIViewController {
         stackView.spacing = 14
         stackView.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.text = "Share in OpenClient"
+        titleLabel.text = String(localized: "Share in OpenClient")
         titleLabel.font = .preferredFont(forTextStyle: .largeTitle)
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 0
 
-        subtitleLabel.text = "Step 1: Choose a connection. Step 2 opens the new chat sheet so you can pick any project and send."
+        subtitleLabel.text = String(localized: "Step 1: Choose a connection. Step 2 opens the new chat sheet so you can pick any project and send.")
         subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.adjustsFontForContentSizeCategory = true
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
 
-        summaryLabel.text = "Preparing share..."
+        summaryLabel.text = String(localized: "Preparing share...")
         summaryLabel.textAlignment = .center
         summaryLabel.font = .preferredFont(forTextStyle: .headline)
         summaryLabel.adjustsFontForContentSizeCategory = true
@@ -85,8 +85,8 @@ final class ShareViewController: UIViewController {
     private func renderActions() {
         resetStack()
         activityIndicator.stopAnimating()
-        titleLabel.text = "Share in OpenClient"
-        subtitleLabel.text = "Step 1: Choose a connection. Step 2 opens the new chat sheet so you can pick any project and send."
+        titleLabel.text = String(localized: "Share in OpenClient")
+        subtitleLabel.text = String(localized: "Step 1: Choose a connection. Step 2 opens the new chat sheet so you can pick any project and send.")
         summaryLabel.text = summaryText
 
         stackView.addArrangedSubview(titleLabel)
@@ -95,12 +95,12 @@ final class ShareViewController: UIViewController {
         stackView.addArrangedSubview(summaryLabel)
 
         servers = OpenClientSharePayloadStore.recentSavedServers()
-        let sectionLabel = makeSectionLabel("Choose Connection")
+        let sectionLabel = makeSectionLabel("CHOOSE CONNECTION")
         stackView.addArrangedSubview(sectionLabel)
         if servers.isEmpty {
             addConnectionCard(
-                title: "Open OpenClient",
-                subtitle: "Pick a connection in the app, then choose a project.",
+                title: String(localized: "Open OpenClient"),
+                subtitle: String(localized: "Pick a connection in the app, then choose a project."),
                 iconName: "square.and.arrow.up"
             ) { [weak self] in
                 self?.renderNewChatStep(server: nil)
@@ -125,9 +125,9 @@ final class ShareViewController: UIViewController {
         selectedServer = server
         resetStack()
 
-        titleLabel.text = "New Chat"
-        subtitleLabel.text = "Step 2: Review what will be sent. OpenClient will open the new chat sheet next so you can choose any project."
-        summaryLabel.text = server.map { "Using \($0.displayName)" } ?? "Using OpenClient"
+        titleLabel.text = String(localized: "New Chat")
+        subtitleLabel.text = String(localized: "Step 2: Review what will be sent. OpenClient will open the new chat sheet next so you can choose any project.")
+        summaryLabel.text = server.map { String(localized: "Using \($0.displayName)") } ?? String(localized: "Using OpenClient")
 
         stackView.addArrangedSubview(titleLabel)
         stackView.addArrangedSubview(subtitleLabel)
@@ -137,7 +137,7 @@ final class ShareViewController: UIViewController {
 
         let continueButton = UIButton(type: .system)
         var configuration = UIButton.Configuration.filled()
-        configuration.title = "Continue to Project Picker"
+        configuration.title = String(localized: "Continue to Project Picker")
         configuration.baseBackgroundColor = view.tintColor
         configuration.baseForegroundColor = .white
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
@@ -149,7 +149,7 @@ final class ShareViewController: UIViewController {
         stackView.addArrangedSubview(continueButton)
 
         let backButton = UIButton(type: .system)
-        backButton.setTitle("Back", for: .normal)
+        backButton.setTitle(String(localized: "Back"), for: .normal)
         backButton.addAction(UIAction { [weak self] _ in
             self?.renderActions()
         }, for: .touchUpInside)
@@ -170,18 +170,26 @@ final class ShareViewController: UIViewController {
         container.layer.cornerCurve = .continuous
 
         let title = UILabel()
-        title.text = "Shared Content"
+        title.text = String(localized: "Shared Content")
         title.font = .preferredFont(forTextStyle: .headline)
         title.adjustsFontForContentSizeCategory = true
 
         let body = UILabel()
         let trimmed = shareText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            body.text = attachments.isEmpty ? "No text or image was found." : "\(attachments.count) image\(attachments.count == 1 ? "" : "s") attached."
+            if attachments.isEmpty {
+                body.text = String(localized: "No text or image was found.")
+            } else if attachments.count == 1 {
+                body.text = String(localized: "\(attachments.count) image attached.")
+            } else {
+                body.text = String(localized: "\(attachments.count) images attached.")
+            }
         } else if attachments.isEmpty {
             body.text = trimmed
+        } else if attachments.count == 1 {
+            body.text = String(localized: "\(trimmed)\n\n\(attachments.count) image attached.")
         } else {
-            body.text = "\(trimmed)\n\n\(attachments.count) image\(attachments.count == 1 ? "" : "s") attached."
+            body.text = String(localized: "\(trimmed)\n\n\(attachments.count) images attached.")
         }
         body.font = .preferredFont(forTextStyle: .subheadline)
         body.textColor = .secondaryLabel
@@ -205,14 +213,19 @@ final class ShareViewController: UIViewController {
 
     private var summaryText: String {
         if attachments.isEmpty {
-            return shareText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Share to OpenClient" : "Share text to OpenClient"
+            return shareText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? String(localized: "Share to OpenClient")
+                : String(localized: "Share text to OpenClient")
         }
-        return "Share \(attachments.count) image\(attachments.count == 1 ? "" : "s") to OpenClient"
+        if attachments.count == 1 {
+            return String(localized: "Share \(attachments.count) image to OpenClient")
+        }
+        return String(localized: "Share \(attachments.count) images to OpenClient")
     }
 
-    private func makeSectionLabel(_ text: String) -> UILabel {
+    private func makeSectionLabel(_ text: LocalizedStringResource) -> UILabel {
         let label = UILabel()
-        label.text = text.uppercased()
+        label.text = String(localized: text)
         label.font = .preferredFont(forTextStyle: .caption1)
         label.textColor = .secondaryLabel
         label.adjustsFontForContentSizeCategory = true
@@ -288,13 +301,13 @@ final class ShareViewController: UIViewController {
             row.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -14)
         ])
 
-        button.accessibilityLabel = "Share in OpenClient with \(title)"
+        button.accessibilityLabel = String(localized: "Share in OpenClient with \(title)")
         stackView.addArrangedSubview(button)
     }
 
     private func addCancelButton() {
         let button = UIButton(type: .system)
-        button.setTitle("Cancel", for: .normal)
+        button.setTitle(String(localized: "Cancel"), for: .normal)
         button.titleLabel?.font = .preferredFont(forTextStyle: .body)
         button.addAction(UIAction { [weak self] _ in
             self?.extensionContext?.completeRequest(returningItems: nil)

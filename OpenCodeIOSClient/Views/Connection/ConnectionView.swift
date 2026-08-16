@@ -302,6 +302,18 @@ struct RootConfigurationsView: View {
                         }
                     }
                     .accessibilityIdentifier("configurations.auto-connect-server")
+
+                    if facade.autoConnectServerID != nil {
+                        Picker("Open After Auto-Connect", selection: Binding(
+                            get: { facade.autoConnectLandingDestination },
+                            set: { facade.setAutoConnectLandingDestination($0) }
+                        )) {
+                            ForEach(AutoConnectLandingDestination.allCases) { destination in
+                                Text(destination.title).tag(destination)
+                            }
+                        }
+                        .accessibilityIdentifier("configurations.auto-connect-landing-destination")
+                    }
                 }
             } header: {
                 Text("Connection")
@@ -364,7 +376,7 @@ private struct AppIconSelectionView: View {
         )) {
             Button("OK", role: .cancel) { store.clearError() }
         } message: {
-            Text(store.errorMessage ?? "Please try again.")
+            Text(store.errorMessage ?? String(localized: "Please try again."))
         }
     }
 }
@@ -435,7 +447,7 @@ private struct ServerConnectionEditorView: View {
         .opencodeGroupedListStyle()
         .scrollContentBackground(.hidden)
         .background(.clear)
-        .navigationTitle(facade.isEditingSavedServer ? "Edit Server" : "Server")
+        .navigationTitle(facade.isEditingSavedServer ? String(localized: "Edit Server") : String(localized: "Server"))
         .opencodeInlineNavigationTitle()
         .toolbar {
             if facade.isEditingSavedServer {
@@ -463,7 +475,7 @@ struct ConnectingServerView: View {
     @State private var loadingWordIndex = 0
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let loadingWords = [
+    private let loadingWords: [LocalizedStringResource] = [
         "Cogitating",
         "Musing",
         "Mulling",
@@ -534,7 +546,7 @@ struct ConnectingServerView: View {
         }
     }
 
-    private var loadingWord: String {
+    private var loadingWord: LocalizedStringResource {
         loadingWords[loadingWordIndex]
     }
 
@@ -643,7 +655,7 @@ private struct DebugEntitlementSection: View {
 private struct ServerConnectionSections: View {
     private struct ConnectionIconOption: Identifiable {
         let symbolName: String
-        let title: String
+        let title: LocalizedStringResource
 
         var id: String { symbolName }
     }
@@ -673,9 +685,9 @@ private struct ServerConnectionSections: View {
     private var insecureConnectionMessage: String {
         switch facade.config.insecureConnectionKind {
         case .localNetwork:
-            return "`http://` connections are not protected by HTTPS/TLS. This is often acceptable for local, LAN, or Tailscale-based self-hosted setups, but it is still less secure than HTTPS."
+            return String(localized: "`http://` connections are not protected by HTTPS/TLS. This is often acceptable for local, LAN, or Tailscale-based self-hosted setups, but it is still less secure than HTTPS.")
         case .nonLocal:
-            return "`http://` connections are not protected by HTTPS/TLS. For non-local hosts, your credentials and traffic are better protected when the server is configured with HTTPS."
+            return String(localized: "`http://` connections are not protected by HTTPS/TLS. For non-local hosts, your credentials and traffic are better protected when the server is configured with HTTPS.")
         case nil:
             return ""
         }
@@ -742,7 +754,7 @@ private struct ServerConnectionSections: View {
             }
 
             Section {
-                Button(facade.isLoading ? "Connecting..." : "Connect to OpenCode") {
+                Button(facade.isLoading ? String(localized: "Connecting...") : String(localized: "Connect to OpenCode")) {
                     facade.startConnectionFromEditor()
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -786,7 +798,7 @@ private struct ServerConnectionSections: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("connection.icon.\(option.symbolName)")
-        .accessibilityLabel(option.title)
+        .accessibilityLabel(Text(option.title))
     }
 }
 

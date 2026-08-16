@@ -288,7 +288,7 @@ extension AppViewModel {
                 }
             }
             if sessionID == nil || sessionID == selectedSession?.id {
-                errorMessage = message ?? "Session error"
+                errorMessage = message ?? String(localized: "Session error")
             }
             debugLastEventSummary = message.map { "session error: \($0)" } ?? "session error"
             appendDebugLog(debugLastEventSummary)

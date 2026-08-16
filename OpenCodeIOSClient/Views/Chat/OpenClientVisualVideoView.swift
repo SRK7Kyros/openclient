@@ -157,7 +157,7 @@ final class OpenClientVisualVideoPlaybackController: NSObject, ObservableObject 
     let id: OpenClientVisualVideoPlaybackID
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var player: AVPlayer?
-    @Published private(set) var playbackAccessibilityValue = "loading"
+    @Published private(set) var playbackAccessibilityValue = String(localized: "Loading")
     @Published private(set) var isPaused = false
 
     var onWillStart: (() -> Void)?
@@ -205,7 +205,7 @@ final class OpenClientVisualVideoPlaybackController: NSObject, ObservableObject 
         startTask?.cancel()
         playbackMonitorTask?.cancel()
         phase = .preparing
-        playbackAccessibilityValue = "loading"
+        playbackAccessibilityValue = String(localized: "Loading")
         startTask = Task { @MainActor [weak self] in
             await self?.preparePlayback()
         }
@@ -261,7 +261,7 @@ final class OpenClientVisualVideoPlaybackController: NSObject, ObservableObject 
         player = nil
         phase = .idle
         isPaused = false
-        playbackAccessibilityValue = "loading"
+        playbackAccessibilityValue = String(localized: "Loading")
         userStartedPlayback = false
         let coordinator = coordinator
         let stream = activeStream
@@ -292,7 +292,7 @@ final class OpenClientVisualVideoPlaybackController: NSObject, ObservableObject 
             try Self.configureAudioSession()
             let asset = AVURLAsset(url: stream.playlistURL)
             guard try await asset.load(.isPlayable) else {
-                throw OpenClientVideoStreamError.server("The video format is not playable on this device.")
+                throw OpenClientVideoStreamError.server(String(localized: "The video format is not playable on this device."))
             }
             let duration = try? await asset.load(.duration)
             try Task.checkCancellation()
@@ -349,22 +349,22 @@ final class OpenClientVisualVideoPlaybackController: NSObject, ObservableObject 
             guard !Task.isCancelled else { return }
             if item.status == .failed {
                 phase = .failed(item.error?.localizedDescription ?? playbackErrorMessage(for: item))
-                playbackAccessibilityValue = "failed"
+                playbackAccessibilityValue = String(localized: "Failed")
                 return
             }
             if player.timeControlStatus == .playing, player.currentTime().seconds > 0.05 {
-                playbackAccessibilityValue = "playing"
+                playbackAccessibilityValue = String(localized: "Playing")
                 return
             }
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard !Task.isCancelled else { return }
         phase = .failed(playbackErrorMessage(for: item))
-        playbackAccessibilityValue = "failed"
+        playbackAccessibilityValue = String(localized: "Failed")
     }
 
     private func playbackErrorMessage(for item: AVPlayerItem) -> String {
-        item.errorLog()?.events.last?.errorComment ?? "The video stream did not begin playback."
+        item.errorLog()?.events.last?.errorComment ?? String(localized: "The video stream did not begin playback.")
     }
 
     private static func configureAudioSession() throws {
@@ -527,7 +527,7 @@ private struct OpenClientInlineVideoPlayer: View {
                                 .contentShape(Circle())
                         }
                         .opencodeActionGlass(clear: true, size: 44, in: Circle())
-                        .accessibilityLabel(playback.isPaused ? "Play" : "Pause")
+                        .accessibilityLabel(playback.isPaused ? LocalizedStringResource("Play") : LocalizedStringResource("Pause"))
 
                         Spacer()
 

@@ -1,5 +1,50 @@
 import SwiftUI
 
+enum TodoStatusPresentation {
+    static func title(for status: String) -> LocalizedStringResource? {
+        switch status {
+        case "pending":
+            LocalizedStringResource(
+                "todo.status.pending",
+                defaultValue: "Pending",
+                comment: "Status of a todo item that has not started."
+            )
+        case "in_progress":
+            LocalizedStringResource(
+                "todo.status.in_progress",
+                defaultValue: "In Progress",
+                comment: "Status of a todo item that is currently being worked on."
+            )
+        case "completed":
+            LocalizedStringResource(
+                "todo.status.completed",
+                defaultValue: "Completed",
+                comment: "Status of a completed todo item."
+            )
+        case "cancelled":
+            LocalizedStringResource(
+                "todo.status.cancelled",
+                defaultValue: "Cancelled",
+                comment: "Status of a cancelled todo item."
+            )
+        default:
+            nil
+        }
+    }
+}
+
+struct TodoStatusLabel: View {
+    let status: String
+
+    var body: some View {
+        if let title = TodoStatusPresentation.title(for: status) {
+            Text(title)
+        } else {
+            Text(verbatim: status.replacingOccurrences(of: "_", with: " ").capitalized)
+        }
+    }
+}
+
 struct TodoCard: View {
     let todo: OpenCodeTodo
 
@@ -15,7 +60,7 @@ struct TodoCard: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-                Text(todo.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                TodoStatusLabel(status: todo.status)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

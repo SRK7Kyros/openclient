@@ -12,7 +12,7 @@ struct ModelToolbarMenu: View {
     var body: some View {
         StablePickerMenu(
             elements: menuElements,
-            accessibilityLabel: "Model",
+            accessibilityLabel: String(localized: "Model"),
             accessibilityValue: modelTitle,
             accessibilityIdentifier: "chat.toolbar.model",
             onSelect: select
@@ -48,7 +48,7 @@ struct ModelToolbarMenu: View {
     private var menuElements: [StablePickerMenuElement] {
         var elements = [StablePickerMenuElement.submenu(
             id: "models",
-            title: "Model",
+            title: String(localized: "Model"),
             children: providerGroups.map { provider in
                 .submenu(
                     id: "provider:\(provider.id)",
@@ -68,7 +68,7 @@ struct ModelToolbarMenu: View {
         if !reasoningVariants.isEmpty {
             elements.append(.submenu(
                 id: "reasoning",
-                title: "Reasoning",
+                title: String(localized: "Reasoning"),
                 children: reasoningVariants.map { variant in
                     .action(
                         id: reasoningActionID(variant.id),

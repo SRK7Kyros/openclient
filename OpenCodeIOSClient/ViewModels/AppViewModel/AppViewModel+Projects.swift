@@ -503,9 +503,9 @@ extension AppViewModel {
 
     var projectScopeTitle: String {
         if effectiveSelectedDirectory == nil {
-            return "Global"
+            return String(localized: "Global")
         }
-        return effectiveSelectedDirectory ?? currentProject?.worktree ?? "All Projects"
+        return effectiveSelectedDirectory ?? currentProject?.worktree ?? String(localized: "All Projects")
     }
 
     func isProjectSelected(_ project: OpenCodeProject?) -> Bool {
@@ -607,7 +607,7 @@ extension AppViewModel {
         }
 
         if workspaceKey(directory) == workspaceKey(project.worktree) {
-            return "Local"
+            return String(localized: "Local")
         }
 
         return URL(fileURLWithPath: directory).lastPathComponent
@@ -628,14 +628,14 @@ extension AppViewModel {
         newWorkspaceName: String = ""
     ) async -> Bool {
         guard backendMode == .server, isConnected else {
-            errorMessage = "Connect to an OpenCode server before starting a chat."
+            errorMessage = String(localized: "Connect to an OpenCode server before starting a chat.")
             return false
         }
 
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !attachments.isEmpty else { return false }
         guard let project = projects.first(where: { $0.id == projectID }) else {
-            errorMessage = "Project is no longer available."
+            errorMessage = String(localized: "Project is no longer available.")
             return false
         }
         guard canCreateSessionOrPresentPaywall() else { return false }
@@ -913,7 +913,7 @@ extension AppViewModel {
             allSessions: allSessions
         )
         guard let resolved = resolution.session else {
-            errorMessage = "Session is no longer available."
+            errorMessage = String(localized: "Session is no longer available.")
             removeSessionPreview(for: recentSession.id)
             return
         }
@@ -1199,11 +1199,11 @@ extension AppViewModel {
     func newSessionWorkspaceTitle(for selection: NewSessionWorkspaceSelection) -> String {
         switch selection {
         case .main:
-            return workspaceDisplayName(for: currentProject?.worktree) ?? "Main branch"
+            return workspaceDisplayName(for: currentProject?.worktree) ?? String(localized: "Main branch")
         case let .directory(directory):
             return workspaceDisplayName(for: directory) ?? URL(fileURLWithPath: directory).lastPathComponent
         case .createNew:
-            return "Create new worktree"
+            return String(localized: "Create new worktree")
         }
     }
 
@@ -1327,7 +1327,7 @@ extension AppViewModel {
                 part.text?.contains(where: { !$0.isWhitespace }) == true
             }
         }) else {
-            return SessionPreview(text: "No messages yet", date: nil)
+            return SessionPreview(text: String(localized: "No messages yet"), date: nil)
         }
 
         let segments = message.parts.compactMap { part -> String? in
@@ -1340,7 +1340,7 @@ extension AppViewModel {
         let previewText = opencodePreviewText(text, limit: 120)
 
         let date = dateFromMilliseconds(message.info.time?.completed ?? message.info.time?.created)
-        return SessionPreview(text: previewText ?? "No preview available", date: date)
+        return SessionPreview(text: previewText ?? String(localized: "No preview available"), date: date)
     }
 
     func dateFromMilliseconds(_ value: Double?) -> Date? {

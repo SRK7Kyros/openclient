@@ -14,21 +14,21 @@ enum OpenCodeShortcutError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingConnection:
-            return "Add and connect to an OpenClient server before running this shortcut."
+            return String(localized: "Add and connect to an OpenClient server before running this shortcut.")
         case let .missingCredentials(name):
-            return "The saved password for \(name) is unavailable. Reconnect this server in OpenClient."
+            return String(localized: "The saved password for \(name) is unavailable. Reconnect this server in OpenClient.")
         case .mismatchedConnection:
-            return "The selected shortcut items belong to different OpenClient connections."
+            return String(localized: "The selected shortcut items belong to different OpenClient connections.")
         case .mismatchedProject:
-            return "The selected session does not belong to the selected project."
+            return String(localized: "The selected session does not belong to the selected project.")
         case .mismatchedSession:
-            return "The selected session is no longer available for this project."
+            return String(localized: "The selected session is no longer available for this project.")
         case .emptyMessage:
-            return "Enter a message before running this shortcut."
+            return String(localized: "Enter a message before running this shortcut.")
         case .sessionLimitReached:
-            return "Free users can create one session. Open OpenClient to upgrade for unlimited sessions."
+            return String(localized: "Free users can create one session. Open OpenClient to upgrade for unlimited sessions.")
         case .promptLimitReached:
-            return "The daily free prompt limit has been reached. Open OpenClient to upgrade for unlimited prompts."
+            return String(localized: "The daily free prompt limit has been reached. Open OpenClient to upgrade for unlimited prompts.")
         }
     }
 }
@@ -392,7 +392,7 @@ struct OpenCodeShortcutService {
             connectionID: connectionID,
             projectID: projectID,
             sessionID: session.id,
-            title: title.isEmpty ? "Session" : title,
+            title: title.isEmpty ? String(localized: "Session") : title,
             directory: Self.normalizedDirectory(session.directory),
             workspaceID: session.workspaceID,
             providerID: model?.providerID,
@@ -423,7 +423,7 @@ struct OpenCodeShortcutService {
         if let component = directoryLastPathComponent(project.worktree), !component.isEmpty {
             return component
         }
-        return project.id == "global" ? "Global" : project.id
+        return project.id == "global" ? String(localized: "Global") : project.id
     }
 
     private static func normalizedDirectory(_ directory: String?) -> String? {

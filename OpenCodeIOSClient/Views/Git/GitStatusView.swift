@@ -59,7 +59,7 @@ private struct GitStatusContent: View {
             if let info = snapshot.vcsInfo {
                 Section("Repository") {
                     HStack(spacing: 12) {
-                        Label(info.branch ?? "Unknown", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        Label(info.branch ?? String(localized: "Unknown", comment: "Fallback Git branch name when the server does not report one."), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                             .font(.subheadline.weight(.medium))
 
                         Spacer()
@@ -78,7 +78,7 @@ private struct GitStatusContent: View {
                     GitSummaryCard(
                         summary: snapshot.summary,
                         branch: snapshot.vcsInfo?.branch,
-                        modeTitle: snapshot.selectedMode.title
+                        modeTitle: diffModeTitle(snapshot.selectedMode)
                     )
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
 
@@ -111,7 +111,7 @@ private struct GitStatusContent: View {
                     set: { mode in onSelectMode(mode) }
                 )) {
                     ForEach(OpenCodeProjectFilesMode.allCases, id: \.self) { mode in
-                        Text(mode.title).tag(mode)
+                        Text(filesModeTitle(mode)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -133,7 +133,7 @@ private struct GitStatusContent: View {
             }
 
             if snapshot.filesMode == .changes {
-                Section(workspaceDisplayName(snapshot.effectiveDirectory) ?? "Working Tree") {
+                Section(workspaceDisplayName(snapshot.effectiveDirectory) ?? String(localized: "Working Tree", comment: "Fallback name for the main Git worktree.")) {
                     changesSectionContent
                 }
             } else {
@@ -312,7 +312,7 @@ private struct GitFileTreeRow: View {
 private struct GitSummaryCard: View {
     let summary: OpenCodeVCSSummary
     let branch: String?
-    let modeTitle: String
+    let modeTitle: LocalizedStringResource
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -348,14 +348,17 @@ private struct GitSummaryCard: View {
         .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private var summaryLine: String {
+    private var summaryLine: LocalizedStringResource {
         if summary.fileCount == 0 {
             return "No changed files in the current view"
         }
-        return "\(summary.fileCount) changed \(summary.fileCount == 1 ? "file" : "files") with \(summary.additions) additions and \(summary.deletions) deletions"
+        return LocalizedStringResource(
+            "Files changed: \(summary.fileCount) · Additions: \(summary.additions) · Deletions: \(summary.deletions)",
+            comment: "Git summary with changed-file, added-line, and deleted-line counts."
+        )
     }
 
-    private func metric(title: String, value: String, color: Color) -> some View {
+    private func metric(title: LocalizedStringResource, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
@@ -366,6 +369,20 @@ private struct GitSummaryCard: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private func filesModeTitle(_ mode: OpenCodeProjectFilesMode) -> LocalizedStringResource {
+    switch mode {
+    case .changes: "Changes"
+    case .tree: "Tree"
+    }
+}
+
+private func diffModeTitle(_ mode: OpenCodeVCSDiffMode) -> LocalizedStringResource {
+    switch mode {
+    case .git: "Working Tree"
+    case .branch: "Branch"
     }
 }
 

@@ -4,7 +4,7 @@ import Foundation
 enum OpenClientChatCommands {
     static let fork = OpenCodeCommand(
         name: "fork",
-        description: "Create a new session from a previous message",
+        description: String(localized: "Create a new session from a previous message"),
         agent: nil,
         model: nil,
         source: "client",
@@ -15,7 +15,7 @@ enum OpenClientChatCommands {
 
     static let compact = OpenCodeCommand(
         name: "compact",
-        description: "Summarize the session context",
+        description: String(localized: "Summarize the session context"),
         agent: nil,
         model: nil,
         source: "client",
@@ -67,7 +67,7 @@ final class ChatFacade: ObservableObject {
         let shimmersNavigationTitle: Bool
 
         var navigationTitle: String {
-            isChildSession ? childTitle : session.displayTitle(fallback: "Session")
+            isChildSession ? childTitle : session.displayTitle(fallback: String(localized: "Session"))
         }
     }
 
@@ -280,7 +280,7 @@ final class ChatFacade: ObservableObject {
             session: session,
             isChildSession: session.parentID != nil,
             parentSession: parent,
-            parentTitle: parent?.displayTitle(fallback: "Session") ?? "Session",
+            parentTitle: parent?.displayTitle(fallback: String(localized: "Session")) ?? String(localized: "Session"),
             childTitle: viewModel.childSessionTitle(for: session),
             shimmersNavigationTitle: session.isDefaultGeneratedTitle && viewModel.latestTaskDescription(for: session) == nil
         )
@@ -702,7 +702,7 @@ final class ChatFacade: ObservableObject {
                 lastUserMessage: lastUserMessage,
                 isLoading: isModelLoading
             ),
-            reasoningTitle: selectedReasoningVariant.map(store.formattedVariantTitle) ?? "Default",
+            reasoningTitle: selectedReasoningVariant.map(store.formattedVariantTitle) ?? String(localized: "Default"),
             isAgentLoading: isAgentLoading,
             isModelLoading: isModelLoading,
             isLoading: isAgentLoading || isModelLoading,
@@ -717,7 +717,7 @@ final class ChatFacade: ObservableObject {
             guard message.info.sessionID == session.id else { return nil }
             let agent = message.info.agent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return agent.isEmpty ? nil : agent
-        }.first ?? "Subagent"
+        }.first ?? String(localized: "Subagent")
 
         let modelReference = messages.reversed().compactMap { message -> OpenCodeModelReference? in
             guard message.info.sessionID == session.id else { return nil }
@@ -730,7 +730,7 @@ final class ChatFacade: ObservableObject {
         }.first
         let modelTitle = viewModel.modelConfigurationStore.model(for: modelReference)?.name
             ?? modelReference?.modelID
-            ?? "Model"
+            ?? String(localized: "Model")
 
         return ChildSessionToolbarSnapshot(agentTitle: agentTitle, modelTitle: modelTitle)
     }
@@ -741,7 +741,7 @@ final class ChatFacade: ObservableObject {
 
     func reasoningTitle(for session: OpenCodeSession) -> String {
         guard let variant = viewModel.modelConfigurationStore.selectedVariant(for: session.id) else {
-            return "Default"
+            return String(localized: "Default")
         }
         return viewModel.modelConfigurationStore.formattedVariantTitle(variant)
     }
@@ -820,8 +820,8 @@ final class ChatFacade: ObservableObject {
            !agent.isEmpty {
             return agent
         }
-        guard !isLoading else { return "Agent" }
-        return viewModel.modelConfigurationStore.effectiveAgentName(for: session.id) ?? "Agent"
+        guard !isLoading else { return String(localized: "Agent") }
+        return viewModel.modelConfigurationStore.effectiveAgentName(for: session.id) ?? String(localized: "Agent")
     }
 
     private func modelToolbarTitle(
@@ -838,8 +838,8 @@ final class ChatFacade: ObservableObject {
             let reference = OpenCodeModelReference(providerID: messageModel.providerID, modelID: messageModel.modelID)
             return store.model(for: reference)?.name ?? messageModel.modelID
         }
-        guard !isLoading else { return "Model" }
-        return store.effectiveModel(for: session.id)?.name ?? "Model"
+        guard !isLoading else { return String(localized: "Model") }
+        return store.effectiveModel(for: session.id)?.name ?? String(localized: "Model")
     }
 
     private func bindActiveDirectoryStore(_ store: DirectoryStore) {

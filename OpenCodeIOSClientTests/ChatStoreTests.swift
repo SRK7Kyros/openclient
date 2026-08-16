@@ -244,6 +244,14 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(provisionalHeight, 78)
     }
 
+    func testTodoStatusPresentationLocalizesEveryUpstreamStatus() {
+        for status in ["pending", "in_progress", "completed", "cancelled"] {
+            XCTAssertNotNil(TodoStatusPresentation.title(for: status), "Missing localized presentation for \(status)")
+        }
+
+        XCTAssertNil(TodoStatusPresentation.title(for: "future_status"))
+    }
+
     func testTodoActivityReservesSubtitleHeight() {
         let provisionalStyle = ActivityStyle(
             title: "Updating Todos",

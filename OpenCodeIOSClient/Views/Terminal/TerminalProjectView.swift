@@ -127,7 +127,7 @@ private struct TerminalListRow: View {
                     Circle()
                         .fill(statusColor)
                         .frame(width: 7, height: 7)
-                    Text(statusText)
+                    statusText
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -141,20 +141,33 @@ private struct TerminalListRow: View {
         .padding(.vertical, 4)
     }
 
-    private var statusText: String {
+    private var statusText: Text {
         if isSelected {
             switch connectionState {
             case .connecting:
-                return "Connecting"
+                return Text("Connecting")
             case .connected:
-                return "Connected"
+                return Text("Connected")
             case .reconnecting:
-                return "Reconnecting"
+                return Text("Reconnecting")
             case .disconnected:
                 break
             }
         }
-        return terminal.info.status.capitalized
+        switch terminal.info.status.lowercased() {
+        case "running":
+            return Text("Running")
+        case "exited":
+            return Text("Exited")
+        case "completed":
+            return Text("Completed")
+        case "stopped":
+            return Text("Stopped")
+        case "error":
+            return Text("Error")
+        default:
+            return Text(verbatim: terminal.info.status.capitalized)
+        }
     }
 
     private var statusColor: SwiftUI.Color {
@@ -215,7 +228,7 @@ struct TerminalDetailView: View {
                 .padding(.bottom, 8)
             }
         }
-        .navigationTitle(terminal?.title ?? "Terminal")
+        .navigationTitle(terminal?.title ?? String(localized: "Terminal", comment: "Fallback navigation title when a terminal has no title."))
         .opencodeInlineNavigationTitle()
         .toolbar {
             if terminal != nil {
@@ -274,14 +287,14 @@ private struct TerminalModifierBar: View {
 
     private var modifierRow: some View {
         HStack(spacing: 7) {
-            modifierButton("paste", accessibilityIdentifier: "terminal.paste") {
+            modifierButton(String(localized: "paste", comment: "Terminal modifier bar button that pastes clipboard text."), accessibilityIdentifier: "terminal.paste") {
                 pasteClipboardText()
             }
             .accessibilityValue("\(pasteInvocationCount)")
-            modifierButton("esc") { facade.sendSpecialKey(.escape) }
-            modifierButton("tab") { facade.sendSpecialKey(.tab) }
-            modifierButton("ctrl", isActive: snapshot.isControlModifierActive) { facade.toggleControlModifier() }
-            modifierButton("alt", isActive: snapshot.isAltModifierActive) { facade.toggleAltModifier() }
+            modifierButton(String(localized: "esc", comment: "Terminal Escape key label.")) { facade.sendSpecialKey(.escape) }
+            modifierButton(String(localized: "tab", comment: "Terminal Tab key label.")) { facade.sendSpecialKey(.tab) }
+            modifierButton(String(localized: "ctrl", comment: "Terminal Control modifier key label."), isActive: snapshot.isControlModifierActive) { facade.toggleControlModifier() }
+            modifierButton(String(localized: "alt", comment: "Terminal Alternate modifier key label."), isActive: snapshot.isAltModifierActive) { facade.toggleAltModifier() }
             modifierButton("/") { facade.insertText("/") }
             modifierButton("|") { facade.insertText("|") }
             modifierButton("~") { facade.insertText("~") }
@@ -395,7 +408,7 @@ private struct TerminalHostView: UIViewRepresentable {
         terminal.isOpaque = false
         terminal.isAccessibilityElement = true
         terminal.accessibilityIdentifier = "terminal.viewport"
-        terminal.accessibilityLabel = "Terminal viewport"
+        terminal.accessibilityLabel = String(localized: "Terminal viewport", comment: "Accessibility label for the interactive terminal output surface.")
         terminal.accessibilityValue = "0.000"
         terminal.setStickyModifierChangeHandler { [weak coordinator = context.coordinator] in
             coordinator?.syncModifierStateFromTerminal()
@@ -657,7 +670,7 @@ private struct TerminalHostView: UIViewRepresentable {
 
         override func viewDidLoad() {
             super.viewDidLoad()
-            title = "Select Terminal Text"
+            title = String(localized: "Select Terminal Text", comment: "UIKit sheet title for selecting terminal output text.")
             view.backgroundColor = .systemBackground
             textView.text = text
             view.addSubview(textView)
@@ -675,7 +688,7 @@ private struct TerminalHostView: UIViewRepresentable {
             )
             doneButton.accessibilityIdentifier = "terminal.selection.done"
             let copyButton = UIBarButtonItem(
-                title: "Copy",
+                title: String(localized: "Copy", comment: "UIKit toolbar button that copies selected terminal text."),
                 style: .plain,
                 target: self,
                 action: #selector(copySelection)

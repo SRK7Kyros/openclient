@@ -127,30 +127,43 @@ final class FunAndGamesStore: ObservableObject {
 
     private static func findBugLanguage(fromSetupPrompt text: String) -> FindBugGameLanguage? {
         let lines = text.components(separatedBy: .newlines)
-        guard let languageLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Markdown fence language:") }) else {
+        let languagePrefixes = [FindBugGame.languageIDPrefix, "Markdown fence language:"]
+        guard let languageLine = lines.first(where: { line in
+            languagePrefixes.contains { line.contains($0) }
+        }), let prefix = languagePrefixes.first(where: { languageLine.contains($0) }) else {
             return nil
         }
         let id = languageLine
-            .replacingOccurrences(of: "Markdown fence language:", with: "")
+            .replacingOccurrences(of: "<!--", with: "")
+            .replacingOccurrences(of: "-->", with: "")
+            .replacingOccurrences(of: prefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return FindBugGame.supportedLanguages.first { $0.id == id } ?? FindBugGameLanguage(id: id, title: id.capitalized)
     }
 
     private static func findPlaceCity(fromSetupPrompt text: String) -> FindPlaceGameCity? {
         let lines = text.components(separatedBy: .newlines)
-        let cityLine = lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Secret city:") }
-        let coordinatesLine = lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Coordinates:") }
+        let cityPrefixes = [FindPlaceGame.secretCityPrefix, "Secret city:"]
+        let coordinatePrefixes = [FindPlaceGame.coordinatesPrefix, "Coordinates:"]
+        let cityLine = lines.first { line in cityPrefixes.contains { line.contains($0) } }
+        let coordinatesLine = lines.first { line in coordinatePrefixes.contains { line.contains($0) } }
 
-        guard let cityLine, let coordinatesLine else { return nil }
+        guard let cityLine, let coordinatesLine,
+              let cityPrefix = cityPrefixes.first(where: { cityLine.contains($0) }),
+              let coordinatePrefix = coordinatePrefixes.first(where: { coordinatesLine.contains($0) }) else { return nil }
 
         let cityValue = cityLine
-            .replacingOccurrences(of: "Secret city:", with: "")
+            .replacingOccurrences(of: "<!--", with: "")
+            .replacingOccurrences(of: "-->", with: "")
+            .replacingOccurrences(of: cityPrefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let cityParts = cityValue.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         guard cityParts.count == 2 else { return nil }
 
         let coordinateValue = coordinatesLine
-            .replacingOccurrences(of: "Coordinates:", with: "")
+            .replacingOccurrences(of: "<!--", with: "")
+            .replacingOccurrences(of: "-->", with: "")
+            .replacingOccurrences(of: coordinatePrefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let coordinateParts = coordinateValue.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         guard coordinateParts.count == 2,
@@ -164,21 +177,27 @@ final class FunAndGamesStore: ObservableObject {
 
     private static func findPlaceWeather(fromSetupPrompt text: String) -> FindPlaceWeatherSummary? {
         let lines = text.components(separatedBy: .newlines)
-        guard let clueLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Current clue:") }) else {
+        let cluePrefixes = [FindPlaceGame.cluePrefix, "Current clue:"]
+        guard let clueLine = lines.first(where: { line in cluePrefixes.contains { line.contains($0) } }),
+              let cluePrefix = cluePrefixes.first(where: { clueLine.contains($0) }) else {
             return nil
         }
 
         let clue = clueLine
-            .replacingOccurrences(of: "Current clue:", with: "")
+            .replacingOccurrences(of: "<!--", with: "")
+            .replacingOccurrences(of: "-->", with: "")
+            .replacingOccurrences(of: cluePrefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let diagnosticLine = lines.first { $0.contains("WeatherKit diagnostic:") }
+        let diagnosticPrefixes = [FindPlaceGame.weatherDiagnosticPrefix, "WeatherKit diagnostic:"]
+        let diagnosticLine = lines.first { line in diagnosticPrefixes.contains { line.contains($0) } }
+        let diagnosticPrefix = diagnosticLine.flatMap { line in diagnosticPrefixes.first { line.contains($0) } }
         let diagnostic = diagnosticLine?
             .replacingOccurrences(of: "<!--", with: "")
             .replacingOccurrences(of: "-->", with: "")
-            .replacingOccurrences(of: "WeatherKit diagnostic:", with: "")
+            .replacingOccurrences(of: diagnosticPrefix ?? "", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let errorDescription = diagnostic == "success" ? nil : diagnostic
-        let provider = errorDescription == nil && !clue.hasPrefix("Location clue:") ? "WeatherKit" : "Fallback"
+        let provider = errorDescription == nil ? "WeatherKit" : "Fallback"
         return FindPlaceWeatherSummary(text: clue, provider: provider, errorDescription: errorDescription)
     }
 }

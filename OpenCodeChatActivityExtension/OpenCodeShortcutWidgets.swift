@@ -120,12 +120,12 @@ private struct OpenCodeActionShortcutWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            shortcutHeader(title: "Command", systemImage: "bolt.fill", tint: .orange)
+            shortcutHeader(title: "COMMAND", systemImage: "bolt.fill", tint: .orange)
 
             Spacer(minLength: 0)
 
             if let command = entry.command {
-                Text("/\(command.name)")
+                Text(verbatim: "/\(command.name)")
                     .font(.headline.weight(.semibold))
                     .lineLimit(1)
 
@@ -175,11 +175,11 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
 
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            shortcutHeader(title: "Session", systemImage: "plus.message.fill", tint: .blue)
+            shortcutHeader(title: "SESSION", systemImage: "plus.message.fill", tint: .blue)
 
             Spacer(minLength: 0)
 
-            Text(entry.project?.title ?? "Choose project")
+            Text(entry.project?.title ?? String(localized: "Choose project"))
                 .font(.headline.weight(.semibold))
                 .lineLimit(2)
 
@@ -194,7 +194,7 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
 
     private var mediumBody: some View {
         VStack(alignment: .leading, spacing: 9) {
-            shortcutHeaderRow(title: "New Session")
+            shortcutHeaderRow(title: "NEW SESSION")
             projectGrid(limit: 4, columnCount: 2, compact: true)
         }
         .padding(6)
@@ -202,7 +202,7 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
 
     private var largeBody: some View {
         VStack(alignment: .leading, spacing: 11) {
-            shortcutHeaderRow(title: "New Session")
+            shortcutHeaderRow(title: "NEW SESSION")
             Text("Pick a project")
                 .font(.title3.weight(.semibold))
                 .lineLimit(1)
@@ -212,7 +212,7 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
         .padding(6)
     }
 
-    private func shortcutHeaderRow(title: String) -> some View {
+    private func shortcutHeaderRow(title: LocalizedStringResource) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             shortcutHeader(title: title, systemImage: "plus.message.fill", tint: .blue)
             Spacer(minLength: 0)
@@ -224,9 +224,9 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
     }
 
     private var modelSummary: String {
-        let modelTitle = entry.model?.modelName ?? "Default"
+        let modelTitle = entry.model?.modelName ?? String(localized: "Default")
         guard let reasoning = entry.reasoning else { return modelTitle }
-        return "\(modelTitle) · \(formattedReasoningTitle(reasoning))"
+        return String(localized: "\(modelTitle) · \(formattedReasoningTitle(reasoning))")
     }
 
     @ViewBuilder
@@ -305,7 +305,7 @@ private struct OpenCodeNewSessionShortcutWidgetView: View {
 
 @MainActor
 @ViewBuilder
-private func shortcutHeader(title: String, systemImage: String, tint: Color) -> some View {
+private func shortcutHeader(title: LocalizedStringResource, systemImage: String, tint: Color) -> some View {
     HStack(spacing: 7) {
         Image(systemName: systemImage)
             .font(.caption.weight(.bold))
@@ -313,7 +313,6 @@ private func shortcutHeader(title: String, systemImage: String, tint: Color) -> 
         Text(title)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
-            .textCase(.uppercase)
             .lineLimit(1)
     }
 }
@@ -321,7 +320,7 @@ private func shortcutHeader(title: String, systemImage: String, tint: Color) -> 
 @MainActor
 @ViewBuilder
 private func modelLine(model: OpenCodeWidgetModelEntity?, reasoning: String?) -> some View {
-    let title = model?.modelName ?? "Default model"
+    let title = model?.modelName ?? String(localized: "Default model")
     let subtitle = reasoning.map(formattedReasoningTitle)
     VStack(alignment: .leading, spacing: 2) {
         Text(title)
@@ -339,10 +338,14 @@ private func modelLine(model: OpenCodeWidgetModelEntity?, reasoning: String?) ->
 
 @MainActor
 @ViewBuilder
-private func shortcutLink(title: String, systemImage: String, url: URL?, tint: Color) -> some View {
+private func shortcutLink(title: LocalizedStringResource, systemImage: String, url: URL?, tint: Color) -> some View {
     if let url {
         Link(destination: url) {
-            Label(title, systemImage: systemImage)
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: systemImage)
+            }
                 .font(.caption.weight(.bold))
                 .labelStyle(.titleAndIcon)
                 .frame(maxWidth: .infinity)
@@ -353,7 +356,11 @@ private func shortcutLink(title: String, systemImage: String, url: URL?, tint: C
         }
         .buttonStyle(.plain)
     } else {
-        Label(title, systemImage: systemImage)
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage)
+        }
             .font(.caption.weight(.bold))
             .labelStyle(.titleAndIcon)
             .frame(maxWidth: .infinity)
@@ -366,7 +373,7 @@ private func shortcutLink(title: String, systemImage: String, url: URL?, tint: C
 
 @MainActor
 @ViewBuilder
-private func shortcutEmptyState(title: String, subtitle: String) -> some View {
+private func shortcutEmptyState(title: LocalizedStringResource, subtitle: LocalizedStringResource) -> some View {
     VStack(spacing: 6) {
         Text(title)
             .font(.headline.weight(.semibold))
@@ -445,7 +452,7 @@ private extension OpenCodeActionShortcutEntry {
         projectID: "preview-project",
         directory: "/Users/nick/Code/openclient",
         name: "test",
-        summary: "Run the project test suite"
+        summary: String(localized: "Run the project test suite")
     )
 
     static let previewModel = OpenCodeWidgetModelEntity(
@@ -486,21 +493,21 @@ private extension OpenCodeNewSessionShortcutEntry {
                 id: "preview-server|website",
                 serverID: "preview-server",
                 projectID: "website",
-                title: "Website",
+                title: String(localized: "Website"),
                 directory: "/Users/nick/Code/website"
             ),
             OpenCodeWidgetProjectEntity(
                 id: "preview-server|api",
                 serverID: "preview-server",
                 projectID: "api",
-                title: "API Server",
+                title: String(localized: "API Server"),
                 directory: "/Users/nick/Code/api"
             ),
             OpenCodeWidgetProjectEntity(
                 id: "preview-server|notes",
                 serverID: "preview-server",
                 projectID: "notes",
-                title: "Notes",
+                title: String(localized: "Notes"),
                 directory: "/Users/nick/Code/notes"
             )
         ],

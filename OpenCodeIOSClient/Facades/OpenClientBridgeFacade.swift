@@ -28,26 +28,26 @@ struct OpenClientBridgeSnapshot: Equatable {
     var statusTitle: String {
         switch phase {
         case .idle:
-            return "Disconnected"
+            return String(localized: "Disconnected")
         case .searching:
-            return "Searching"
+            return String(localized: "Searching")
         case .connecting:
-            return "Connecting"
+            return String(localized: "Connecting")
         case .connected:
-            return "Connected"
+            return String(localized: "Connected")
         }
     }
 
     var statusDetail: String {
         switch phase {
         case .idle:
-            return errorMessage ?? "No plugin bridge connection is active."
+            return errorMessage ?? String(localized: "No plugin bridge connection is active.")
         case .searching:
-            return "Scanning the OpenCode host on ports 4070 through 4090."
+            return String(localized: "Scanning the OpenCode host on ports 4070 through 4090.")
         case .connecting(let port):
-            return "Opening the plugin bridge on port \(port)."
+            return String(localized: "Opening the plugin bridge on port \(port).")
         case .connected(let port):
-            return "Device tools are available through port \(port)."
+            return String(localized: "Device tools are available through port \(port).")
         }
     }
 

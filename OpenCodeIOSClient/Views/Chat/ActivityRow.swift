@@ -1,13 +1,50 @@
 import SwiftUI
 
+enum ActivityText: ExpressibleByStringLiteral {
+    case localized(LocalizedStringResource)
+    case verbatim(String)
+
+    var text: Text {
+        switch self {
+        case .localized(let resource):
+            Text(resource)
+        case .verbatim(let value):
+            Text(value)
+        }
+    }
+
+    init(stringLiteral value: String) {
+        self = .verbatim(value)
+    }
+}
+
 struct ActivityStyle {
-    let title: String
-    let subtitle: String?
+    let title: ActivityText
+    let subtitle: ActivityText?
     let icon: String
     let tint: Color
     let isRunning: Bool
     let showsDisclosure: Bool
     let shimmerTitle: Bool
+
+    init(
+        title: ActivityText,
+        subtitle: ActivityText?,
+        icon: String,
+        tint: Color,
+        isRunning: Bool,
+        showsDisclosure: Bool,
+        shimmerTitle: Bool
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.tint = tint
+        self.isRunning = isRunning
+        self.showsDisclosure = showsDisclosure
+        self.shimmerTitle = shimmerTitle
+    }
+
 }
 
 struct OpenCodeToolActivityAppearance {
@@ -72,8 +109,8 @@ struct ActivityRow: View {
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                if let subtitle = style.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
+                if let subtitle = style.subtitle {
+                    subtitle.text
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(nil)
@@ -112,13 +149,13 @@ struct ActivityRow: View {
 }
 
 private struct ShimmeringText: View {
-    let text: String
+    let text: ActivityText
     let active: Bool
 
     @State private var phase: CGFloat = -1
 
     var body: some View {
-        Text(text)
+        text.text
             .foregroundStyle(.primary)
             .overlay {
                 if active {
@@ -132,7 +169,7 @@ private struct ShimmeringText: View {
                         .offset(x: geometry.size.width * phase)
                         .blendMode(.plusLighter)
                     }
-                    .mask(Text(text))
+                    .mask(text.text)
                     .allowsHitTesting(false)
                 }
             }

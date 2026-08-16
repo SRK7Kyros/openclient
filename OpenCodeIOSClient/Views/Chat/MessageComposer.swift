@@ -58,11 +58,11 @@ private final class MessageComposerDictationController: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .recognizerUnavailable:
-                "Dictation is not available right now."
+                String(localized: "Dictation is not available right now.")
             case .speechDenied:
-                "Enable Speech Recognition for OpenClient in Settings to dictate messages."
+                String(localized: "Enable Speech Recognition for OpenClient in Settings to dictate messages.")
             case .microphoneDenied:
-                "Enable Microphone access for OpenClient in Settings to dictate messages."
+                String(localized: "Enable Microphone access for OpenClient in Settings to dictate messages.")
             }
         }
     }
@@ -626,7 +626,7 @@ struct MessageComposer: View {
         }
     }
 
-    private var prominentActionAccessibilityLabel: String {
+    private var prominentActionAccessibilityLabel: LocalizedStringResource {
         switch prominentAction {
         case .send:
             "Send"
@@ -908,7 +908,7 @@ struct MessageComposer: View {
             .buttonStyle(.plain)
             .disabled(isBusy)
             .disabled(showsSendAction ? !canSend : !canStop)
-            .accessibilityLabel(showsSendAction ? "Send" : "Stop")
+            .accessibilityLabel(showsSendAction ? LocalizedStringResource("Send") : LocalizedStringResource("Stop"))
             .accessibilityIdentifier(showsSendAction ? "chat.send" : "chat.stop")
         }
         .padding(6)
@@ -1205,7 +1205,7 @@ struct MessageComposer: View {
         isListeningForDictation ? .red : .primary
     }
 
-    private var micActionAccessibilityLabel: String {
+    private var micActionAccessibilityLabel: LocalizedStringResource {
         isDictating ? "Stop Dictation" : "Dictate"
     }
 
@@ -1283,7 +1283,7 @@ struct MessageComposer: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
 #if canImport(PhotosUI) && canImport(UIKit)
-                AccessorySectionTitle("Attachments")
+                AccessorySectionTitle("ATTACHMENTS")
 
                 recentPhotosStrip
 
@@ -1346,7 +1346,7 @@ struct MessageComposer: View {
 #endif
 
                 if allowsTextTools || allowsSessionTools || onOpenBrowser != nil {
-                    AccessorySectionTitle("Utilities")
+                    AccessorySectionTitle("UTILITIES")
 
                     if let onOpenBrowser {
                         AccessoryMenuAction(
@@ -1402,7 +1402,7 @@ struct MessageComposer: View {
 
                     if allowsSessionTools {
                         AccessoryMenuAction(
-                            title: "Compact",
+                            title: "Compact Session",
                             subtitle: "Summarize context",
                             systemImage: "rectangle.compress.vertical",
                             tint: .teal,
@@ -1686,7 +1686,7 @@ struct MessageComposer: View {
         guard let (data, uti) = await requestImageData(for: asset), !data.isEmpty else { return nil }
         let type = uti.flatMap(UTType.init) ?? .jpeg
         guard data.count <= AttachmentImportLimits.maxInlineBytes else {
-            attachmentImportError = Self.attachmentTooLargeMessage(filename: "Photo", byteCount: data.count)
+            attachmentImportError = Self.attachmentTooLargeMessage(filename: String(localized: "Photo"), byteCount: data.count)
             return nil
         }
 
@@ -1724,11 +1724,11 @@ struct MessageComposer: View {
         for item in items.prefix(AttachmentImportLimits.maxItemCount) {
             guard let data = try? await item.loadTransferable(type: Data.self), !data.isEmpty else { continue }
             guard data.count <= AttachmentImportLimits.maxInlineBytes else {
-                skippedMessages.append(Self.attachmentTooLargeMessage(filename: "Image", byteCount: data.count))
+                skippedMessages.append(Self.attachmentTooLargeMessage(filename: String(localized: "Image"), byteCount: data.count))
                 continue
             }
             guard totalBytes + data.count <= AttachmentImportLimits.maxTotalBytes else {
-                skippedMessages.append("Some images were skipped because attachments are limited to \(Self.formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message.")
+                skippedMessages.append(String(localized: "Some images were skipped because attachments are limited to \(Self.formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message."))
                 break
             }
 
@@ -1774,15 +1774,15 @@ struct MessageComposer: View {
 
         for image in images {
             guard let encodedImage = encodedPasteImageData(from: image) else {
-                skippedMessages.append("Pasted image could not be read.")
+                skippedMessages.append(String(localized: "Pasted image could not be read."))
                 continue
             }
             guard encodedImage.data.count <= AttachmentImportLimits.maxInlineBytes else {
-                skippedMessages.append(attachmentTooLargeMessage(filename: "Pasted image", byteCount: encodedImage.data.count))
+                skippedMessages.append(attachmentTooLargeMessage(filename: String(localized: "Pasted image"), byteCount: encodedImage.data.count))
                 continue
             }
             guard totalBytes + encodedImage.data.count <= AttachmentImportLimits.maxTotalBytes else {
-                skippedMessages.append("Some images were skipped because attachments are limited to \(formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message.")
+                skippedMessages.append(String(localized: "Some images were skipped because attachments are limited to \(formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message."))
                 break
             }
 
@@ -1827,7 +1827,7 @@ struct MessageComposer: View {
             }
 
             guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]), !data.isEmpty else {
-                skippedMessages.append("\(filename) could not be read.")
+                skippedMessages.append(String(localized: "\(filename) could not be read."))
                 continue
             }
             guard data.count <= AttachmentImportLimits.maxInlineBytes else {
@@ -1835,13 +1835,13 @@ struct MessageComposer: View {
                 continue
             }
             guard totalBytes + data.count <= AttachmentImportLimits.maxTotalBytes else {
-                skippedMessages.append("Some files were skipped because attachments are limited to \(formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message.")
+                skippedMessages.append(String(localized: "Some files were skipped because attachments are limited to \(formattedByteCount(AttachmentImportLimits.maxTotalBytes)) per message."))
                 break
             }
 
             let type = values?.contentType ?? UTType(filenameExtension: url.pathExtension) ?? .data
             guard let mime = fileAttachmentMimeType(for: type, filename: filename, data: data) else {
-                skippedMessages.append("\(filename) is not a supported attachment type.")
+                skippedMessages.append(String(localized: "\(filename) is not a supported attachment type."))
                 continue
             }
             let attachment = OpenCodeComposerAttachment(
@@ -1926,13 +1926,13 @@ struct MessageComposer: View {
     }
 
     nonisolated private static func attachmentTooLargeMessage(filename: String, byteCount: Int) -> String {
-        "\(filename) is \(formattedByteCount(byteCount)). Attachments must be under \(formattedByteCount(AttachmentImportLimits.maxInlineBytes))."
+        String(localized: "\(filename) is \(formattedByteCount(byteCount)). Attachments must be under \(formattedByteCount(AttachmentImportLimits.maxInlineBytes)).")
     }
 
     nonisolated private static func skippedAttachmentMessage(_ messages: [String]) -> String {
         let visibleMessages = messages.prefix(3).joined(separator: "\n")
         if messages.count > 3 {
-            return "\(visibleMessages)\n\(messages.count - 3) more attachments were skipped."
+            return String(localized: "\(visibleMessages)\n\(messages.count - 3) more attachments were skipped.")
         }
         return visibleMessages
     }
@@ -2026,7 +2026,7 @@ private enum ComposerTextViewMetrics {
 private struct ComposerTextView: UIViewRepresentable {
     @Binding var text: String
     let agentMentions: [OpenCodeAgentMention]
-    let placeholder: String
+    let placeholder: LocalizedStringResource
     let maxLines: Int
     let canSubmit: Bool
     let autoFocus: Bool
@@ -2055,7 +2055,7 @@ private struct ComposerTextView: UIViewRepresentable {
         )
         textView.returnKeyType = .default
         textView.keyboardDismissMode = .interactive
-        textView.placeholder = placeholder
+        textView.placeholder = String(localized: placeholder)
         textView.canSubmit = canSubmit
         textView.onPasteImages = onPasteImages
         textView.onSubmit = onSubmit
@@ -2093,8 +2093,9 @@ private struct ComposerTextView: UIViewRepresentable {
             needsLayoutUpdate = true
         }
 
-        if textView.placeholder != placeholder {
-            textView.placeholder = placeholder
+        let localizedPlaceholder = String(localized: placeholder)
+        if textView.placeholder != localizedPlaceholder {
+            textView.placeholder = localizedPlaceholder
             needsLayoutUpdate = true
         }
 
@@ -2582,8 +2583,8 @@ private struct PinnedCommandStrip: View {
 }
 
 private struct AccessoryMenuAction: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     let systemImage: String
     let tint: Color
     let isDisabled: Bool
@@ -2601,9 +2602,9 @@ private struct AccessoryMenuAction: View {
 }
 
 private struct AccessorySectionTitle: View {
-    let title: String
+    let title: LocalizedStringResource
 
-    init(_ title: String) {
+    init(_ title: LocalizedStringResource) {
         self.title = title
     }
 
@@ -2611,7 +2612,6 @@ private struct AccessorySectionTitle: View {
         Text(title)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
-            .textCase(.uppercase)
             .tracking(0.6)
             .padding(.top, 6)
             .padding(.horizontal, 2)
@@ -2619,8 +2619,8 @@ private struct AccessorySectionTitle: View {
 }
 
 private struct AccessoryMenuLabel: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     let systemImage: String
     let tint: Color
     let isDisabled: Bool
@@ -2672,9 +2672,9 @@ private struct ComposerForkListView: View {
         List {
             if filteredMessages.isEmpty {
                 ContentUnavailableView(
-                    searchText.isEmpty ? "No User Messages" : "No Matches",
+                    searchText.isEmpty ? LocalizedStringResource("No User Messages") : LocalizedStringResource("No Matches"),
                     systemImage: "arrow.triangle.branch",
-                    description: Text(searchText.isEmpty ? "Send a message before forking this session." : "Try a different search.")
+                    description: Text(searchText.isEmpty ? LocalizedStringResource("Send a message before forking this session.") : LocalizedStringResource("Try a different search."))
                 )
                 .listRowBackground(Color.clear)
             } else {
@@ -2794,7 +2794,7 @@ private struct ComposerMCPListView: View {
                 if isLoading && servers.isEmpty {
                     ProgressView("Loading MCP servers")
                 } else if filteredServers.isEmpty {
-                    Text(servers.isEmpty ? "No configured MCP servers." : "No MCP servers match your search.")
+                    Text(servers.isEmpty ? LocalizedStringResource("No configured MCP servers.") : LocalizedStringResource("No MCP servers match your search."))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(filteredServers) { server in

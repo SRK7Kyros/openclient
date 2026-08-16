@@ -45,7 +45,7 @@ struct OpenClientVisualMapView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OpenClientVisualMapHeader(
-                title: activity.payload.title ?? "Map",
+                title: activity.payload.title.map { Text($0) } ?? Text("Map"),
                 markerCount: activity.payload.markers.count,
                 isRunning: activity.isRunning
             )
@@ -55,11 +55,10 @@ struct OpenClientVisualMapView: View {
                 initialPosition: .region(activity.payload.coordinateRegion),
                 interactionModes: [.pan, .zoom]
             ) {
-                if activity.payload.markers.isEmpty {
-                    Marker(
-                        activity.payload.title ?? "Location",
-                        coordinate: activity.payload.center.clLocationCoordinate
-                    )
+                if activity.payload.markers.isEmpty, let title = activity.payload.title {
+                    Marker(title, coordinate: activity.payload.center.clLocationCoordinate)
+                } else if activity.payload.markers.isEmpty {
+                    Marker("Location", coordinate: activity.payload.center.clLocationCoordinate)
                 } else {
                     ForEach(activity.payload.markers) { marker in
                         Marker(marker.title, coordinate: marker.coordinate.clLocationCoordinate)
@@ -115,7 +114,7 @@ private struct OpenClientVisualMapMarkerSummary: View {
             }
 
             if markers.count > 3 {
-                Text("\(markers.count - 3) more markers")
+                Text(markers.count - 3 == 1 ? LocalizedStringResource("1 more marker") : LocalizedStringResource("\(markers.count - 3) more markers"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -124,7 +123,7 @@ private struct OpenClientVisualMapMarkerSummary: View {
 }
 
 private struct OpenClientVisualMapHeader: View {
-    let title: String
+    let title: Text
     let markerCount: Int
     let isRunning: Bool
 
@@ -137,10 +136,10 @@ private struct OpenClientVisualMapHeader: View {
                 .background(.blue.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                title
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
-                Text(markerCount == 1 ? "1 marker" : "\(markerCount) markers")
+                Text(markerCount == 1 ? LocalizedStringResource("1 marker") : LocalizedStringResource("\(markerCount) markers"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

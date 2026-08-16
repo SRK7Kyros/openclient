@@ -107,12 +107,20 @@ targets:
           if [ -d "$EXCALIDRAW_FONT_DIR" ]; then
             rm -rf "$EXCALIDRAW_FONT_DIR"
           fi
+      - name: Lint localizations
+        basedOnDependencyAnalysis: false
+        script: |
+          ruby "$SRCROOT/scripts/lint-localizations.rb" --stringsdata-root "$(dirname "$TARGET_TEMP_DIR")"
     info:
       path: OpenCodeIOSClient/Generated-Info.plist
       properties:
         CFBundleDisplayName: OpenClient
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations:
+          - en
+          - pt-BR
         UIApplicationSupportsIndirectInputEvents: true
         NSSupportsLiveActivities: true
         UIBackgroundModes:
@@ -153,10 +161,10 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
+        SWIFT_EMIT_LOC_STRINGS: YES
         TARGETED_DEVICE_FAMILY: 1,2
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
-        SWIFT_EMIT_LOC_STRINGS: YES
         CODE_SIGN_ENTITLEMENTS: OpenCodeIOSClient/OpenCodeIOSClient.entitlements
     scheme:
       gatherCoverageData: false
@@ -191,6 +199,10 @@ targets:
         CFBundleDisplayName: OpenClient Live
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations:
+          - en
+          - pt-BR
         OpenCodeSharedKeychainAccessGroup: $(AppIdentifierPrefix)com.ntoporcov.openclient.shared
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -202,6 +214,7 @@ targets:
         PRODUCT_NAME: OpenCodeChatActivityExtension
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         CODE_SIGN_STYLE: Automatic
+        SWIFT_EMIT_LOC_STRINGS: YES
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: ""
         CODE_SIGN_ENTITLEMENTS: OpenCodeChatActivityExtension/OpenCodeChatActivityExtension.entitlements
@@ -233,6 +246,10 @@ targets:
         CFBundleDisplayName: Share in OpenClient
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations:
+          - en
+          - pt-BR
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -247,6 +264,7 @@ targets:
         PRODUCT_NAME: OpenCodeShareExtension
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         CODE_SIGN_STYLE: Automatic
+        SWIFT_EMIT_LOC_STRINGS: YES
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: ""
         CODE_SIGN_ENTITLEMENTS: OpenCodeShareExtension/OpenCodeShareExtension.entitlements

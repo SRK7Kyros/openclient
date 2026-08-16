@@ -94,6 +94,18 @@ platform :ios do
     ENV["LC_ALL"] ||= "en_US.UTF-8"
   end
 
+  desc "Validate required localization coverage"
+  lane :lint_localizations do
+    sh(xcodegen_generate_command(repo_root))
+    sh(
+      "cd #{repo_root.shellescape} && " \
+      "xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient " \
+      "-configuration Debug -destination 'generic/platform=iOS' " \
+      "-derivedDataPath build/localization-lint-derived-data " \
+      "CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build"
+    )
+  end
+
   desc "Run a simulator build sanity check"
   lane :build do
     sh(xcodegen_generate_command(repo_root))

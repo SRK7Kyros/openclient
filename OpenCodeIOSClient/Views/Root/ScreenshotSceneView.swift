@@ -55,7 +55,7 @@ struct ScreenshotSceneView: View {
             }
         case .activity:
             NavigationStack {
-                ActivityView(facade: viewModel.activityFacade) {}
+                ActivityView(facade: viewModel.activityFacade, connection: viewModel.connectionFacade) {}
             }
         case .projects, .newSession, .providerSetup, .funGames, .sessions, .terminal, .sessionActions, .sessionPinned, .chat, .permission, .question, .findPlaceGame, .findBugGame, .composerActions:
             rootView

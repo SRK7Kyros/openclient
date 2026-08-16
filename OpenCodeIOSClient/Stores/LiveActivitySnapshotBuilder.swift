@@ -21,7 +21,7 @@ enum LiveActivitySnapshotBuilder {
 
     static func sessionTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Session" : trimmed
+        return trimmed.isEmpty ? String(localized: "Session") : trimmed
     }
 
     static func state(for input: LiveActivitySnapshotInput, now: Date = .now) -> OpenCodeChatActivityAttributes.ContentState {
@@ -141,7 +141,7 @@ enum LiveActivitySnapshotBuilder {
             }
             if let user = latestMeaningfulSnippet(in: input.selectedMessages, role: "user") {
                 if input.sessionStatus == "busy" {
-                    return "Waiting for assistant..."
+                    return String(localized: "Waiting for assistant...")
                 }
                 return user
             }
@@ -152,12 +152,12 @@ enum LiveActivitySnapshotBuilder {
         }
         if let user = latestMeaningfulSnippet(in: input.cachedMessages, role: "user") {
             if input.sessionStatus == "busy" {
-                return "Waiting for assistant..."
+                return String(localized: "Waiting for assistant...")
             }
             return user
         }
 
-        return input.sessionPreviewText ?? "No messages yet"
+        return input.sessionPreviewText ?? String(localized: "No messages yet")
     }
 
     private static func statusText(sessionStatus: String?, hasPendingInteraction: Bool) -> String {
@@ -199,7 +199,7 @@ enum LiveActivitySnapshotBuilder {
                 return output
             }
             if let tool = part.tool?.trimmingCharacters(in: .whitespacesAndNewlines), !tool.isEmpty {
-                return "Running \(tool)"
+                return String(localized: "Running \(tool)")
             }
             return nil
         default:

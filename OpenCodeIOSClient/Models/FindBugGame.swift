@@ -13,6 +13,7 @@ struct FindBugGameSession: Codable, Hashable, Sendable {
 enum FindBugGame {
     static let setupMarker = "[[OPENCLIENT_FIND_BUG_SETUP]]"
     static let winMarker = "[[OPENCLIENT_FIND_BUG_SOLVED]]"
+    static let languageIDPrefix = "OPENCLIENT_LANGUAGE_ID:"
 
     static let supportedLanguages: [FindBugGameLanguage] = [
         FindBugGameLanguage(id: "swift", title: "Swift"),
@@ -30,10 +31,13 @@ enum FindBugGame {
     ]
 
     static func starterPrompt(language: FindBugGameLanguage) -> String {
-        return """
+        let metadata = """
         \(setupMarker)
+        <!-- \(languageIDPrefix) \(language.id) -->
+        """
 
-        We are playing a private OpenClient game called Find the Bug.
+        let instructions = String(localized: """
+        We are playing an OpenClient game called Find the Bug.
 
         Language: \(language.title)
         Markdown fence language: \(language.id)
@@ -49,6 +53,7 @@ enum FindBugGame {
         - If the user asks for a hint, give only one small hint at a time.
         - Accept answers that identify the bug clearly, even if phrased differently or with minor typos.
         - When the user identifies the bug correctly, reply with exactly this marker and no other text: \(winMarker)
-        """
+        """)
+        return "\(metadata)\n\n\(instructions)"
     }
 }

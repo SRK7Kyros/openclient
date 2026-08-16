@@ -292,11 +292,11 @@ struct MessageBubble: View {
     }
 
     private var agentLabel: String {
-        effectiveMessage.info.agent?.nilIfEmpty ?? "Default"
+        effectiveMessage.info.agent?.nilIfEmpty ?? String(localized: "Default")
     }
 
     private var modelLabel: String {
-        guard let model = effectiveMessage.info.model else { return "Default" }
+        guard let model = effectiveMessage.info.model else { return String(localized: "Default") }
         return "\(model.providerID)/\(model.modelID)"
     }
 
@@ -306,8 +306,9 @@ struct MessageBubble: View {
         }
 
         let reasoningParts = effectiveMessage.parts.filter { $0.type == "reasoning" && ($0.text?.nilIfEmpty != nil) }
-        guard !reasoningParts.isEmpty else { return "None" }
-        return reasoningParts.count == 1 ? "1 block" : "\(reasoningParts.count) blocks"
+        guard !reasoningParts.isEmpty else { return String(localized: "None") }
+        if reasoningParts.count == 1 { return String(localized: "1 block") }
+        return String(localized: "\(reasoningParts.count) blocks")
     }
 
     private func formattedReasoningVariant(_ variant: String) -> String {
@@ -523,7 +524,7 @@ struct MessageBubble: View {
 
     private var unknownStreamingPartStyle: ActivityStyle {
         ActivityStyle(
-            title: "Thinking",
+            title: .localized("Thinking"),
             subtitle: nil,
             icon: "sparkles",
             tint: .secondary,
@@ -571,7 +572,9 @@ struct MessageBubble: View {
         let isExpanded = expandedContextGroupIDs.contains(group.id)
         let summary = contextSummary(for: group.parts)
         let running = isStreamingMessage || group.parts.contains { isRunning($0.part) }
-        let title = running ? "Exploring" : "Explored"
+        let title: ActivityText = running
+            ? .localized(LocalizedStringResource("Exploring"))
+            : .localized(LocalizedStringResource("Explored"))
         let subtitle = contextSummaryText(summary)
 
         return VStack(alignment: .leading, spacing: MessageBubbleSpacing.part) {
@@ -633,22 +636,35 @@ struct MessageBubble: View {
         return text
     }
 
-    private func todoWriteTitle(for part: OpenCodePart, running: Bool) -> String {
+    private func todoWriteTitle(for part: OpenCodePart, running: Bool) -> ActivityText {
         if running {
-            return "Updating Todos"
+            return .localized("Updating Todos")
+        }
+
+        if let count = todoWriteTodos(for: part)?.count, count > 0 {
+            return count == 1
+                ? .localized(LocalizedStringResource("1 task"))
+                : .localized(LocalizedStringResource("\(count) tasks"))
         }
 
         let title = part.state?.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let title, !title.isEmpty {
-            return title
+            switch title.lowercased() {
+            case "todo", "todos", "todowrite", "todo update":
+                return .localized(LocalizedStringResource("Tasks"))
+            default:
+                break
+            }
+            return .verbatim(title)
         }
 
-        return "Todo Update"
+        return .localized("Todo Update")
     }
 
-    private func todoWriteSubtitle(for part: OpenCodePart) -> String? {
+    private func todoWriteSubtitle(for part: OpenCodePart) -> ActivityText? {
         guard let todos = todoWriteTodos(for: part), !todos.isEmpty else {
-            return part.state?.status?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let status = part.state?.status?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+            return .verbatim(status)
         }
 
         let completed = todos.filter { $0.isComplete }.count
@@ -657,17 +673,17 @@ struct MessageBubble: View {
 
         var segments: [String] = []
         if completed > 0 {
-            segments.append("\(completed) completed")
+            segments.append(String(localized: "\(completed) completed"))
         }
         if inProgress > 0 {
-            segments.append("\(inProgress) in progress")
+            segments.append(String(localized: "\(inProgress) in progress"))
         }
         if pending > 0 {
-            segments.append("\(pending) pending")
+            segments.append(String(localized: "\(pending) pending"))
         }
 
         guard !segments.isEmpty else { return nil }
-        return segments.joined(separator: " · ")
+        return .verbatim(segments.formatted())
     }
 
     private func todoWriteTodos(for part: OpenCodePart) -> [OpenCodeTodo]? {
@@ -895,8 +911,8 @@ struct MessageBubble: View {
             )
         case "bash":
             return ActivityStyle(
-                title: "Shell",
-                subtitle: running ? nil : firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Shell"),
+                subtitle: running ? nil : verbatimActivityText(firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -905,8 +921,8 @@ struct MessageBubble: View {
             )
         case "read":
             return ActivityStyle(
-                title: "Read",
-                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Read"),
+                subtitle: verbatimActivityText(firstNonEmpty(filename(from: part.state?.input?.filePath), filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -915,8 +931,8 @@ struct MessageBubble: View {
             )
         case "list":
             return ActivityStyle(
-                title: "List",
-                subtitle: firstNonEmpty(filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("List"),
+                subtitle: verbatimActivityText(firstNonEmpty(filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -925,8 +941,8 @@ struct MessageBubble: View {
             )
         case "glob":
             return ActivityStyle(
-                title: "Glob",
-                subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Glob"),
+                subtitle: verbatimActivityText(firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -935,8 +951,8 @@ struct MessageBubble: View {
             )
         case "grep":
             return ActivityStyle(
-                title: "Grep",
-                subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Grep"),
+                subtitle: verbatimActivityText(firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -945,8 +961,8 @@ struct MessageBubble: View {
             )
         case "webfetch":
             return ActivityStyle(
-                title: "Webfetch",
-                subtitle: running ? nil : firstNonEmpty(part.state?.input?.url, toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Webfetch"),
+                subtitle: running ? nil : verbatimActivityText(firstNonEmpty(part.state?.input?.url, toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -955,8 +971,8 @@ struct MessageBubble: View {
             )
         case "websearch":
             return ActivityStyle(
-                title: "Web Search",
-                subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Web Search"),
+                subtitle: verbatimActivityText(firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -965,8 +981,8 @@ struct MessageBubble: View {
             )
         case "codesearch":
             return ActivityStyle(
-                title: "Code Search",
-                subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Code Search"),
+                subtitle: verbatimActivityText(firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -978,7 +994,7 @@ struct MessageBubble: View {
             let subtitle = firstNonEmpty(part.state?.input?.description, resolveTaskSessionID(for: part, currentSessionID: currentSessionID ?? ""), toolSubtitle(for: part, fallback: nil))
             return ActivityStyle(
                 title: agent,
-                subtitle: subtitle,
+                subtitle: verbatimActivityText(subtitle),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -987,8 +1003,8 @@ struct MessageBubble: View {
             )
         case "edit":
             return ActivityStyle(
-                title: "Edit",
-                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Edit"),
+                subtitle: verbatimActivityText(firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -997,8 +1013,8 @@ struct MessageBubble: View {
             )
         case "write":
             return ActivityStyle(
-                title: "Write",
-                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Write"),
+                subtitle: verbatimActivityText(firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1007,10 +1023,12 @@ struct MessageBubble: View {
             )
         case "apply_patch":
             let count = part.state?.metadata?.files?.count
-            let fileSummary = count.map { $0 == 1 ? "1 file" : "\($0) files" }
+            let fileSummary = count.map {
+                $0 == 1 ? ActivityText.localized("1 file") : ActivityText.localized("\($0) files")
+            }
             return ActivityStyle(
-                title: "Patch",
-                subtitle: firstNonEmpty(fileSummary, toolSubtitle(for: part, fallback: nil)),
+                title: .localized("Patch"),
+                subtitle: fileSummary ?? verbatimActivityText(toolSubtitle(for: part, fallback: nil)),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1019,8 +1037,8 @@ struct MessageBubble: View {
             )
         case "question":
             return ActivityStyle(
-                title: "Questions",
-                subtitle: toolSubtitle(for: part, fallback: nil),
+                title: .localized("Questions"),
+                subtitle: verbatimActivityText(toolSubtitle(for: part, fallback: nil)),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1029,8 +1047,8 @@ struct MessageBubble: View {
             )
         case "skill":
             return ActivityStyle(
-                title: firstNonEmpty(part.state?.input?.name, "Skill") ?? "Skill",
-                subtitle: toolSubtitle(for: part, fallback: nil),
+                title: part.state?.input?.name?.nilIfEmpty.map(ActivityText.verbatim) ?? .localized("Skill"),
+                subtitle: verbatimActivityText(toolSubtitle(for: part, fallback: nil)),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1039,8 +1057,8 @@ struct MessageBubble: View {
             )
         case "mcp":
             return ActivityStyle(
-                title: firstNonEmpty(part.state?.title, "MCP") ?? "MCP",
-                subtitle: toolSubtitle(for: part, fallback: nil),
+                title: part.state?.title?.nilIfEmpty.map(ActivityText.verbatim) ?? .localized("MCP"),
+                subtitle: verbatimActivityText(toolSubtitle(for: part, fallback: nil)),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1048,10 +1066,10 @@ struct MessageBubble: View {
                 shimmerTitle: false
             )
         default:
-            let title = firstNonEmpty(part.state?.title, displayTitle(for: tool, fallback: part.type)) ?? "Tool"
+            let title = firstNonEmpty(part.state?.title, displayTitle(for: tool, fallback: part.type))
             return ActivityStyle(
-                title: title,
-                subtitle: firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
+                title: title.map(ActivityText.verbatim) ?? .localized("Tool"),
+                subtitle: verbatimActivityText(firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil))),
                 icon: appearance.icon,
                 tint: appearance.tint,
                 isRunning: running,
@@ -1073,14 +1091,14 @@ struct MessageBubble: View {
         return (path as NSString).lastPathComponent
     }
 
-    private func taskAgentTitle(for part: OpenCodePart) -> String {
+    private func taskAgentTitle(for part: OpenCodePart) -> ActivityText {
         let trimmed = part.state?.input?.subagentType?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
         guard let first = trimmed.first else {
-            return "Agent"
+            return .localized("Agent")
         }
 
         let value = String(first).uppercased() + String(trimmed.dropFirst())
-        return "\(value) Agent"
+        return .localized("\(value) Agent")
     }
 
     private func resolveTaskSessionID(for part: OpenCodePart, currentSessionID: String) -> String? {
@@ -1111,18 +1129,22 @@ struct MessageBubble: View {
         }
     }
 
-    private func contextSummaryText(_ summary: ContextSummary) -> String? {
+    private func contextSummaryText(_ summary: ContextSummary) -> ActivityText? {
         var items: [String] = []
         if summary.reads > 0 {
-            items.append(summary.reads == 1 ? "1 read" : "\(summary.reads) reads")
+            items.append(summary.reads == 1 ? String(localized: "1 read") : String(localized: "\(summary.reads) reads"))
         }
         if summary.searches > 0 {
-            items.append(summary.searches == 1 ? "1 search" : "\(summary.searches) searches")
+            items.append(summary.searches == 1 ? String(localized: "1 search") : String(localized: "\(summary.searches) searches"))
         }
         if summary.lists > 0 {
-            items.append(summary.lists == 1 ? "1 list" : "\(summary.lists) lists")
+            items.append(summary.lists == 1 ? String(localized: "1 list") : String(localized: "\(summary.lists) lists"))
         }
-        return items.isEmpty ? nil : items.joined(separator: ", ")
+        return items.isEmpty ? nil : .verbatim(items.formatted())
+    }
+
+    private func verbatimActivityText(_ value: String?) -> ActivityText? {
+        value.map(ActivityText.verbatim)
     }
 
     private func firstNonEmpty(_ values: String?...) -> String? {
@@ -1136,11 +1158,11 @@ struct MessageBubble: View {
         if let status = part.state?.status?.lowercased() {
             switch status {
             case "completed", "complete", "success":
-                return "Completed"
+                return String(localized: "Completed")
             case "error", "failed":
-                return "Error"
+                return String(localized: "Error")
             case "running", "pending", "in_progress":
-                return "Running"
+                return String(localized: "Running")
             default:
                 return status.replacingOccurrences(of: "_", with: " ").capitalized
             }
@@ -1149,9 +1171,9 @@ struct MessageBubble: View {
         if let reason = part.reason {
             switch reason.lowercased() {
             case "stop", "finish", "finished", "complete", "completed":
-                return "Completed"
+                return String(localized: "Completed")
             case "start", "started", "running":
-                return "Running"
+                return String(localized: "Running")
             default:
                 return reason.replacingOccurrences(of: "-", with: " ").capitalized
             }
@@ -1536,9 +1558,9 @@ private struct ErrorMessageCard: View {
     let message: String
     let title: String?
 
-    private var displayTitle: String {
+    private var displayTitle: String? {
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let trimmed, !trimmed.isEmpty else { return "Error" }
+        guard let trimmed, !trimmed.isEmpty else { return nil }
         return trimmed
     }
 
@@ -1548,8 +1570,13 @@ private struct ErrorMessageCard: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.subheadline.weight(.semibold))
 
-                Text(displayTitle)
-                    .font(.subheadline.weight(.semibold))
+                if let displayTitle {
+                    Text(displayTitle)
+                        .font(.subheadline.weight(.semibold))
+                } else {
+                    Text("Error")
+                        .font(.subheadline.weight(.semibold))
+                }
             }
             .foregroundStyle(.red)
 

@@ -119,27 +119,27 @@ enum OpenClientImageContentError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint:
-            return "The OpenClient plugin image endpoint is invalid."
+            return String(localized: "The OpenClient plugin image endpoint is invalid.")
         case .invalidPath:
-            return "The OpenClient plugin image path is invalid."
+            return String(localized: "The OpenClient plugin image path is invalid.")
         case .unavailable:
-            return "Connect to the OpenClient plugin before viewing this image."
+            return String(localized: "Connect to the OpenClient plugin before viewing this image.")
         case .invalidResponse:
-            return "The OpenClient plugin returned an invalid image response."
+            return String(localized: "The OpenClient plugin returned an invalid image response.")
         case .statusCode(let status):
-            return "The image service returned HTTP \(status)."
+            return String(localized: "The image service returned HTTP \(status).")
         case .invalidContentType:
-            return "The image service returned an unexpected content type."
+            return String(localized: "The image service returned an unexpected content type.")
         case .invalidContentLength:
-            return "The image service returned an unexpected number of bytes."
+            return String(localized: "The image service returned an unexpected number of bytes.")
         case .emptyResponse:
-            return "The image service returned an empty image."
+            return String(localized: "The image service returned an empty image.")
         case .responseTooLarge:
-            return "The image exceeds the supported size limit."
+            return String(localized: "The image exceeds the supported size limit.")
         case .invalidImage:
-            return "The image service returned data that cannot be displayed as an image."
+            return String(localized: "The image service returned data that cannot be displayed as an image.")
         case .dimensionMismatch:
-            return "The image dimensions do not match the persisted metadata."
+            return String(localized: "The image dimensions do not match the persisted metadata.")
         case .network(let message):
             return message
         }

@@ -97,8 +97,19 @@ struct OpenCodeLiveActivityActionClient {
     }
 }
 
-enum OpenCodeLiveActivityActionError: Error {
+enum OpenCodeLiveActivityActionError: LocalizedError {
     case invalidURL
     case missingCredentials
     case requestFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return String(localized: "The OpenClient server URL is invalid.")
+        case .missingCredentials:
+            return String(localized: "The saved OpenClient credentials are unavailable.")
+        case .requestFailed:
+            return String(localized: "OpenClient could not send the Live Activity response.")
+        }
+    }
 }

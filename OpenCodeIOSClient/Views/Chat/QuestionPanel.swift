@@ -127,7 +127,7 @@ private struct QuestionRequestCarousel: View {
         }
     }
 
-    private var submitLabel: String {
+    private var submitLabel: LocalizedStringResource {
         if answeredQuestionCount == request.questions.count && !request.questions.isEmpty {
             return "Submit"
         }
@@ -313,7 +313,7 @@ private struct QuestionPageIndicator: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Question \(index + 1)")
-                .accessibilityValue(index == selectedIndex ? "Current" : "")
+                .accessibilityValue(index == selectedIndex ? LocalizedStringResource("Current") : LocalizedStringResource(""))
             }
         }
         .animation(opencodeSelectionAnimation, value: selectedIndex)
@@ -322,7 +322,7 @@ private struct QuestionPageIndicator: View {
 
 private struct QuestionGroupActions: View {
     let requestID: String
-    let submitLabel: String
+    let submitLabel: LocalizedStringResource
     let isSubmitEnabled: Bool
     let onDismiss: () -> Void
     let onSubmit: () -> Void

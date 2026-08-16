@@ -1,0 +1,358 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@\n\n%lld image attached." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@\n\n%2$lld image attached."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@\n\n%2$lld imagem anexada."
+          }
+        }
+      }
+    },
+    "%@\n\n%lld images attached." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@\n\n%2$lld images attached."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@\n\n%2$lld imagens anexadas."
+          }
+        }
+      }
+    },
+    "%lld image attached." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld imagem anexada."
+          }
+        }
+      }
+    },
+    "%lld images attached." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld imagens anexadas."
+          }
+        }
+      }
+    },
+    "Back" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar"
+          }
+        }
+      }
+    },
+    "CHOOSE CONNECTION" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ESCOLHA UMA CONEXÃO"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        }
+      }
+    },
+    "Continue to Project Picker" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar para a seleção de projeto"
+          }
+        }
+      }
+    },
+    "LATEST" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MAIS RECENTES"
+          }
+        }
+      }
+    },
+    "Needs Action" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requer ação"
+          }
+        }
+      }
+    },
+    "New Chat" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nova conversa"
+          }
+        }
+      }
+    },
+    "No text or image was found." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum texto ou imagem foi encontrado."
+          }
+        }
+      }
+    },
+    "Open OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir o OpenClient"
+          }
+        }
+      }
+    },
+    "OpenClient could not send the Live Activity response." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenClient não conseguiu enviar a resposta da Atividade ao Vivo."
+          }
+        }
+      }
+    },
+    "PERMISSION" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PERMISSÃO"
+          }
+        }
+      }
+    },
+    "Pick a connection in the app, then choose a project." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma conexão no app e depois selecione um projeto."
+          }
+        }
+      }
+    },
+    "Preparing share..." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando compartilhamento..."
+          }
+        }
+      }
+    },
+    "QUESTION" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PERGUNTA"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronto"
+          }
+        }
+      }
+    },
+    "Share %lld image to OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar %lld imagem com o OpenClient"
+          }
+        }
+      }
+    },
+    "Share %lld images to OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar %lld imagens com o OpenClient"
+          }
+        }
+      }
+    },
+    "Share in OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar no OpenClient"
+          }
+        }
+      }
+    },
+    "Share in OpenClient with %@" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar no OpenClient usando %@"
+          }
+        }
+      }
+    },
+    "Share text to OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar texto com o OpenClient"
+          }
+        }
+      }
+    },
+    "Share to OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar com o OpenClient"
+          }
+        }
+      }
+    },
+    "Shared Content" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conteúdo compartilhado"
+          }
+        }
+      }
+    },
+    "Step 1: Choose a connection. Step 2 opens the new chat sheet so you can pick any project and send." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etapa 1: escolha uma conexão. Na etapa 2, a tela de nova conversa será aberta para você escolher qualquer projeto e enviar o conteúdo."
+          }
+        }
+      }
+    },
+    "Step 2: Review what will be sent. OpenClient will open the new chat sheet next so you can choose any project." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etapa 2: revise o que será enviado. Em seguida, o OpenClient abrirá a tela de nova conversa para você escolher qualquer projeto."
+          }
+        }
+      }
+    },
+    "The OpenClient server URL is invalid." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A URL do servidor do OpenClient é inválida."
+          }
+        }
+      }
+    },
+    "The saved OpenClient credentials are unavailable." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As credenciais salvas do OpenClient não estão disponíveis."
+          }
+        }
+      }
+    },
+    "Using %@" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@"
+          }
+        }
+      }
+    },
+    "Using OpenClient" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando o OpenClient"
+          }
+        }
+      }
+    },
+    "Watching" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acompanhando"
+          }
+        }
+      }
+    },
+    "Working" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trabalhando"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

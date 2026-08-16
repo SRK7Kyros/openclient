@@ -12,7 +12,13 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
         let detail: String
         let systemImage: String
 
-        var id: String { title }
+        var id: String { systemImage }
+
+        init(title: LocalizedStringResource, detail: LocalizedStringResource, systemImage: String) {
+            self.title = String(localized: title)
+            self.detail = String(localized: detail)
+            self.systemImage = systemImage
+        }
     }
 
     let version: String
@@ -27,19 +33,19 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
 
     init(
         version: String,
-        title: String,
-        summary: String,
+        title: LocalizedStringResource,
+        summary: LocalizedStringResource,
         features: [Feature],
         hero: Hero = .customization,
-        featureSectionTitle: String = "Small changes, right where they count",
+        featureSectionTitle: LocalizedStringResource = "Small changes, right where they count",
         showsSetup: Bool = true
     ) {
         self.version = version
-        self.title = title
-        self.summary = summary
+        self.title = String(localized: title)
+        self.summary = String(localized: summary)
         self.features = features
         self.hero = hero
-        self.featureSectionTitle = featureSectionTitle
+        self.featureSectionTitle = String(localized: featureSectionTitle)
         self.showsSetup = showsSetup
     }
 }

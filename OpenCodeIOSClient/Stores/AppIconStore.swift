@@ -50,7 +50,7 @@ final class AppIconStore: ObservableObject {
 
         #if canImport(UIKit)
         guard supportsAlternateIcons else {
-            errorMessage = "Alternate app icons are unavailable in this build."
+            errorMessage = String(localized: "Alternate app icons are unavailable in this build.")
             return
         }
 
@@ -65,7 +65,7 @@ final class AppIconStore: ObservableObject {
             errorMessage = error.localizedDescription
         }
         #else
-        errorMessage = "Alternate app icons are unavailable on this platform."
+        errorMessage = String(localized: "Alternate app icons are unavailable on this platform.")
         #endif
     }
 
@@ -84,7 +84,7 @@ final class AppIconStore: ObservableObject {
 
         var result = [OpenClientAppIcon(
             alternateIconName: nil,
-            displayName: displayNames[primaryName] ?? "Default",
+            displayName: displayNames[primaryName] ?? String(localized: "Default"),
             iconFiles: primary["CFBundleIconFiles"] as? [String] ?? []
         )]
 

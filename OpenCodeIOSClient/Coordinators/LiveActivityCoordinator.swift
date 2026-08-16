@@ -100,7 +100,7 @@ enum LiveActivityCoordinator {
 
         return .fallback(OpenCodeSession(
             id: sessionID,
-            title: "Session",
+            title: String(localized: "Session"),
             workspaceID: workspaceID,
             directory: normalizedDirectory(directory),
             projectID: nil,

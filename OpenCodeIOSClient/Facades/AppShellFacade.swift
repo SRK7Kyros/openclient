@@ -86,13 +86,13 @@ final class AppShellFacade: ObservableObject {
         var toolbarLabel: String {
             switch selectedTab {
             case .sessions:
-                return "Create Session"
+                return String(localized: "Create Session")
             case .git:
-                return filesMode == .tree ? "Refresh File Tree" : "Refresh Files"
+                return filesMode == .tree ? String(localized: "Refresh File Tree") : String(localized: "Refresh Files")
             case .mcp:
-                return "Refresh MCP Servers"
+                return String(localized: "Refresh MCP Servers")
             case .terminal:
-                return "New Terminal"
+                return String(localized: "New Terminal")
             }
         }
 
@@ -316,6 +316,15 @@ final class AppShellFacade: ObservableObject {
 
     func selectProjectContent() {
         contentSelection = .project
+    }
+
+    func selectAutomaticConnectionLandingDestination(_ destination: AutoConnectLandingDestination) {
+        switch destination {
+        case .projects:
+            selectProjectContent()
+        case .activity:
+            selectActivity()
+        }
     }
 
     func dismissPrimarySheet() {

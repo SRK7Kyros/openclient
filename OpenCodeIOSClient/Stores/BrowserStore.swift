@@ -47,19 +47,19 @@ enum BrowserAutomationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .noActiveProject:
-            return "Select a project before using the in-app browser."
+            return String(localized: "Select a project before using the in-app browser.")
         case .noPage:
-            return "Open a page in the in-app browser first."
+            return String(localized: "Open a page in the in-app browser first.")
         case .invalidAddress:
-            return "The browser address is invalid."
+            return String(localized: "The browser address is invalid.")
         case .navigationTimedOut:
-            return "The webpage did not finish loading in time."
+            return String(localized: "The webpage did not finish loading in time.")
         case .invalidElementReference:
-            return "The browser element reference is missing or stale. Take a new snapshot."
+            return String(localized: "The browser element reference is missing or stale. Take a new snapshot.")
         case .unsupportedElement:
-            return "The referenced element does not support this browser action."
+            return String(localized: "The referenced element does not support this browser action.")
         case .invalidHistoryAction:
-            return "The browser history action is unsupported."
+            return String(localized: "The browser history action is unsupported.")
         }
     }
 }
@@ -123,7 +123,7 @@ final class BrowserStore: ObservableObject {
     }
 
     var pageTitle: String {
-        activeSession?.pageTitle ?? "Browser"
+        activeSession?.pageTitle ?? String(localized: "Browser")
     }
 
     var currentURL: URL? {
@@ -162,11 +162,11 @@ final class BrowserStore: ObservableObject {
     }
 
     var displayTitle: String {
-        activeSession?.displayTitle ?? "Browser"
+        activeSession?.displayTitle ?? String(localized: "Browser")
     }
 
     var displayURL: String {
-        activeSession?.displayURL ?? "Search or enter a website"
+        activeSession?.displayURL ?? String(localized: "Search or enter a website")
     }
 
     var faviconURL: URL? {
@@ -372,11 +372,11 @@ private final class BrowserSession: NSObject, ObservableObject {
         if !trimmed.isEmpty, trimmed != "Browser" {
             return trimmed
         }
-        return currentURL?.host ?? "Browser"
+        return currentURL?.host ?? String(localized: "Browser")
     }
 
     var displayURL: String {
-        currentURL?.absoluteString ?? "Search or enter a website"
+        currentURL?.absoluteString ?? String(localized: "Search or enter a website")
     }
 
     var faviconURL: URL? {
@@ -711,7 +711,7 @@ private final class BrowserSession: NSObject, ObservableObject {
 
     private func synchronizeMetadata() {
         currentURL = webView.url
-        pageTitle = webView.title ?? currentURL?.host ?? "Browser"
+        pageTitle = webView.title ?? currentURL?.host ?? String(localized: "Browser")
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
         isLoading = webView.isLoading
@@ -765,7 +765,7 @@ extension BrowserSession: WKNavigationDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         synchronizeMetadata()
         isLoading = false
-        errorMessage = "The webpage stopped responding. Reload it to continue."
+        errorMessage = String(localized: "The webpage stopped responding. Reload it to continue.")
     }
 }
 

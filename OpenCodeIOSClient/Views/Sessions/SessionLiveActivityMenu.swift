@@ -12,7 +12,7 @@ struct SessionLiveActivityMenu: View {
                     facade.setLiveActivityAutoStartEnabled(!facade.settingsSnapshot.isLiveActivityAutoStartEnabled)
                 } label: {
                     Label(
-                        facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "Disable Auto-Start" : "Enable Auto-Start",
+                        autoStartActionTitle,
                         systemImage: facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "bolt.slash" : "bolt.badge.a"
                     )
                 }
@@ -25,5 +25,9 @@ struct SessionLiveActivityMenu: View {
 
     private var toolbarSymbolName: String {
         facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "bolt.badge.a" : "waveform.badge.plus"
+    }
+
+    private var autoStartActionTitle: LocalizedStringResource {
+        facade.settingsSnapshot.isLiveActivityAutoStartEnabled ? "Disable Auto-Start" : "Enable Auto-Start"
     }
 }

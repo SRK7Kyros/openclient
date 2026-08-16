@@ -3,6 +3,7 @@ import UIKit
 
 struct ActivityView: View {
     @ObservedObject var facade: ActivityFacade
+    let connection: ConnectionFacade
     let onSessionChosen: () -> Void
     @State private var excludedProjectIDs: Set<String> = []
     @State private var isShowingSettings = false
@@ -46,7 +47,7 @@ struct ActivityView: View {
             }
         }
         .sheet(isPresented: $isShowingSettings) {
-            ActivitySettingsSheet(facade: facade)
+            ActivitySettingsSheet(facade: facade, connection: connection)
                 .presentationDetents([.medium])
         }
         .task {
@@ -109,11 +110,21 @@ struct ActivityView: View {
 
 private struct ActivitySettingsSheet: View {
     @ObservedObject var facade: ActivityFacade
+    let connection: ConnectionFacade
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink {
+                        RootConfigurationsView(facade: connection)
+                    } label: {
+                        Label("Global Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("activity.settings.global-settings")
+                }
+
                 Section {
                     Toggle(
                         "Show Last User Message",
@@ -215,15 +226,21 @@ private struct ActivityContent: View, Equatable {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } else if visibleRowsAreEmpty {
-                ContentUnavailableView(
-                    allProjectsExcluded ? "No Projects Selected" : "No Matching Activity",
-                    systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text(
-                        allProjectsExcluded
-                            ? "Select at least one project from the filter menu."
-                            : "No recent sessions belong to the selected projects."
-                    )
-                )
+                Group {
+                    if allProjectsExcluded {
+                        ContentUnavailableView(
+                            "No Projects Selected",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text("Select at least one project from the filter menu.")
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            "No Matching Activity",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text("No recent sessions belong to the selected projects.")
+                        )
+                    }
+                }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } else {
@@ -329,7 +346,7 @@ private struct ActivityContent: View, Equatable {
                             Task { await facade.toggleLiveActivity(row) }
                         } label: {
                             Label(
-                                row.isLiveActivityActive ? "Stop Live" : "Live",
+                                row.isLiveActivityActive ? LocalizedStringResource("Stop Live") : LocalizedStringResource("Live"),
                                 systemImage: row.isLiveActivityActive ? "waveform.slash" : "waveform"
                             )
                         }
@@ -420,7 +437,7 @@ struct ActivitySessionRow: View {
 
                 VStack(alignment: .trailing, spacing: 4) {
                     ActivityStatusPill(
-                        title: row.isHydrating && !row.needsInput ? "Updating" : row.statusTitle,
+                        title: row.isHydrating && !row.needsInput ? Text("Updating") : Text(row.statusTitle),
                         isWorking: row.isWorking,
                         isHydrating: row.isHydrating,
                         needsInput: row.needsInput
@@ -495,7 +512,7 @@ struct ActivitySessionRow: View {
     private var title: String {
         guard let title = row.recent.session.title?.trimmingCharacters(in: .whitespacesAndNewlines),
               !title.isEmpty else {
-            return "Untitled Session"
+            return String(localized: "Untitled Session")
         }
         return title
     }
@@ -522,21 +539,24 @@ struct SessionRelativeTimeText: View {
         let interval = now.timeIntervalSince(date)
         let isFuture = interval < 0
         let seconds = abs(interval)
-        guard seconds >= 60 else { return "Now" }
+        guard seconds >= 60 else { return String(localized: "Now") }
 
         let value: Int
         let unit: String
         if seconds < 3_600 {
             value = max(1, Int(seconds / 60))
-            unit = "m"
+            unit = String(localized: "m", comment: "Abbreviated unit for minutes in a compact relative timestamp.")
         } else if seconds < 86_400 {
             value = max(1, Int(seconds / 3_600))
-            unit = "h"
+            unit = String(localized: "h", comment: "Abbreviated unit for hours in a compact relative timestamp.")
         } else {
             value = max(1, Int(seconds / 86_400))
-            unit = "d"
+            unit = String(localized: "d", comment: "Abbreviated unit for days in a compact relative timestamp.")
         }
-        return isFuture ? "in \(value)\(unit)" : "\(value)\(unit) ago"
+        if isFuture {
+            return String(localized: "in \(value)\(unit)", comment: "Compact relative time in the future. The first value is a number and the second is the localized abbreviated unit (m, h, or d).")
+        }
+        return String(localized: "\(value)\(unit) ago", comment: "Compact relative time in the past. The first value is a number and the second is the localized abbreviated unit (m, h, or d).")
     }
 }
 
@@ -702,7 +722,7 @@ struct ActivityTailPreview: View {
 }
 
 private struct ActivityStatusPill: View {
-    let title: String
+    let title: Text
     let isWorking: Bool
     let isHydrating: Bool
     let needsInput: Bool
@@ -717,7 +737,7 @@ private struct ActivityStatusPill: View {
                     .fill(Color.secondary.opacity(0.55))
                     .frame(width: 6, height: 6)
             }
-            Text(title)
+            title
         }
         .font(.caption2.weight(.bold))
         .foregroundStyle(

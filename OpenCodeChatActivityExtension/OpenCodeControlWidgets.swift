@@ -70,8 +70,8 @@ private struct OpenCodeControlPayload {
         )
 
         return OpenCodeControlPayload(
-            title: "New Session",
-            status: project?.title ?? "Choose project",
+            title: String(localized: "New Session"),
+            status: project?.title ?? String(localized: "Choose project"),
             url: url
         )
     }
@@ -95,10 +95,10 @@ private struct OpenCodeControlPayload {
             reasoningVariant: reasoning
         )
 
-        let title = command.map { "/\($0.name)" } ?? "Slash Command"
+        let title = command.map { "/\($0.name)" } ?? String(localized: "Slash Command")
         return OpenCodeControlPayload(
             title: title,
-            status: project?.title ?? "Choose command",
+            status: project?.title ?? String(localized: "Choose command"),
             url: url
         )
     }

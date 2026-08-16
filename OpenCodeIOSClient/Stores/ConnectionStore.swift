@@ -8,7 +8,7 @@ enum OpenClientConnectionPhase: String, Equatable, Sendable {
     case preparingInterface
     case startingLiveUpdates
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .idle:
             return "Ready"
@@ -23,7 +23,7 @@ enum OpenClientConnectionPhase: String, Equatable, Sendable {
         }
     }
 
-    var detail: String {
+    var detail: LocalizedStringResource {
         switch self {
         case .idle:
             return "Waiting for coordinates."

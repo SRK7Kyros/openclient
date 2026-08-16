@@ -3,7 +3,7 @@ import WidgetKit
 
 struct OpenCodeSessionsWidgetEntry: TimelineEntry {
     let date: Date
-    let title: String
+    let title: LocalizedStringResource
     let serverName: String?
     let mediumSession: OpenCodeWidgetSessionSnapshot?
     let largeSessions: [OpenCodeWidgetSessionSnapshot]
@@ -79,7 +79,7 @@ struct OpenCodeSessionsTimelineProvider: TimelineProvider {
 }
 
 private extension OpenCodeSessionsTimelineProvider.Source {
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .recent:
             return "Recent Sessions"
@@ -94,13 +94,13 @@ private extension OpenCodeWidgetSessionSnapshot {
         id: "preview-session",
         serverID: "preview-server",
         projectID: "preview-project",
-        title: "Widget dashboard polish",
+        title: String(localized: "Widget dashboard polish"),
         projectLabel: "openclient",
         directory: "/Users/nick/Code/openclient",
         workspaceID: nil,
         status: .working,
         summaryKind: .snippet,
-        summaryText: "Tighten the session dashboard rows and line wrapping for the large widget.",
+        summaryText: String(localized: "Tighten the session dashboard rows and line wrapping for the large widget."),
         updatedAt: Date().addingTimeInterval(-420),
         lastActiveAt: Date().addingTimeInterval(-420),
         isPinned: true,
@@ -113,7 +113,7 @@ private extension OpenCodeWidgetSessionSnapshot {
             id: "preview-permission",
             serverID: "preview-server",
             projectID: "preview-project",
-            title: "Release prep",
+            title: String(localized: "Release prep"),
             projectLabel: "opencode",
             directory: "/Users/nick/Code/opencode",
             workspaceID: nil,
@@ -129,13 +129,13 @@ private extension OpenCodeWidgetSessionSnapshot {
             id: "preview-question",
             serverID: "preview-server",
             projectID: "preview-project",
-            title: "Widget copy",
+            title: String(localized: "Widget copy"),
             projectLabel: "docs",
             directory: "/Users/nick/Code/docs",
             workspaceID: nil,
             status: .needsAction,
             summaryKind: .question,
-            summaryText: "Which session summary should be highlighted first?",
+            summaryText: String(localized: "Which session summary should be highlighted first?"),
             updatedAt: Date().addingTimeInterval(-900),
             lastActiveAt: Date().addingTimeInterval(-900),
             isPinned: false,

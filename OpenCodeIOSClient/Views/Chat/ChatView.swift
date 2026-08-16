@@ -689,7 +689,7 @@ fileprivate enum AppleIntelligenceInstructionTab: String, CaseIterable, Identifi
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .user:
             return "User Prompt"
@@ -714,7 +714,7 @@ private struct MessageDebugPayload: Identifiable {
 
 private struct CompactionSummaryPayload: Identifiable {
     let id: String
-    let title: String
+    let title: LocalizedStringResource
     let summary: String
 }
 
@@ -1528,8 +1528,8 @@ private struct BottomRefreshRenderSnapshot {
 }
 
 private struct ChatProgressOverlaySnapshot {
-    let title: String
-    let accessibilityLabel: String
+    let title: LocalizedStringResource
+    let accessibilityLabel: LocalizedStringResource
 }
 
 private enum ChatOverlayKind {
@@ -1595,9 +1595,9 @@ enum ChatPreviousUserContextPolicy {
         }
 
         let attachmentCount = message.parts.lazy.filter { $0.type == "file" }.count
-        if attachmentCount == 1 { return "Sent an attachment" }
-        if attachmentCount > 1 { return "Sent \(attachmentCount) attachments" }
-        return "Previous user message"
+        if attachmentCount == 1 { return String(localized: "Sent an attachment") }
+        if attachmentCount > 1 { return String(localized: "Sent \(attachmentCount) attachments") }
+        return String(localized: "Previous user message")
     }
 
     private static func textPart(
@@ -2055,7 +2055,7 @@ struct ChatView: View {
 
         return session(matching: sessionID) ?? OpenCodeSession(
             id: sessionID,
-            title: "Session",
+            title: String(localized: "Session"),
             workspaceID: nil,
             directory: nil,
             projectID: nil,
@@ -3506,8 +3506,9 @@ struct ChatView: View {
 
     @ViewBuilder
     private func messageChunkContextMenu(for message: OpenCodeMessageEnvelope) -> some View {
+        let agent = message.info.agent?.nilIfEmpty ?? String(localized: "Default")
         Button {} label: {
-            Label("Agent: \(message.info.agent?.nilIfEmpty ?? "Default")", systemImage: "person.crop.circle")
+            Label("Agent: \(agent)", systemImage: "person.crop.circle")
         }
         .disabled(true)
 
@@ -3938,7 +3939,7 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: copiedTranscript ? "checkmark.doc" : "doc.on.doc")
                 }
-                .accessibilityLabel(copiedTranscript ? "Copied Transcript" : "Copy Transcript")
+                .accessibilityLabel(copiedTranscript ? LocalizedStringResource("Copied Transcript") : LocalizedStringResource("Copy Transcript"))
             }
 
             ToolbarItem(placement: .opencodeTrailing) {
@@ -4315,11 +4316,11 @@ private struct SessionContextUsageToolbarButton: View {
     }
 
     private var accessibilityValue: String {
-        guard let context = metrics.context else { return "No token usage yet" }
+        guard let context = metrics.context else { return String(localized: "No token usage yet") }
         if let usage = context.usage {
-            return "\(usage)% used, \(context.total) tokens"
+            return String(localized: "\(usage)% used, \(context.total) tokens")
         }
-        return "\(context.total) tokens"
+        return String(localized: "\(context.total) tokens")
     }
 }
 
@@ -4480,7 +4481,7 @@ private struct SessionContextMetricsSheet: View {
         return Date(timeIntervalSince1970: seconds).formatted(date: .abbreviated, time: .shortened)
     }
 
-    private func breakdownLabel(for kind: OpenCodeSessionContextBreakdownSegment.Kind) -> String {
+    private func breakdownLabel(for kind: OpenCodeSessionContextBreakdownSegment.Kind) -> LocalizedStringResource {
         switch kind {
         case .system:
             return "System"
@@ -4562,9 +4563,15 @@ private struct CompactionBoundaryRow: View {
                     Image(systemName: "rectangle.compress.vertical")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                Text(isStreaming ? "Compacting session" : "Session compacted")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
+                if isStreaming {
+                    Text("Compacting session")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                } else {
+                    Text("Session compacted")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
                 if hasSummary && !isStreaming {
                     Text("View context")
                         .font(.caption2.weight(.semibold))
@@ -4588,7 +4595,13 @@ private struct CompactionBoundaryRow: View {
                 .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
-        .accessibilityLabel(isStreaming ? "Compacting session" : (hasSummary ? "Session compacted. View context." : "Session compacted"))
+        .accessibilityLabel(accessibilityTitle)
+    }
+
+    private var accessibilityTitle: LocalizedStringResource {
+        if isStreaming { return "Compacting session" }
+        if hasSummary { return "Session compacted. View context." }
+        return "Session compacted"
     }
 }
 
@@ -4609,7 +4622,7 @@ private struct CompactionSummarySheet: View {
         .opencodeInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .opencodeTrailing) {
-                Button(copiedSummary ? "Copied" : "Copy") {
+                Button(copiedSummary ? LocalizedStringResource("Copied") : LocalizedStringResource("Copy")) {
                     OpenCodeClipboard.copy(payload.summary)
                     copiedSummary = true
                 }
@@ -4634,7 +4647,7 @@ private struct FindPlaceWeatherDebugSheet: View {
 
                 if let weather = game.weather {
                     Section("WeatherKit Pull") {
-                        labeledValue("Status", weather.didUseWeatherKit ? "Success" : "Fallback")
+                        labeledValue("Status", weather.didUseWeatherKit ? String(localized: "Success") : String(localized: "Fallback"))
                         labeledValue("Provider", weather.provider)
                         labeledValue("Requested", weather.requestedAt.formatted(date: .abbreviated, time: .standard))
                         if let errorDomain = weather.errorDomain {
@@ -4651,9 +4664,15 @@ private struct FindPlaceWeatherDebugSheet: View {
                     }
 
                     Section("Diagnostic") {
-                        Text(weather.errorDescription ?? "WeatherKit request succeeded.")
-                            .font(.system(.footnote, design: .monospaced))
-                            .textSelection(.enabled)
+                        if let errorDescription = weather.errorDescription {
+                            Text(errorDescription)
+                                .font(.system(.footnote, design: .monospaced))
+                                .textSelection(.enabled)
+                        } else {
+                            Text("WeatherKit request succeeded.")
+                                .font(.system(.footnote, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
                     }
                 } else {
                     Section("WeatherKit Pull") {
@@ -4672,7 +4691,7 @@ private struct FindPlaceWeatherDebugSheet: View {
         .opencodeInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .opencodeTrailing) {
-                Button(copiedDebugText ? "Copied" : "Copy") {
+                Button(copiedDebugText ? LocalizedStringResource("Copied") : LocalizedStringResource("Copy")) {
                     OpenCodeClipboard.copy(debugText)
                     copiedDebugText = true
                 }
@@ -4682,7 +4701,7 @@ private struct FindPlaceWeatherDebugSheet: View {
     }
 
     @ViewBuilder
-    private func labeledValue(_ label: String, _ value: String) -> some View {
+    private func labeledValue(_ label: LocalizedStringResource, _ value: String) -> some View {
         HStack {
             Text(label)
             Spacer()
@@ -4697,15 +4716,15 @@ private struct FindPlaceWeatherDebugSheet: View {
         guard let game else { return "" }
         let weather = game.weather
         return [
-            "City: \(game.city.name), \(game.city.country)",
-            "Coordinates: \(game.city.latitude), \(game.city.longitude)",
-            "Status: \(weather?.didUseWeatherKit == true ? "Success" : "Fallback/Unavailable")",
-            "Provider: \(weather?.provider ?? "unknown")",
-            "Requested: \(weather?.requestedAt.formatted(date: .abbreviated, time: .standard) ?? "unknown")",
-            "Error Domain: \(weather?.errorDomain ?? "none")",
-            "Error Code: \(weather?.errorCode.map(String.init) ?? "none")",
-            "Clue: \(weather?.text ?? "unknown")",
-            "Diagnostic: \(weather?.errorDescription ?? "WeatherKit request succeeded.")"
+            String(localized: "City: \(game.city.name), \(game.city.country)"),
+            String(localized: "Coordinates: \(game.city.latitude), \(game.city.longitude)"),
+            String(localized: "Status: \(weather?.didUseWeatherKit == true ? String(localized: "Success") : String(localized: "Fallback/Unavailable"))"),
+            String(localized: "Provider: \(weather?.provider ?? String(localized: "unknown"))"),
+            String(localized: "Requested: \(weather?.requestedAt.formatted(date: .abbreviated, time: .standard) ?? String(localized: "unknown"))"),
+            String(localized: "Error Domain: \(weather?.errorDomain ?? String(localized: "none"))"),
+            String(localized: "Error Code: \(weather?.errorCode.map(String.init) ?? String(localized: "none"))"),
+            String(localized: "Clue: \(weather?.text ?? String(localized: "unknown"))"),
+            String(localized: "Diagnostic: \(weather?.errorDescription ?? String(localized: "WeatherKit request succeeded."))")
         ].joined(separator: "\n")
     }
 }
@@ -4729,7 +4748,7 @@ private struct MessageDebugSheet: View {
         .opencodeInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .opencodeTrailing) {
-                Button(copiedJSON ? "Copied" : "Copy") {
+                Button(copiedJSON ? LocalizedStringResource("Copied") : LocalizedStringResource("Copy")) {
                     OpenCodeClipboard.copy(payload.json)
                     copiedJSON = true
                 }

@@ -368,9 +368,9 @@ enum OpenClientBridgeDiscoveryError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidServerURL:
-            return "The OpenCode server URL cannot be used for OpenClient bridge discovery."
+            return String(localized: "The OpenCode server URL cannot be used for OpenClient bridge discovery.")
         case .notFound:
-            return "No OpenClient plugin bridge was found on ports 4070 through 4090."
+            return String(localized: "No OpenClient plugin bridge was found on ports 4070 through 4090.")
         }
     }
 }

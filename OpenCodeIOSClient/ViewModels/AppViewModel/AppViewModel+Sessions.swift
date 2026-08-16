@@ -14,13 +14,13 @@ private enum OpenCodeWorktreeOperationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingProject:
-            return "No git project is selected."
+            return String(localized: "No git project is selected.")
         case .primaryWorkspace:
-            return "The primary workspace cannot be reset or deleted."
+            return String(localized: "The primary workspace cannot be reset or deleted.")
         case let .failed(message):
             return message
         case .timedOut:
-            return "OpenCode is still preparing this worktree. Try again in a moment."
+            return String(localized: "OpenCode is still preparing this worktree. Try again in a moment.")
         }
     }
 }
@@ -528,14 +528,14 @@ extension AppViewModel {
         }
 
         guard !isUsingAppleIntelligence else {
-            errorMessage = "Actions require an OpenCode server connection."
+            errorMessage = String(localized: "Actions require an OpenCode server connection.")
             return
         }
 
         guard !isActionRunning(action) else { return }
 
         guard actionCommand(for: action) != nil else {
-            errorMessage = "The /\(action.commandName) command is not available in this project."
+            errorMessage = String(localized: "The /\(action.commandName) command is not available in this project.")
             return
         }
 
@@ -1327,7 +1327,7 @@ extension AppViewModel {
     func compactSession(_ selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async -> Bool {
         guard selectedSession.parentID == nil else {
             appendDebugLog("compact blocked child session=\(debugSessionLabel(selectedSession))")
-            errorMessage = "Compact is only available in root sessions."
+            errorMessage = String(localized: "Compact is only available in root sessions.")
             return false
         }
 
@@ -1338,7 +1338,7 @@ extension AppViewModel {
 
         guard let modelReference = effectiveModelReference(for: selectedSession) else {
             appendDebugLog("compact blocked missing model session=\(debugSessionLabel(selectedSession))")
-            errorMessage = "Select a model before compacting this session."
+            errorMessage = String(localized: "Select a model before compacting this session.")
             return false
         }
 
@@ -2040,7 +2040,7 @@ extension AppViewModel {
             return session.displayTitle(fallback: "New Session").replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
         }
 
-        return "New Session"
+        return String(localized: "New Session")
     }
 
     private func mergeSessions(_ sessions: [OpenCodeSession]) {
@@ -2113,7 +2113,7 @@ extension AppViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
         guard let workspace = activeAppleIntelligenceWorkspace else {
-            errorMessage = "No Apple Intelligence workspace is active."
+            errorMessage = String(localized: "No Apple Intelligence workspace is active.")
             return
         }
 
@@ -2187,7 +2187,7 @@ extension AppViewModel {
                     messageID: assistantMessageID,
                     partID: assistantPartID,
                     sessionID: session.id,
-                    text: appleIntelligenceAvailabilitySummary ?? "Apple Intelligence is unavailable."
+                    text: appleIntelligenceAvailabilitySummary ?? String(localized: "Apple Intelligence is unavailable."),
                 )
                 sessionStatuses[session.id] = "idle"
                 isLoading = false
@@ -2200,7 +2200,7 @@ extension AppViewModel {
                     messageID: assistantMessageID,
                     partID: assistantPartID,
                     sessionID: session.id,
-                    text: "Apple Intelligence does not support the current device language or locale for this demo yet."
+                    text: String(localized: "Apple Intelligence does not support the current device language or locale for this demo yet.")
                 )
                 sessionStatuses[session.id] = "idle"
                 isLoading = false
@@ -2253,10 +2253,10 @@ extension AppViewModel {
                         }
                     }
                 } else {
-                    throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence is unavailable on this OS version."])
+                    throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: String(localized: "Apple Intelligence is unavailable on this OS version.")])
                 }
 #else
-                throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence is unavailable on this build."])
+                throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: String(localized: "Apple Intelligence is unavailable on this build.")])
 #endif
 
                 await MainActor.run {
@@ -2278,7 +2278,7 @@ extension AppViewModel {
                         messageID: assistantMessageID,
                         partID: assistantPartID,
                         sessionID: session.id,
-                        text: "Apple Intelligence error: \(error.localizedDescription)"
+                        text: String(localized: "Apple Intelligence error: \(error.localizedDescription)")
                     )
                     self.persistAppleIntelligenceMessages()
                     self.errorMessage = error.localizedDescription
@@ -2630,7 +2630,7 @@ extension AppViewModel {
             throw NSError(
                 domain: "AppleIntelligence",
                 code: 5,
-                userInfo: [NSLocalizedDescriptionKey: "The saved Apple Intelligence folder is no longer available. Please pick it again."]
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "The saved Apple Intelligence folder is no longer available. Please pick it again.")]
             )
         }
 
@@ -2642,13 +2642,13 @@ extension AppViewModel {
 #if canImport(FoundationModels)
         let model = SystemLanguageModel.default
         guard model.isAvailable else {
-            throw NSError(domain: "AppleIntelligence", code: 1, userInfo: [NSLocalizedDescriptionKey: appleIntelligenceAvailabilitySummary ?? "Apple Intelligence is unavailable."])
+            throw NSError(domain: "AppleIntelligence", code: 1, userInfo: [NSLocalizedDescriptionKey: appleIntelligenceAvailabilitySummary ?? String(localized: "Apple Intelligence is unavailable.")])
         }
         guard model.supportsLocale(Locale.current) else {
             throw NSError(
                 domain: "AppleIntelligence",
                 code: 7,
-                userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence does not support the current device language/locale for this model."]
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "Apple Intelligence does not support the current device language/locale for this model.")]
             )
         }
 
@@ -2683,7 +2683,7 @@ extension AppViewModel {
         }
         return session.streamResponse(to: prompt)
 #else
-        throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence is unavailable on this build."])
+        throw NSError(domain: "AppleIntelligence", code: 2, userInfo: [NSLocalizedDescriptionKey: String(localized: "Apple Intelligence is unavailable on this build.")])
 #endif
     }
 }
@@ -2817,7 +2817,7 @@ private struct AppleIntelligenceWorkspaceToolbox: Sendable {
 
         let values = try? standardized.resourceValues(forKeys: [.isDirectoryKey])
         if values?.isDirectory == true {
-            throw NSError(domain: "AppleIntelligence", code: 4, userInfo: [NSLocalizedDescriptionKey: "Expected a file path, but received a directory."])
+            throw NSError(domain: "AppleIntelligence", code: 4, userInfo: [NSLocalizedDescriptionKey: String(localized: "Expected a file path, but received a directory.")])
         }
         return standardized
     }

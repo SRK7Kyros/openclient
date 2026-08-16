@@ -48,7 +48,7 @@ extension AppViewModel {
 
     func handleLiveActivityURL(_ url: URL) async {
         guard let deepLink = LiveActivityCoordinator.deepLink(from: url) else { return }
-        openURLNavigationMessage = "Opening chat..."
+        openURLNavigationMessage = String(localized: "Opening chat...")
         defer { openURLNavigationMessage = nil }
         appendDebugLog("live activity deep link session=\(deepLink.sessionID) dir=\(debugDirectoryLabel(deepLink.directory)) action=\(deepLink.action)")
 

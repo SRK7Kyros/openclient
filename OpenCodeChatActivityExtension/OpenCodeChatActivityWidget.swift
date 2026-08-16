@@ -45,7 +45,7 @@ struct OpenCodeChatActivityWidget: Widget {
                 OpenCodeChatActivityAvatar(title: context.attributes.sessionTitle, size: 20)
             } compactTrailing: {
                 Circle()
-                    .fill(statusColor(for: context.state.status))
+                    .fill(OpenCodeChatActivityDisplayStatus(rawValue: context.state.status).color)
                     .frame(width: 10, height: 10)
             } minimal: {
                 Image(systemName: "bubble.left.fill")
@@ -57,44 +57,29 @@ struct OpenCodeChatActivityWidget: Widget {
                     workspaceID: context.attributes.workspaceID
                 )
             )
-            .keylineTint(statusColor(for: displayStatus(for: context)))
+            .keylineTint(displayStatus(for: context).color)
         }
     }
 
     @ViewBuilder
-    private func statusBadge(for status: String) -> some View {
-        Text(status)
+    private func statusBadge(for status: OpenCodeChatActivityDisplayStatus) -> some View {
+        openCodeStatusText(status)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(statusColor(for: status).opacity(0.3), in: Capsule())
+            .background(status.color.opacity(0.3), in: Capsule())
             .overlay {
                 Capsule()
                     .strokeBorder(.white.opacity(0.12), lineWidth: 1)
             }
     }
 
-    private func statusColor(for status: String) -> Color {
-        switch status.lowercased() {
-        case "action":
-            return .orange
-        case "working", "live":
-            return .green
-        case "ready":
-            return .blue
-        case "paused":
-            return .gray
-        default:
-            return .white
-        }
-    }
-
-    private func displayStatus(for context: ActivityViewContext<OpenCodeChatActivityAttributes>) -> String {
+    private func displayStatus(for context: ActivityViewContext<OpenCodeChatActivityAttributes>) -> OpenCodeChatActivityDisplayStatus {
         if context.state.pendingInteractionKind != nil {
-            return "Action"
+            return OpenCodeChatActivityDisplayStatus(rawValue: "action")
         }
-        return context.isStale ? "Paused" : context.state.status
+        return OpenCodeChatActivityDisplayStatus(rawValue: context.isStale ? "paused" : context.state.status)
     }
 }
 
@@ -120,7 +105,7 @@ private struct OpenCodeChatActivityView: View {
 
                     Spacer(minLength: 0)
 
-                    Text(displayStatus)
+                    openCodeStatusText(displayStatus)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(statusColor)
                         .padding(.horizontal, 8)
@@ -138,25 +123,14 @@ private struct OpenCodeChatActivityView: View {
     }
 
     private var statusColor: Color {
-        switch displayStatus.lowercased() {
-        case "action":
-            return .orange
-        case "live":
-            return .green
-        case "ready":
-            return .blue
-        case "paused":
-            return .gray
-        default:
-            return .white
-        }
+        displayStatus.color
     }
 
-    private var displayStatus: String {
+    private var displayStatus: OpenCodeChatActivityDisplayStatus {
         if context.state.pendingInteractionKind != nil {
-            return "Action"
+            return OpenCodeChatActivityDisplayStatus(rawValue: "action")
         }
-        return context.isStale ? "Paused" : context.state.status
+        return OpenCodeChatActivityDisplayStatus(rawValue: context.isStale ? "paused" : context.state.status)
     }
 
     @ViewBuilder
@@ -285,7 +259,7 @@ private struct OpenCodeChatActivityActions: View {
         }
     }
 
-    private func actionLink(title: String, destination: URL?, tint: Color) -> some View {
+    private func actionLink(title: LocalizedStringResource, destination: URL?, tint: Color) -> some View {
         Group {
             if let destination {
                 Link(destination: destination) {
@@ -303,7 +277,7 @@ private struct OpenCodeChatActivityActions: View {
         }
     }
 
-    private func permissionButton(title: String, requestID: String, reply: String, tint: Color) -> some View {
+    private func permissionButton(title: LocalizedStringResource, requestID: String, reply: String, tint: Color) -> some View {
         Button(intent: OpenCodeReplyPermissionIntent(
             sessionID: context.attributes.sessionID,
             requestID: requestID,
@@ -330,12 +304,19 @@ private struct OpenCodeChatActivityActions: View {
             directory: context.attributes.directory,
             workspaceID: context.attributes.workspaceID
         )) {
-            actionLabel(title: title, tint: tint)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(tint, in: Capsule())
+                .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
     }
 
-    private func actionLabel(title: String, tint: Color) -> some View {
+    private func actionLabel(title: LocalizedStringResource, tint: Color) -> some View {
         Text(title)
             .font(.caption.weight(.semibold))
             .lineLimit(1)
@@ -346,6 +327,52 @@ private struct OpenCodeChatActivityActions: View {
             .foregroundStyle(.white)
     }
 
+}
+
+private struct OpenCodeChatActivityDisplayStatus {
+    let rawValue: String
+
+    var localizedTitle: LocalizedStringResource? {
+        switch rawValue.lowercased() {
+        case "action":
+            return "Action"
+        case "working":
+            return "Working"
+        case "live":
+            return "Live"
+        case "ready":
+            return "Ready"
+        case "paused":
+            return "Paused"
+        default:
+            return nil
+        }
+    }
+
+    var color: Color {
+        switch rawValue.lowercased() {
+        case "action":
+            return .orange
+        case "working", "live":
+            return .green
+        case "ready":
+            return .blue
+        case "paused":
+            return .gray
+        default:
+            return .white
+        }
+    }
+}
+
+@MainActor
+@ViewBuilder
+private func openCodeStatusText(_ status: OpenCodeChatActivityDisplayStatus) -> some View {
+    if let localizedTitle = status.localizedTitle {
+        Text(localizedTitle)
+    } else {
+        Text(status.rawValue)
+    }
 }
 
 private struct OpenCodeChatActivityAvatar: View {

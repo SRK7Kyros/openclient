@@ -16,7 +16,7 @@ struct AgentToolbarMenu: View {
                     isSelected: agent.name.caseInsensitiveCompare(title) == .orderedSame
                 )
             },
-            accessibilityLabel: "Agent",
+            accessibilityLabel: String(localized: "Agent"),
             accessibilityValue: title,
             accessibilityIdentifier: "chat.toolbar.agent",
             onSelect: onSelectAgent

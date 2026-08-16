@@ -48,11 +48,19 @@ private struct GitDiffContent: View {
                 )
             } else if let path = snapshot.selectedFilePath,
                       OpenCodeFilePreviewSupport.isImagePath(path) {
-                ContentUnavailableView(
-                    snapshot.fileContentErrorMessage == nil ? "Loading Image" : "Preview Unavailable",
-                    systemImage: snapshot.fileContentErrorMessage == nil ? "photo" : "exclamationmark.triangle",
-                    description: Text([relativeGitPath(path), snapshot.fileContentErrorMessage].compactMap { $0 }.joined(separator: "\n\n"))
-                )
+                if snapshot.fileContentErrorMessage == nil {
+                    ContentUnavailableView(
+                        "Loading Image",
+                        systemImage: "photo",
+                        description: Text(relativeGitPath(path))
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Preview Unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text([relativeGitPath(path), snapshot.fileContentErrorMessage].compactMap { $0 }.joined(separator: "\n\n"))
+                    )
+                }
             } else if let diff {
                 OpenCodeUnifiedDiffView(
                     diff: OpenCodeUnifiedDiffData(
@@ -285,7 +293,7 @@ struct OpenCodeUnifiedDiffView: View {
         .background(OpenCodePlatformColor.secondaryGroupedBackground)
     }
 
-    private func statusTitle(_ status: String?) -> String {
+    private func statusTitle(_ status: String?) -> LocalizedStringResource {
         switch status {
         case "added":
             return "Added"

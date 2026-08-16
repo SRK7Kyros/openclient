@@ -19,13 +19,13 @@ enum OpenCodeWorkspaceOperation: Equatable, Sendable {
     var title: String {
         switch self {
         case .preparing:
-            return "Preparing"
+            return String(localized: "Preparing")
         case .resetting:
-            return "Resetting"
+            return String(localized: "Resetting")
         case .deleting:
-            return "Deleting"
+            return String(localized: "Deleting")
         case .failed:
-            return "Failed"
+            return String(localized: "Failed")
         }
     }
 }
@@ -463,12 +463,12 @@ final class SessionListStore: ObservableObject {
         if let name = project.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        if project.id == "global" { return "Global" }
+        if project.id == "global" { return String(localized: "Global") }
         return directoryTitle(project.worktree)
     }
 
     private static func directoryTitle(_ directory: String?) -> String {
-        guard let directory, !directory.isEmpty else { return "Global" }
+        guard let directory, !directory.isEmpty else { return String(localized: "Global") }
         return URL(fileURLWithPath: directory).lastPathComponent
     }
 

@@ -17,15 +17,15 @@ enum OpenClientVisualPreviewError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidMIMEType:
-            return "The visual preview must be a JPEG image."
+            return String(localized: "The visual preview must be a JPEG image.")
         case .invalidDataURL:
-            return "The visual preview data URL is invalid."
+            return String(localized: "The visual preview data URL is invalid.")
         case .exceedsSizeLimit:
-            return "The visual preview exceeds the supported size limit."
+            return String(localized: "The visual preview exceeds the supported size limit.")
         case .invalidJPEG:
-            return "The visual preview is not a valid JPEG image."
+            return String(localized: "The visual preview is not a valid JPEG image.")
         case .invalidDimensions:
-            return "The visual preview dimensions are invalid."
+            return String(localized: "The visual preview dimensions are invalid.")
         }
     }
 }

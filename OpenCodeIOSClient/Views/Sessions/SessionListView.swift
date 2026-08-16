@@ -91,12 +91,22 @@ private struct SessionListContent: View, Equatable {
                             .listRowSeparator(.hidden)
                     }
                     } else if snapshot.unpinnedRows.isEmpty {
-                        Text(snapshot.isEmpty ? (snapshot.isReadOnly ? "No downloaded sessions." : "Create a session to start chatting.") : "All visible sessions are pinned.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                        Group {
+                            if snapshot.isEmpty {
+                                if snapshot.isReadOnly {
+                                    Text("No downloaded sessions.")
+                                } else {
+                                    Text("Create a session to start chatting.")
+                                }
+                            } else {
+                                Text("All visible sessions are pinned.")
+                            }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     } else {
                         ForEach(snapshot.unpinnedRows) { row in
                             sessionRow(for: row)
@@ -112,7 +122,7 @@ private struct SessionListContent: View, Equatable {
                         } label: {
                             HStack {
                                 Spacer(minLength: 0)
-                                Text(snapshot.isLoadingMoreSessions ? "Loading..." : "Show More")
+                                Text(loadMoreTitle(isLoading: snapshot.isLoadingMoreSessions))
                                     .font(.subheadline.weight(.semibold))
                                 Spacer(minLength: 0)
                             }
@@ -245,7 +255,7 @@ private struct SessionListContent: View, Equatable {
                 } label: {
                     HStack {
                         Spacer(minLength: 0)
-                        Text(section.isLoading ? "Loading..." : "Show More")
+                        Text(loadMoreTitle(isLoading: section.isLoading))
                             .font(.subheadline.weight(.semibold))
                         Spacer(minLength: 0)
                     }
@@ -422,7 +432,7 @@ private struct SessionListContent: View, Equatable {
             Task { await facade.toggleLiveActivity(for: session) }
         } label: {
             Label(
-                facade.isLiveActivityActive(for: session) ? "Stop Live" : "Live",
+                liveActivityActionTitle(isActive: facade.isLiveActivityActive(for: session)),
                 systemImage: facade.isLiveActivityActive(for: session) ? "waveform.slash" : "waveform"
             )
         }
@@ -524,9 +534,9 @@ private struct ProjectActionChip: View {
         phase == nil ? .orange : .accentColor
     }
 
-    private var subtitle: String {
+    private var subtitle: LocalizedStringResource {
         if let phase {
-            return phase.title
+            return actionRunPhaseTitle(phase)
         }
         if command == nil {
             return "Unavailable"
@@ -616,10 +626,13 @@ private struct ProjectUsageCTA: View {
         .accessibilityIdentifier("project.usage.cta")
     }
 
-    private var usageSummary: String {
+    private var usageSummary: LocalizedStringResource {
         let prompts = facade.remainingFreePromptsToday
         let sessions = facade.remainingFreeSessions
-        return "\(prompts) \(prompts == 1 ? "message" : "messages") today, \(sessions) \(sessions == 1 ? "session" : "sessions") left"
+        return LocalizedStringResource(
+            "Messages today: \(prompts) · Sessions left: \(sessions)",
+            comment: "Free-plan usage summary with remaining messages today and remaining sessions."
+        )
     }
 }
 
@@ -636,12 +649,18 @@ private enum WorkspaceActionConfirmation: Identifiable, Equatable {
         }
     }
 
-    var message: String {
+    var message: LocalizedStringResource {
         switch self {
         case let .reset(_, title):
-            return "Reset \(title) to the default branch and archive its sessions. Local changes in that worktree will be discarded."
+            return LocalizedStringResource(
+                "Reset \(title) to the default branch and archive its sessions. Local changes in that worktree will be discarded.",
+                comment: "Destructive worktree reset warning. The variable is the user-visible workspace name."
+            )
         case let .delete(_, title):
-            return "Delete \(title), remove its git worktree, and delete its branch. This cannot be undone."
+            return LocalizedStringResource(
+                "Delete \(title), remove its git worktree, and delete its branch. This cannot be undone.",
+                comment: "Destructive worktree deletion warning. The variable is the user-visible workspace name."
+            )
         }
     }
 }
@@ -814,7 +833,7 @@ private struct WorkspaceSectionHeader: View {
 }
 
 private struct SessionSectionHeader: View {
-    let title: String
+    let title: LocalizedStringResource
     let systemImage: String
     var accessory: String?
 
@@ -832,5 +851,20 @@ private struct SessionSectionHeader: View {
             }
         }
         .textCase(nil)
+    }
+}
+
+private func loadMoreTitle(isLoading: Bool) -> LocalizedStringResource {
+    isLoading ? "Loading..." : "Show More"
+}
+
+private func liveActivityActionTitle(isActive: Bool) -> LocalizedStringResource {
+    isActive ? "Stop Live" : "Live"
+}
+
+private func actionRunPhaseTitle(_ phase: OpenCodeActionRunPhase) -> LocalizedStringResource {
+    switch phase {
+    case .runningCommand: "Running command"
+    case .checkingResult: "Checking result"
     }
 }

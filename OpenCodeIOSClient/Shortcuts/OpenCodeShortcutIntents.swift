@@ -27,6 +27,9 @@ struct OpenCodeGetProjectsShortcutIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<[OpenCodeShortcutProjectEntity]> & ProvidesDialog {
         let projects = try await OpenCodeShortcutService().projects(connection: connection)
+        if projects.count == 1 {
+            return .result(value: projects, dialog: IntentDialog("Found \(projects.count) project."))
+        }
         return .result(value: projects, dialog: IntentDialog("Found \(projects.count) projects."))
     }
 }
@@ -43,6 +46,9 @@ struct OpenCodeGetSessionsShortcutIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<[OpenCodeShortcutSessionEntity]> & ProvidesDialog {
         let sessions = try await OpenCodeShortcutService().sessions(connection: connection, project: project)
+        if sessions.count == 1 {
+            return .result(value: sessions, dialog: IntentDialog("Found \(sessions.count) session."))
+        }
         return .result(value: sessions, dialog: IntentDialog("Found \(sessions.count) sessions."))
     }
 }
@@ -58,6 +64,9 @@ struct OpenCodeGetModelsShortcutIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<[OpenCodeShortcutModelEntity]> & ProvidesDialog {
         let models = try await OpenCodeShortcutService().models(connection: connection)
+        if models.count == 1 {
+            return .result(value: models, dialog: IntentDialog("Found \(models.count) model."))
+        }
         return .result(value: models, dialog: IntentDialog("Found \(models.count) models."))
     }
 }

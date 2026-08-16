@@ -15,7 +15,7 @@ struct OpenClientDebugEntitlementControls: View {
                 set: { commerce.debugEntitlementOverride = $0 }
             )) {
                 ForEach(OpenClientDebugEntitlementOverride.allCases) { option in
-                    Text(option.title).tag(option)
+                    Text(debugEntitlementTitle(option)).tag(option)
                 }
             }
             .pickerStyle(.segmented)
@@ -31,6 +31,15 @@ struct OpenClientDebugEntitlementControls: View {
             }
             .font(.caption.weight(.medium))
         }
+    }
+}
+
+private func debugEntitlementTitle(_ option: OpenClientDebugEntitlementOverride) -> LocalizedStringResource {
+    switch option {
+    case .system: "System"
+    case .free: "Free"
+    case .unlocked: "Unlocked"
+    case .limitReached: "Limit Reached"
     }
 }
 #endif

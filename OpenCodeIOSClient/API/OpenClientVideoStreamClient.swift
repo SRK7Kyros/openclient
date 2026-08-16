@@ -116,7 +116,7 @@ actor OpenClientVideoStreamClient: OpenClientVideoStreamTransport {
            !response.error.isEmpty {
             return response.error
         }
-        return "The video service returned HTTP \(status)."
+        return String(localized: "The video service returned HTTP \(status).")
     }
 }
 
@@ -129,11 +129,11 @@ enum OpenClientVideoStreamError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint:
-            return "The OpenClient plugin video endpoint is invalid."
+            return String(localized: "The OpenClient plugin video endpoint is invalid.")
         case .invalidResponse:
-            return "The OpenClient plugin returned an invalid video response."
+            return String(localized: "The OpenClient plugin returned an invalid video response.")
         case .unavailable:
-            return "Connect to the OpenClient plugin before playing this video."
+            return String(localized: "Connect to the OpenClient plugin before playing this video.")
         case .server(let message):
             return message
         }

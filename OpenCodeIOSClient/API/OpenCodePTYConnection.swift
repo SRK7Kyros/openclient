@@ -4,7 +4,7 @@ enum OpenCodePTYConnectionError: LocalizedError {
     case notConnected
 
     var errorDescription: String? {
-        "The terminal is not connected."
+        String(localized: "The terminal is not connected.")
     }
 }
 

@@ -53,7 +53,7 @@ extension AppViewModel {
             } else {
                 appendDebugLog("find-place WeatherKit success city=\(city.id)")
             }
-            let session = try await client.createSession(title: "Find the Place", directory: nil)
+            let session = try await client.createSession(title: String(localized: "Find the Place"), directory: nil)
             upsertVisibleSession(session)
             try await reloadSessions()
             upsertVisibleSession(session)
@@ -108,7 +108,7 @@ extension AppViewModel {
             try await reloadSessions()
             await loadComposerOptions()
 
-            let session = try await client.createSession(title: "Find the Bug", directory: nil)
+            let session = try await client.createSession(title: String(localized: "Find the Bug"), directory: nil)
             upsertVisibleSession(session)
             try await reloadSessions()
             upsertVisibleSession(session)

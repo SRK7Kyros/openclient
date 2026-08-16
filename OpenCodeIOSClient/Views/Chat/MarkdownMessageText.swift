@@ -1031,7 +1031,7 @@ private struct OpenClientMessageLinkPreview: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: 360)
-        .accessibilityLabel(metadata?.title ?? "Open link to \(hostLabel)")
+        .accessibilityLabel(accessibilityTitle)
         .accessibilityHint("Opens in your browser")
         .onAppear {
             fetchMetadataIfNeeded()
@@ -1052,10 +1052,17 @@ private struct OpenClientMessageLinkPreview: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(didFinishLoading ? url.absoluteString : "Loading preview...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                if didFinishLoading {
+                    Text(url.absoluteString)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else {
+                    Text("Loading preview...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             Spacer(minLength: 0)
@@ -1070,6 +1077,13 @@ private struct OpenClientMessageLinkPreview: View {
 
     private var hostLabel: String {
         url.host(percentEncoded: false) ?? url.absoluteString
+    }
+
+    private var accessibilityTitle: Text {
+        if let title = metadata?.title {
+            return Text(title)
+        }
+        return Text("Open link to \(hostLabel)")
     }
 
     private func fetchMetadataIfNeeded() {

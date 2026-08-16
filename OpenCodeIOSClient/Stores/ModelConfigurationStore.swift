@@ -185,11 +185,11 @@ final class ModelConfigurationStore: ObservableObject {
 
     func sourceTitle(for provider: OpenCodeProvider) -> String {
         switch provider.source {
-        case "env": return "Environment"
-        case "api": return "API Key"
-        case "config": return "Config"
-        case "custom": return "Custom"
-        default: return connectedProviderIDs.contains(provider.id) ? "Connected" : "Available"
+        case "env": return String(localized: "Environment")
+        case "api": return String(localized: "API Key")
+        case "config": return String(localized: "Config")
+        case "custom": return String(localized: "Custom")
+        default: return connectedProviderIDs.contains(provider.id) ? String(localized: "Connected") : String(localized: "Available")
         }
     }
 
@@ -303,17 +303,17 @@ final class ModelConfigurationStore: ObservableObject {
     var configurationReasoningVariants: [String] { reasoningVariants(for: configurationEffectiveModelReference) }
 
     var configurationModelTitle: String {
-        guard let reference = newSessionDefaultModelReference(), let model = model(for: reference) else { return "System Default" }
+        guard let reference = newSessionDefaultModelReference(), let model = model(for: reference) else { return String(localized: "System Default") }
         return model.name
     }
 
     var configurationAgentTitle: String {
-        guard let name = newSessionDefaults.agentName, selectableAgents.contains(where: { $0.name == name }) else { return "System Default" }
+        guard let name = newSessionDefaults.agentName, selectableAgents.contains(where: { $0.name == name }) else { return String(localized: "System Default") }
         return name.capitalized
     }
 
     var configurationReasoningTitle: String {
-        guard let variant = newSessionDefaults.reasoningVariant, configurationReasoningVariants.contains(variant) else { return "System Default" }
+        guard let variant = newSessionDefaults.reasoningVariant, configurationReasoningVariants.contains(variant) else { return String(localized: "System Default") }
         return formattedVariantTitle(variant)
     }
 

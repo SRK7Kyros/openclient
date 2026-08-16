@@ -78,27 +78,24 @@ struct OpenCodeServerConfig: Equatable, Codable, Sendable {
     }
 
     var connectionValidationMessage: String? {
-        var missingFields: [String] = []
-        if trimmedName.isEmpty {
-            missingFields.append("name")
+        switch (trimmedName.isEmpty, trimmedBaseURL.isEmpty, trimmedIconName.isEmpty) {
+        case (false, false, false):
+            return nil
+        case (true, false, false):
+            return String(localized: "Add a name before connecting.")
+        case (false, true, false):
+            return String(localized: "Add a server URL before connecting.")
+        case (false, false, true):
+            return String(localized: "Add an icon before connecting.")
+        case (true, true, false):
+            return String(localized: "Add a name and server URL before connecting.")
+        case (true, false, true):
+            return String(localized: "Add a name and icon before connecting.")
+        case (false, true, true):
+            return String(localized: "Add a server URL and icon before connecting.")
+        case (true, true, true):
+            return String(localized: "Add a name, server URL, and icon before connecting.")
         }
-        if trimmedBaseURL.isEmpty {
-            missingFields.append("server URL")
-        }
-        if trimmedIconName.isEmpty {
-            missingFields.append("icon")
-        }
-
-        guard missingFields.isEmpty == false else { return nil }
-        let fieldList: String
-        if missingFields.count == 1 {
-            fieldList = missingFields[0]
-        } else if missingFields.count == 2 {
-            fieldList = missingFields.joined(separator: " and ")
-        } else {
-            fieldList = "\(missingFields.dropLast().joined(separator: ", ")), and \(missingFields.last ?? "")"
-        }
-        return "Add a \(fieldList) before connecting."
     }
 }
 
