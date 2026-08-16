@@ -1,86 +1,116 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "CFBundleDisplayName" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient"
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient"
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient"
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient"
           }
         }
       }
     },
-    "NSLocalNetworkUsageDescription" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient connects to your OpenCode server and its device-tool bridge on your local network."
+    "NSLocalNetworkUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient connects to your OpenCode server and its device-tool bridge on your local network."
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O OpenClient se conecta ao seu servidor OpenCode e à ponte de ferramentas do dispositivo pela rede local."
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient se conecta ao seu servidor OpenCode e à ponte de ferramentas do dispositivo pela rede local."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient si connette al tuo server OpenCode e al suo bridge degli strumenti del dispositivo sulla tua rete locale."
           }
         }
       }
     },
-    "NSMicrophoneUsageDescription" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient uses the microphone to dictate chat messages."
+    "NSMicrophoneUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient uses the microphone to dictate chat messages."
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O OpenClient usa o microfone para ditar mensagens no chat."
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient usa o microfone para ditar mensagens no chat."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient usa il microfono per dettare i messaggi della chat."
           }
         }
       }
     },
-    "NSPhotoLibraryUsageDescription" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient uses your photo library to show recent photos and attach selected images to messages."
+    "NSPhotoLibraryUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient uses your photo library to show recent photos and attach selected images to messages."
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O OpenClient usa sua fototeca para mostrar fotos recentes e anexar as imagens selecionadas às mensagens."
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient usa sua fototeca para mostrar fotos recentes e anexar as imagens selecionadas às mensagens."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient usa la tua libreria foto per mostrare foto recenti e allegare le immagini selezionate ai messaggi."
           }
         }
       }
     },
-    "NSSpeechRecognitionUsageDescription" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClient uses speech recognition to transcribe dictated chat messages."
+    "NSSpeechRecognitionUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient uses speech recognition to transcribe dictated chat messages."
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O OpenClient usa o reconhecimento de fala para transcrever mensagens ditadas no chat."
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient usa o reconhecimento de fala para transcrever mensagens ditadas no chat."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient usa il riconoscimento vocale per trascrivere i messaggi dettati nella chat."
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

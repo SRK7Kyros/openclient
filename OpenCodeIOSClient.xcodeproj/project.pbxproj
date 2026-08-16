@@ -1371,32 +1371,25 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					03ABFB08B570A48C3F9A2AA3 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					323A6934DF3EC04D7353FAEF = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 						TestTargetID = FE46DB5F396A39389531C069;
 					};
 					3A4666958AE1034C80B61FAB = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					3FA005BF49CBCE2F53A0A028 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					BB490846463F18E8EE36413F = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					FB00EC303AAA20A8C2BAEED2 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					FE46DB5F396A39389531C069 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -1407,6 +1400,7 @@
 			knownRegions = (
 				Base,
 				en,
+				it,
 				"pt-BR",
 			);
 			mainGroup = 3282EDEEEF58EC6680AAB777;
@@ -1420,13 +1414,13 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3A4666958AE1034C80B61FAB /* OpenCodeChatActivityExtension */,
 				FE46DB5F396A39389531C069 /* OpenCodeIOSClient */,
+				3A4666958AE1034C80B61FAB /* OpenCodeChatActivityExtension */,
+				3FA005BF49CBCE2F53A0A028 /* OpenCodeShareExtension */,
+				BB490846463F18E8EE36413F /* OpenCodeMacClient */,
 				03ABFB08B570A48C3F9A2AA3 /* OpenCodeIOSClientTests */,
 				323A6934DF3EC04D7353FAEF /* OpenCodeIOSClientUITests */,
-				BB490846463F18E8EE36413F /* OpenCodeMacClient */,
 				FB00EC303AAA20A8C2BAEED2 /* OpenCodeMacClientTests */,
-				3FA005BF49CBCE2F53A0A028 /* OpenCodeShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -2072,7 +2066,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CURRENT_PROJECT_VERSION = 47;
-				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.16;
@@ -2084,7 +2077,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CURRENT_PROJECT_VERSION = 47;
-				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
