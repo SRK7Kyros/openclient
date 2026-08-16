@@ -5,7 +5,7 @@ require "pathname"
 require "yaml"
 
 ROOT = Pathname.new(__dir__).parent.expand_path
-REQUIRED_LANGUAGES = ["pt-BR"].freeze
+REQUIRED_LANGUAGES = ["pt-BR", "it"].freeze
 
 CATALOGS = [
   { path: "OpenCodeIOSClient/Localizable.xcstrings", target: "OpenCodeIOSClient", table: "Localizable" },

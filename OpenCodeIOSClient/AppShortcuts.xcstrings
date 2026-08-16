@@ -22,9 +22,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Create an OpenClient session with ${applicationName}"
+              "Crea una sessione con ${applicationName}"
             ]
           }
         }
@@ -51,9 +51,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Get OpenClient connection with ${applicationName}"
+              "Ottieni la connessione con ${applicationName}"
             ]
           }
         }
@@ -80,9 +80,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Get OpenClient models with ${applicationName}"
+              "Ottieni i modelli con ${applicationName}"
             ]
           }
         }
@@ -109,9 +109,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Get OpenClient projects with ${applicationName}"
+              "Ottieni i progetti con ${applicationName}"
             ]
           }
         }
@@ -138,9 +138,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Get OpenClient sessions with ${applicationName}"
+              "Ottieni le sessioni con ${applicationName}"
             ]
           }
         }
@@ -167,9 +167,9 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Send a message to OpenClient with ${applicationName}"
+              "Invia un messaggio a una sessione con ${applicationName}"
             ]
           }
         }
@@ -198,10 +198,10 @@
         },
         "it": {
           "stringSet": {
-            "state": "new",
+            "state": "translated",
             "values": [
-              "Send an OpenClient message with ${applicationName}",
-              "Start an OpenClient session with ${applicationName}"
+              "Invia un messaggio e avvia una sessione con ${applicationName}",
+              "Avvia una sessione e invia un messaggio con ${applicationName}"
             ]
           }
         }

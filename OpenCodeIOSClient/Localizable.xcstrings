@@ -72,7 +72,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@\n%2$lld altri allegati sono stati ignorati."
+            "value": "%1$@\nAllegati ignorati: %2$lld."
           }
         }
       }
@@ -453,7 +453,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld completati"
+            "value": "Completati: %lld"
           }
         }
       }
@@ -485,7 +485,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld elementi nascosti"
+            "value": "Elementi nascosti: %lld"
           }
         }
       }
@@ -1558,7 +1558,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi e connettiti a un server OpenClient prima di eseguire questa shortcut."
+            "value": "Aggiungi e connettiti a un server OpenClient prima di eseguire questo comando rapido."
           }
         }
       }
@@ -2156,7 +2156,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avvia automaticamente la Live Activity"
+            "value": "Avvia automaticamente l'attività in tempo reale"
           }
         }
       }
@@ -2172,7 +2172,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avvia automaticamente la Live Activity per questo progetto."
+            "value": "Avvia automaticamente l'attività in tempo reale per questo progetto."
           }
         }
       }
@@ -2780,7 +2780,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scegli una sessione terminale dall'elenco."
+            "value": "Scegli una sessione del terminale dall'elenco."
           }
         }
       }
@@ -3218,7 +3218,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comprimi sessione"
+            "value": "Compatta sessione"
           }
         }
       }
@@ -3234,7 +3234,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La compressione è disponibile solo nelle sessioni principali."
+            "value": "La compattazione è disponibile solo nelle sessioni principali."
           }
         }
       }
@@ -3250,7 +3250,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contesto compresso"
+            "value": "Contesto compattato"
           }
         }
       }
@@ -3266,7 +3266,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compressione sessione"
+            "value": "Compattazione della sessione"
           }
         }
       }
@@ -5218,7 +5218,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inserisci un messaggio prima di eseguire questa shortcut."
+            "value": "Inserisci un messaggio prima di eseguire questo comando rapido."
           }
         }
       }
@@ -7217,7 +7217,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Live Activity"
+            "value": "Attività in tempo reale"
           }
         }
       }
@@ -7233,7 +7233,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impostazioni Live Activity"
+            "value": "Impostazioni attività in tempo reale"
           }
         }
       }
@@ -7607,7 +7607,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Indizio di posizione: %1$@ in %2$@."
+            "value": "Indizio di posizione: %1$@, %2$@."
           }
         }
       }
@@ -7911,7 +7911,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messaggio sessione"
+            "value": "Invia messaggio alla sessione"
           }
         }
       }
@@ -8452,7 +8452,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Predefiniti nuova sessione"
+            "value": "Impostazioni predefinite per le nuove sessioni"
           }
         }
       }
@@ -8756,7 +8756,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna sessione terminale"
+            "value": "Nessuna sessione del terminale"
           }
         }
       }
@@ -9627,7 +9627,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apri menu compositore"
+            "value": "Apri il menu di composizione"
           }
         }
       }
@@ -9890,7 +9890,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenClient non è riuscito a inviare la risposta della Live Activity."
+            "value": "OpenClient non è riuscito a inviare la risposta dell'attività in tempo reale."
           }
         }
       }
@@ -10002,7 +10002,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenClient si connetterà al server selezionato all'apertura dell'app. Le password del server restano nel Keychain."
+            "value": "OpenClient si connetterà al server selezionato all'apertura dell'app. Le password del server restano nel Portachiavi."
           }
         }
       }
@@ -12891,7 +12891,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vedi lo scambio più recente, lo strumento attivo, l'avanzamento dei todo e lo stato della Live Activity senza aprire ogni chat."
+            "value": "Vedi lo scambio più recente, lo strumento attivo, l'avanzamento delle attività e lo stato dell'attività in tempo reale senza aprire ogni chat."
           }
         }
       }
@@ -13036,7 +13036,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seleziona un modello prima di comprimere questa sessione."
+            "value": "Seleziona un modello prima di compattare questa sessione."
           }
         }
       }
@@ -13388,7 +13388,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sessione compressa"
+            "value": "Sessione compattata"
           }
         }
       }
@@ -13404,7 +13404,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sessione compressa. Visualizza contesto."
+            "value": "Sessione compattata. Visualizza il contesto."
           }
         }
       }
@@ -14142,7 +14142,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avvia automaticamente una Live Activity quando una sessione inizia a lavorare in questo progetto."
+            "value": "Avvia automaticamente un'attività in tempo reale quando una sessione inizia a lavorare in questo progetto."
           }
         }
       }
@@ -14703,7 +14703,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sessioni terminale"
+            "value": "Sessioni del terminale"
           }
         }
       }
@@ -15424,7 +15424,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gli elementi della shortcut selezionati appartengono a connessioni OpenClient diverse."
+            "value": "Gli elementi del comando rapido selezionati appartengono a connessioni OpenClient diverse."
           }
         }
       }
@@ -16696,7 +16696,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa predefinito di sistema"
+            "value": "Usa l'impostazione predefinita di sistema"
           }
         }
       }
@@ -16712,7 +16712,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usalo, studialo, migioralo."
+            "value": "Usalo, studialo, miglioralo."
           }
         }
       }

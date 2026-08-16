@@ -232,7 +232,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenClient non è riuscito a inviare la risposta della Live Activity."
+            "value": "OpenClient non è riuscito a inviare la risposta dell'attività in tempo reale."
           }
         }
       }
@@ -520,7 +520,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usare OpenClient"
+            "value": "Utilizzo di OpenClient"
           }
         }
       }

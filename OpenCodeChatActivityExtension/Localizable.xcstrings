@@ -738,7 +738,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenClient non è riuscito a inviare la risposta della Live Activity."
+            "value": "OpenClient non è riuscito a inviare la risposta dell'attività in tempo reale."
           }
         }
       }
@@ -930,7 +930,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rispondi al permesso"
+            "value": "Rispondi alla richiesta di autorizzazione"
           }
         }
       }
@@ -1138,7 +1138,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ottimizza le righe della dashboard sessioni e l'a capo del testo per il widget grande."
+            "value": "Ottimizza le righe del pannello delle sessioni e il ritorno a capo del testo nel widget grande."
           }
         }
       }
@@ -1202,7 +1202,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quale riepilogo sessione deve essere evidenziato per primo?"
+            "value": "Quale riepilogo della sessione deve essere evidenziato per primo?"
           }
         }
       }

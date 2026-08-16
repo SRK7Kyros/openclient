@@ -10,7 +10,7 @@ Use this skill whenever a feature adds or changes user-facing text. Localization
 ## Sources Of Truth
 
 - English (`en`) is the source language.
-- Read `REQUIRED_LANGUAGES` in `scripts/lint-localizations.rb` for the languages every catalog entry must include. Brazilian Portuguese (`pt-BR`) is currently required.
+- Read `REQUIRED_LANGUAGES` in `scripts/lint-localizations.rb` for the languages every catalog entry must include. Brazilian Portuguese (`pt-BR`) and Italian (`it`) are currently required.
 - Read `LOCALIZATION.md` for the repository workflow and conventions.
 - Use the Swift compiler's emitted `.stringsdata` as the authoritative inventory of localization-aware Swift strings.
 - Keep `project.yml` authoritative for target resources and Info.plist values. Regenerate the project after adding or removing catalog or source files.
