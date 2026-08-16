@@ -7325,11 +7325,12 @@
       }
     },
     "Read" : {
+      "comment" : "Title of a tool card that reads a file.",
       "localizations" : {
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read"
+            "value" : "Leitura"
           }
         }
       }
@@ -11268,6 +11269,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "latitude tropical"
+          }
+        }
+      }
+    },
+    "todo.status.cancelled" : {
+      "comment" : "Status of a cancelled todo item.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cancelled"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelada"
+          }
+        }
+      }
+    },
+    "todo.status.completed" : {
+      "comment" : "Status of a completed todo item.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Completed"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concluída"
+          }
+        }
+      }
+    },
+    "todo.status.in_progress" : {
+      "comment" : "Status of a todo item that is currently being worked on.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "In Progress"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Em andamento"
+          }
+        }
+      }
+    },
+    "todo.status.pending" : {
+      "comment" : "Status of a todo item that has not started.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pending"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendente"
           }
         }
       }

@@ -53,7 +53,7 @@ struct TodoInspectorView: View {
                             .foregroundStyle(todo.isComplete ? .green : (todo.isInProgress ? .blue : .secondary))
                         VStack(alignment: .leading, spacing: 4) {
                             Text(todo.content)
-                            Text(todo.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                            TodoStatusLabel(status: todo.status)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

@@ -515,7 +515,7 @@ private struct StackTodoCard: View {
                         Text(todo.content)
                             .font(.subheadline.weight(.medium))
                             .lineLimit(2)
-                        Text(todo.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                        TodoStatusLabel(status: todo.status)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
