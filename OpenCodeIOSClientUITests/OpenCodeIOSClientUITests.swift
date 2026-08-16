@@ -41,26 +41,27 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("connection", "01-connection"),
             ("recent-servers", "02-recent-servers"),
             ("projects", "03-projects"),
-            ("new-session", "04-new-session"),
-            ("provider-setup", "05-provider-setup"),
-            ("sessions", "06-sessions"),
-            ("chat", "07-chat"),
-            ("permission", "08-permission"),
-            ("question", "09-question"),
-            ("fun-games", "10-fun-games"),
-            ("find-place-game", "11-find-place-game"),
-            ("find-bug-game", "12-find-bug-game"),
-            ("composer-actions", "13-composer-actions"),
-            ("paywall", "14-paywall"),
-            ("recent-widget", "15-recent-widget"),
-            ("pinned-widget", "16-pinned-widget"),
-            ("quick-start-widgets", "17-quick-start-widgets"),
-            ("live-activity", "18-live-activity"),
-            ("session-actions", "19-session-actions"),
-            ("session-pinned", "20-session-pinned"),
-            ("browser", "21-browser"),
-            ("visual-tools", "22-visual-tools"),
-            ("terminal-showcase", "23-terminal"),
+            ("activity", "04-activity"),
+            ("new-session", "05-new-session"),
+            ("provider-setup", "06-provider-setup"),
+            ("sessions", "07-sessions"),
+            ("chat", "08-chat"),
+            ("permission", "09-permission"),
+            ("question", "10-question"),
+            ("fun-games", "11-fun-games"),
+            ("find-place-game", "12-find-place-game"),
+            ("find-bug-game", "13-find-bug-game"),
+            ("composer-actions", "14-composer-actions"),
+            ("paywall", "15-paywall"),
+            ("recent-widget", "16-recent-widget"),
+            ("pinned-widget", "17-pinned-widget"),
+            ("quick-start-widgets", "18-quick-start-widgets"),
+            ("live-activity", "19-live-activity"),
+            ("session-actions", "20-session-actions"),
+            ("session-pinned", "21-session-pinned"),
+            ("browser", "22-browser"),
+            ("visual-tools", "23-visual-tools"),
+            ("terminal-showcase", "24-terminal"),
         ]
 
         let requestedScenes = Set(
@@ -132,13 +133,6 @@ final class OpenCodeIOSClientUITests: XCTestCase {
                 let configurations = app.buttons["projects.configurations"]
                 XCTAssertTrue(configurations.waitForExistence(timeout: 10), "Expected configurations button to load")
                 configurations.tap()
-
-                let addProvider = app.buttons["configurations.addProvider"].firstMatch
-                if !addProvider.waitForExistence(timeout: 3) {
-                    app.swipeUp()
-                }
-                XCTAssertTrue(addProvider.waitForExistence(timeout: 10), "Expected Add Provider row to load")
-                addProvider.tap()
                 XCTAssertTrue(app.navigationBars["Add Provider"].waitForExistence(timeout: 10), "Expected Add Provider screen to load")
             }
 

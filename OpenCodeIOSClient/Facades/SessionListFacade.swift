@@ -543,17 +543,23 @@ final class SessionListFacade: ObservableObject {
               let part = message.parts.last,
               let tool = part.tool,
               ["running", "pending", "in_progress"].contains(part.state?.status?.lowercased() ?? "") else { return [] }
+
+        let id = part.id ?? part.callID ?? "\(message.id):\(tool)"
+        let title = activityToolTitle(part: part, tool: tool)
+        let input = part.state?.input
+        var detail: String? = input?.command
+        if detail == nil { detail = input?.description }
+        if detail == nil { detail = input?.filePath }
+        if detail == nil { detail = input?.path }
+        if detail == nil { detail = input?.query }
+        if detail == nil { detail = input?.pattern }
+
         return [
             ActivityFacade.ToolSnapshot(
-                id: part.id ?? part.callID ?? "\(message.id):\(tool)",
+                id: id,
                 tool: tool,
-                title: activityToolTitle(part: part, tool: tool),
-                detail: part.state?.input?.command
-                    ?? part.state?.input?.description
-                    ?? part.state?.input?.filePath
-                    ?? part.state?.input?.path
-                    ?? part.state?.input?.query
-                    ?? part.state?.input?.pattern
+                title: title,
+                detail: detail
             ),
         ]
     }

@@ -108,6 +108,13 @@ struct ConfigurationsSheet: View {
             .task {
                 await viewModel.loadProvidersForConfigurationIfNeeded()
             }
+            .onAppear {
+                #if DEBUG
+                if OpenClientScreenshotScene.current == .providerSetup, navigationPath.isEmpty {
+                    navigationPath.append(ConfigurationRoute.addProvider)
+                }
+                #endif
+            }
             .navigationDestination(for: ConfigurationRoute.self) { route in
                 switch route {
                 case .plugins:

@@ -119,7 +119,7 @@ private struct ActivitySettingsSheet: View {
                         "Show Last User Message",
                         isOn: Binding(
                             get: { facade.showsLastUserMessage },
-                            set: facade.setShowsLastUserMessage
+                            set: { facade.setShowsLastUserMessage($0) }
                         )
                     )
                     .accessibilityIdentifier("activity.settings.showLastUserMessage")

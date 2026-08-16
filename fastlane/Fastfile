@@ -14,7 +14,7 @@ platform :ios do
 
   def screenshot_devices
     [
-      "iPhone 13 Pro Max",
+      "iPhone 17 Pro Max",
       "iPad Pro 13-inch (M5)"
     ]
   end
@@ -24,13 +24,25 @@ platform :ios do
     return if devices.include?("#{device} (")
 
     device_types = {
-      "iPhone 13 Pro Max" => "com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max",
+      "iPhone 17 Pro Max" => "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
       "iPad Pro 13-inch (M5)" => "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"
     }
     device_type = device_types[device]
     UI.user_error!("No simulator device type configured for #{device}") if device_type.nil?
 
-    sh("xcrun simctl create #{device.shellescape} #{device_type.shellescape} com.apple.CoreSimulator.SimRuntime.iOS-26-2")
+    sh("xcrun simctl create #{device.shellescape} #{device_type.shellescape} com.apple.CoreSimulator.SimRuntime.iOS-27-0")
+  end
+
+  def normalize_iphone_screenshots(screenshot_output)
+    pattern = File.join(screenshot_output, "en_US", "iPhone-17-Pro-Max-*.png")
+    Dir.glob(pattern).each do |path|
+      resized = "#{path}.resized.png"
+      cropped = "#{path}.cropped.png"
+      sh("sips --resampleWidth 1242 #{path.shellescape} --out #{resized.shellescape}")
+      sh("sips --cropToHeightWidth 2688 1242 #{resized.shellescape} --out #{cropped.shellescape}")
+      FileUtils.mv(cropped, path)
+      FileUtils.rm_f(resized)
+    end
   end
 
   def metadata_path_for_upload(repo_root)
@@ -212,7 +224,7 @@ platform :ios do
           "test",
           "-project", File.join(repo_root, "OpenCodeIOSClient.xcodeproj").shellescape,
           "-scheme", "OpenCodeIOSClientScreenshots",
-          "-destination", "platform=iOS Simulator,name=#{device},OS=26.2".shellescape,
+          "-destination", "platform=iOS Simulator,name=#{device},OS=27.0".shellescape,
           "-only-testing:OpenCodeIOSClientUITests/OpenCodeIOSClientUITests/testAppStoreScreenshots",
           "-parallel-testing-enabled", "NO",
           "-maximum-concurrent-test-simulator-destinations", "1",
@@ -221,5 +233,8 @@ platform :ios do
         ].compact.join(" ")
       )
     end
+
+
+    normalize_iphone_screenshots(screenshot_output)
   end
 end
