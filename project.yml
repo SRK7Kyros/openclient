@@ -121,6 +121,7 @@ targets:
         CFBundleLocalizations:
           - en
           - pt-BR
+          - it
         UIApplicationSupportsIndirectInputEvents: true
         NSSupportsLiveActivities: true
         UIBackgroundModes:
@@ -203,6 +204,7 @@ targets:
         CFBundleLocalizations:
           - en
           - pt-BR
+          - it
         OpenCodeSharedKeychainAccessGroup: $(AppIdentifierPrefix)com.ntoporcov.openclient.shared
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -250,6 +252,7 @@ targets:
         CFBundleLocalizations:
           - en
           - pt-BR
+          - it
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

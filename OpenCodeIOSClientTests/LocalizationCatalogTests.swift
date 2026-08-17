@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 
 final class LocalizationCatalogTests: XCTestCase {
+    private let requiredLanguages = ["pt-BR", "it"]
     private let catalogPaths = [
         "OpenCodeIOSClient/Localizable.xcstrings",
         "OpenCodeIOSClient/AppShortcuts.xcstrings",
@@ -12,7 +13,7 @@ final class LocalizationCatalogTests: XCTestCase {
         "OpenCodeShareExtension/InfoPlist.xcstrings",
     ]
 
-    func testBrazilianPortugueseCatalogsAreComplete() throws {
+    func testRequiredLanguageCatalogsAreComplete() throws {
         for path in catalogPaths {
             let strings = try catalogStrings(at: path)
             XCTAssertFalse(strings.isEmpty, "Expected localization entries in \(path)")
@@ -20,31 +21,39 @@ final class LocalizationCatalogTests: XCTestCase {
             for (key, value) in strings {
                 let entry = try XCTUnwrap(value as? [String: Any], "Invalid entry for \(key) in \(path)")
                 let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], "Missing localizations for \(key) in \(path)")
-                let portuguese = try XCTUnwrap(localizations["pt-BR"] as? [String: Any], "Missing pt-BR translation for \(key) in \(path)")
-                XCTAssertTrue(isTranslated(portuguese), "Incomplete pt-BR translation for \(key) in \(path)")
+                for language in requiredLanguages {
+                    let localization = try XCTUnwrap(
+                        localizations[language] as? [String: Any],
+                        "Missing \(language) translation for \(key) in \(path)"
+                    )
+                    XCTAssertTrue(isTranslated(localization), "Incomplete \(language) translation for \(key) in \(path)")
+                }
             }
         }
     }
 
-    func testBrazilianPortugueseTranslationsPreservePlaceholders() throws {
+    func testRequiredLanguageTranslationsPreservePlaceholders() throws {
         for path in catalogPaths {
             let strings = try catalogStrings(at: path)
 
             for (key, value) in strings {
                 let entry = try XCTUnwrap(value as? [String: Any])
                 let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
-                let portuguese = try XCTUnwrap(localizations["pt-BR"] as? [String: Any])
                 let english = localizations["en"] as? [String: Any]
                 let sourceValues = localizedValues(english, fallback: key)
-                let translatedValues = localizedValues(portuguese, fallback: key)
 
-                XCTAssertEqual(sourceValues.count, translatedValues.count, "Value count differs for \(key) in \(path)")
-                for (source, translation) in zip(sourceValues, translatedValues) {
-                    XCTAssertEqual(
-                        placeholders(in: source),
-                        placeholders(in: translation),
-                        "Placeholders differ for \(key) in \(path)"
-                    )
+                for language in requiredLanguages {
+                    let localization = try XCTUnwrap(localizations[language] as? [String: Any])
+                    let translatedValues = localizedValues(localization, fallback: key)
+
+                    XCTAssertEqual(sourceValues.count, translatedValues.count, "Value count differs for \(key) in \(path) [\(language)]")
+                    for (source, translation) in zip(sourceValues, translatedValues) {
+                        XCTAssertEqual(
+                            placeholders(in: source),
+                            placeholders(in: translation),
+                            "Placeholders differ for \(key) in \(path) [\(language)]"
+                        )
+                    }
                 }
             }
         }

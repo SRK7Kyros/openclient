@@ -6,6 +6,7 @@ OpenClient uses Xcode String Catalogs for the app, App Shortcuts, widgets and Li
 
 - English (`en`) is the source language.
 - Brazilian Portuguese (`pt-BR`) is required for every catalog entry.
+- Italian (`it`) is required for every catalog entry.
 
 Update `REQUIRED_LANGUAGES` in `scripts/lint-localizations.rb` when another language becomes mandatory.
 

@@ -1,802 +1,1276 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "%@" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@"
-          }
-        }
-      }
-    },
-    "%@ reasoning" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Raciocínio: %@"
-          }
-        }
-      }
-    },
-    "%@ · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
+  "sourceLanguage": "en",
+  "strings": {
+    "%@": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
           }
         },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@"
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
           }
         }
       }
     },
-    "/%@" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "/%@"
+    "%@ reasoning": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raciocínio: %@"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ragionamento %@"
+          }
+        }
+      }
+    },
+    "%@ · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ · %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "/%@": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/%@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/%@"
+          }
         }
       }
     },
-    "API Server" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Servidor da API"
+    "API Server": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servidor da API"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server API"
+          }
         }
       }
     },
-    "Action" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ação"
+    "Action": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ação"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azione"
+          }
         }
       }
     },
-    "Allow Once" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permitir uma vez"
+    "Allow Once": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir uma vez"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consenti una volta"
           }
         }
       }
     },
-    "Answer" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Responder"
+    "Answer": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risposta"
+          }
         }
       }
     },
-    "Base URL" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "URL base"
+    "Base URL": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL base"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL di base"
+          }
         }
       }
     },
-    "COMMAND" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "COMANDO"
+    "COMMAND": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COMANDO"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COMANDO"
           }
         }
       }
     },
-    "Choose a command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolha um comando"
+    "Choose a command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha um comando"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli un comando"
+          }
         }
       }
     },
-    "Choose command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolher comando"
+    "Choose command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher comando"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli comando"
+          }
         }
       }
     },
-    "Choose project" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolher projeto"
+    "Choose project": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher projeto"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli progetto"
           }
         }
       }
     },
-    "Command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comando"
+    "Command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comando"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comando"
+          }
         }
       }
     },
-    "Connection" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conexão"
+    "Connection": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexão"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connessione"
           }
         }
       }
     },
-    "Create a blank OpenClient session in a selected project." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crie uma sessão vazia do OpenClient em um projeto selecionado."
+    "Create a blank OpenClient session in a selected project.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crie uma sessão vazia do OpenClient em um projeto selecionado."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea una sessione OpenClient vuota in un progetto selezionato."
+          }
         }
       }
     },
-    "Create a new OpenClient session and send a selected slash command." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crie uma nova sessão do OpenClient e envie um comando de barra selecionado."
+    "Create a new OpenClient session and send a selected slash command.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crie uma nova sessão do OpenClient e envie um comando de barra selecionado."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea una nuova sessione OpenClient e invia un comando slash selezionato."
+          }
         }
       }
     },
-    "Credential ID" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ID da credencial"
+    "Credential ID": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID da credencial"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID credenziale"
           }
         }
       }
     },
-    "Default" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Padrão"
+    "Default": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Padrão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Predefinito"
+          }
         }
       }
     },
-    "Default model" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modelo padrão"
+    "Default model": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo padrão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modello predefinito"
+          }
         }
       }
     },
-    "Deny" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Negar"
+    "Deny": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nega"
           }
         }
       }
     },
-    "Directory" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diretório"
+    "Directory": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diretório"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cartella"
+          }
         }
       }
     },
-    "Edit widget settings after syncing a project in the app." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edite os ajustes do widget depois de sincronizar um projeto no app."
+    "Edit widget settings after syncing a project in the app.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edite os ajustes do widget depois de sincronizar um projeto no app."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica le impostazioni del widget dopo aver sincronizzato un progetto nell'app."
+          }
         }
       }
     },
-    "Keep an eye on pinned OpenClient sessions." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acompanhe as sessões fixadas do OpenClient."
+    "Keep an eye on pinned OpenClient sessions.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhe as sessões fixadas do OpenClient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tieni d'occhio le sessioni OpenClient fissate."
           }
         }
       }
     },
-    "LATEST" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MAIS RECENTES"
+    "LATEST": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MAIS RECENTES"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIÙ RECENTE"
+          }
         }
       }
     },
-    "Live" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ao vivo"
+    "Live": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ao vivo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live"
           }
         }
       }
     },
-    "Model" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modelo"
+    "Model": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modello"
+          }
         }
       }
     },
-    "Monitor the latest OpenClient sessions across projects." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acompanhe as sessões mais recentes do OpenClient em todos os projetos."
+    "Monitor the latest OpenClient sessions across projects.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhe as sessões mais recentes do OpenClient em todos os projetos."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monitora le ultime sessioni OpenClient tra i progetti."
+          }
         }
       }
     },
-    "NEW SESSION" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "NOVA SESSÃO"
+    "NEW SESSION": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOVA SESSÃO"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NUOVA SESSIONE"
           }
         }
       }
     },
-    "Needs Action" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Requer ação"
+    "Needs Action": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requer ação"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiede azione"
+          }
         }
       }
     },
-    "New" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nova"
+    "New": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nova"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovo"
+          }
         }
       }
     },
-    "New Session" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nova sessão"
+    "New Session": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nova sessão"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuova sessione"
           }
         }
       }
     },
-    "No Projects" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhum projeto"
+    "No Projects": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum projeto"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun progetto"
+          }
         }
       }
     },
-    "No Sessions" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhuma sessão"
+    "No Sessions": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma sessão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna sessione"
+          }
         }
       }
     },
-    "Notes" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notas"
+    "Notes": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note"
           }
         }
       }
     },
-    "Open App" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir app"
+    "Open App": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir app"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri app"
+          }
         }
       }
     },
-    "Open OpenClient" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir o OpenClient"
+    "Open OpenClient": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir o OpenClient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient"
           }
         }
       }
     },
-    "Open OpenClient and start a blank session in a project." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o OpenClient e inicie uma sessão vazia em um projeto."
+    "Open OpenClient and start a blank session in a project.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o OpenClient e inicie uma sessão vazia em um projeto."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient e avvia una sessione vuota in un progetto."
+          }
         }
       }
     },
-    "Open OpenClient and start a blank session in a selected project." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o OpenClient e inicie uma sessão vazia em um projeto selecionado."
+    "Open OpenClient and start a blank session in a selected project.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o OpenClient e inicie uma sessão vazia em um projeto selecionado."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient e avvia una sessione vuota in un progetto selezionato."
+          }
         }
       }
     },
-    "Open OpenClient and start a new session in a project." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o OpenClient e inicie uma nova sessão em um projeto."
+    "Open OpenClient and start a new session in a project.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o OpenClient e inicie uma nova sessão em um projeto."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient e avvia una nuova sessione in un progetto."
           }
         }
       }
     },
-    "Open OpenClient, start a session, and send a selected slash command." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o OpenClient, inicie uma sessão e envie um comando de barra selecionado."
+    "Open OpenClient, start a session, and send a selected slash command.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o OpenClient, inicie uma sessão e envie um comando de barra selecionado."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient, avvia una sessione e invia un comando slash selezionato."
+          }
         }
       }
     },
-    "Open OpenClient, start a session, and send a slash command." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o OpenClient, inicie uma sessão e envie um comando de barra."
+    "Open OpenClient, start a session, and send a slash command.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o OpenClient, inicie uma sessão e envie um comando de barra."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri OpenClient, avvia una sessione e invia un comando slash."
+          }
         }
       }
     },
-    "Open the app to sync projects." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o app para sincronizar os projetos."
+    "Open the app to sync projects.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o app para sincronizar os projetos."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri l'app per sincronizzare i progetti."
           }
         }
       }
     },
-    "Open the app to sync recent activity." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o app para sincronizar a atividade recente."
+    "Open the app to sync recent activity.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o app para sincronizar a atividade recente."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri l'app per sincronizzare l'attività recente."
+          }
         }
       }
     },
-    "Open the app to sync sessions." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o app para sincronizar as sessões."
+    "Open the app to sync sessions.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o app para sincronizar as sessões."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri l'app per sincronizzare le sessioni."
+          }
         }
       }
     },
-    "OpenClient could not send the Live Activity response." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O OpenClient não conseguiu enviar a resposta da Atividade ao Vivo."
+    "OpenClient could not send the Live Activity response.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient não conseguiu enviar a resposta da Atividade ao Vivo."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient non è riuscito a inviare la risposta dell'attività in tempo reale."
           }
         }
       }
     },
-    "PERMISSION" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PERMISSÃO"
+    "PERMISSION": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PERMISSÃO"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PERMESSO"
+          }
         }
       }
     },
-    "Paused" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Em pausa"
+    "Paused": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em pausa"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In pausa"
           }
         }
       }
     },
-    "Pick a project" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolher um projeto"
+    "Pick a project": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher um projeto"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli un progetto"
+          }
         }
       }
     },
-    "Pinned Sessions" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessões fixadas"
+    "Pinned Sessions": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessões fixadas"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessioni fissate"
+          }
         }
       }
     },
-    "Project" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Projeto"
+    "Project": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projeto"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progetto"
           }
         }
       }
     },
-    "QUESTION" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PERGUNTA"
+    "QUESTION": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PERGUNTA"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOMANDA"
+          }
         }
       }
     },
-    "Ready" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pronto"
+    "Ready": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pronto"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pronto"
+          }
         }
       }
     },
-    "Reasoning" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Raciocínio"
+    "Reasoning": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raciocínio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ragionamento"
           }
         }
       }
     },
-    "Recent Sessions" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessões recentes"
+    "Recent Sessions": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessões recentes"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessioni recenti"
+          }
         }
       }
     },
-    "Release prep" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparação da versão"
+    "Release prep": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparação da versão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparazione release"
+          }
         }
       }
     },
-    "Reply" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Responder"
+    "Reply": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondi"
           }
         }
       }
     },
-    "Reply to Permission" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Responder à solicitação de permissão"
+    "Reply to Permission": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder à solicitação de permissão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondi alla richiesta di autorizzazione"
+          }
         }
       }
     },
-    "Reply to Question" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Responder à pergunta"
+    "Reply to Question": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder à pergunta"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondi alla domanda"
           }
         }
       }
     },
-    "Request ID" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ID da solicitação"
+    "Request ID": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID da solicitação"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID richiesta"
+          }
         }
       }
     },
-    "Run command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Executar comando"
+    "Run command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Executar comando"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esegui comando"
+          }
         }
       }
     },
-    "Run the project test suite" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Executar a suíte de testes do projeto"
+    "Run the project test suite": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Executar a suíte de testes do projeto"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esegui la suite di test del progetto"
           }
         }
       }
     },
-    "SESSION" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SESSÃO"
+    "SESSION": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SESSÃO"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SESSIONE"
+          }
         }
       }
     },
-    "Session ID" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ID da sessão"
+    "Session ID": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID da sessão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID sessione"
+          }
         }
       }
     },
-    "Slash Command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comando de barra"
+    "Slash Command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comando de barra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comando slash"
           }
         }
       }
     },
-    "Start" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iniciar"
+    "Start": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia"
+          }
         }
       }
     },
-    "Start Session" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iniciar sessão"
+    "Start Session": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar sessão"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia sessione"
+          }
         }
       }
     },
-    "Start Slash Command" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iniciar comando de barra"
+    "Start Slash Command": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar comando de barra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia comando slash"
           }
         }
       }
     },
-    "The OpenClient server URL is invalid." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A URL do servidor do OpenClient é inválida."
+    "The OpenClient server URL is invalid.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A URL do servidor do OpenClient é inválida."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'URL del server OpenClient non è valido."
+          }
         }
       }
     },
-    "The saved OpenClient credentials are unavailable." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As credenciais salvas do OpenClient não estão disponíveis."
+    "The saved OpenClient credentials are unavailable.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As credenciais salvas do OpenClient não estão disponíveis."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le credenziali OpenClient salvate non sono disponibili."
           }
         }
       }
     },
-    "Tighten the session dashboard rows and line wrapping for the large widget." : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deixe mais compactas as linhas do painel de sessões e a quebra de texto no widget grande."
+    "Tighten the session dashboard rows and line wrapping for the large widget.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deixe mais compactas as linhas do painel de sessões e a quebra de texto no widget grande."
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ottimizza le righe del pannello delle sessioni e il ritorno a capo del testo nel widget grande."
+          }
         }
       }
     },
-    "Username" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nome de usuário"
+    "Username": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome de usuário"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome utente"
+          }
         }
       }
     },
-    "Watching" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acompanhando"
+    "Watching": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhando"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Osservando"
           }
         }
       }
     },
-    "Website" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Site"
+    "Website": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sito web"
+          }
         }
       }
     },
-    "Which session summary should be highlighted first?" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qual resumo de sessão deve aparecer em destaque primeiro?"
+    "Which session summary should be highlighted first?": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qual resumo de sessão deve aparecer em destaque primeiro?"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quale riepilogo della sessione deve essere evidenziato per primo?"
+          }
         }
       }
     },
-    "Widget copy" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Texto do widget"
+    "Widget copy": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto do widget"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testi widget"
           }
         }
       }
     },
-    "Widget dashboard polish" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Refinamento do painel do widget"
+    "Widget dashboard polish": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refinamento do painel do widget"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rifinitura dashboard widget"
+          }
         }
       }
     },
-    "Working" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trabalhando"
+    "Working": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trabalhando"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In lavorazione"
+          }
         }
       }
     },
-    "Workspace" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Espaço de trabalho"
+    "Workspace": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaço de trabalho"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

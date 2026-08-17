@@ -1,155 +1,212 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "Create an OpenClient session with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+  "sourceLanguage": "en",
+  "strings": {
+    "Create an OpenClient session with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Create an OpenClient session with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Crie uma sessão no OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Crea una sessione con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Get OpenClient connection with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Get OpenClient connection with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Get OpenClient connection with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Consulte a conexão do OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Ottieni la connessione con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Get OpenClient models with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Get OpenClient models with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Get OpenClient models with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Veja os modelos do OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Ottieni i modelli con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Get OpenClient projects with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Get OpenClient projects with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Get OpenClient projects with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Veja os projetos do OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Ottieni i progetti con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Get OpenClient sessions with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Get OpenClient sessions with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Get OpenClient sessions with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Veja as sessões do OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Ottieni le sessioni con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Send a message to OpenClient with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Send a message to OpenClient with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Send a message to OpenClient with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Envie uma mensagem para o OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Invia un messaggio a una sessione con ${applicationName}"
             ]
           }
         }
       }
     },
-    "Send an OpenClient message with ${applicationName}" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
+    "Send an OpenClient message with ${applicationName}": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
               "Send an OpenClient message with ${applicationName}",
               "Start an OpenClient session with ${applicationName}"
             ]
           }
         },
-        "pt-BR" : {
-          "stringSet" : {
-            "state" : "translated",
-            "values" : [
+        "pt-BR": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
               "Envie uma mensagem no OpenClient com ${applicationName}",
               "Inicie uma sessão no OpenClient com ${applicationName}"
+            ]
+          }
+        },
+        "it": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Invia un messaggio e avvia una sessione con ${applicationName}",
+              "Avvia una sessione e invia un messaggio con ${applicationName}"
             ]
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }
