@@ -4,6 +4,7 @@ import XCTest
 @MainActor
 final class AppViewModelTests: XCTestCase {
     private let pinnedCommandTestStorageKey = "PinnedCommandStoreTests"
+    private let appCustomizationStorageKey = "appCustomizationPreferences"
 
     override func setUp() {
         super.setUp()
@@ -12,6 +13,7 @@ final class AppViewModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.pinnedSessionsByScope)
         ProjectListPreferencesStore.reset()
         UserDefaults.standard.removeObject(forKey: pinnedCommandTestStorageKey)
+        UserDefaults.standard.removeObject(forKey: appCustomizationStorageKey)
     }
 
     override func tearDown() {
@@ -20,7 +22,52 @@ final class AppViewModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.pinnedSessionsByScope)
         ProjectListPreferencesStore.reset()
         UserDefaults.standard.removeObject(forKey: pinnedCommandTestStorageKey)
+        UserDefaults.standard.removeObject(forKey: appCustomizationStorageKey)
         super.tearDown()
+    }
+
+    func testIneligibleAutomaticConnectionDoesNotConsumeLaunchAttempt() {
+        let viewModel = AppViewModel()
+
+        XCTAssertFalse(viewModel.startAutomaticConnectionIfConfigured())
+        XCTAssertFalse(viewModel.hasAttemptedAutomaticConnection)
+    }
+
+    func testAutomaticConnectionRetryRearmsOnceOnForeground() {
+        let viewModel = AppViewModel()
+        let server = OpenCodeServerConfig(
+            name: "Retry Test",
+            baseURL: "https://retry.example",
+            username: "opencode",
+            password: "password"
+        )
+        viewModel.recentServerConfigs = [server]
+        viewModel.appCustomizationStore.setAutoConnectServerID(server.recentServerID)
+        viewModel.hasAttemptedAutomaticConnection = true
+        viewModel.automaticConnectionRetryEnabled = true
+        viewModel.backendMode = .cachedServer
+        viewModel.isApplicationActive = false
+
+        viewModel.applicationActivityChanged(isActive: true)
+        let generation = viewModel.automaticConnectionRetryGeneration
+
+        XCTAssertNotNil(viewModel.automaticConnectionRetryTask)
+        viewModel.applicationActivityChanged(isActive: true)
+        XCTAssertEqual(viewModel.automaticConnectionRetryGeneration, generation)
+
+        viewModel.applicationActivityChanged(isActive: false)
+        XCTAssertNil(viewModel.automaticConnectionRetryTask)
+        XCTAssertTrue(viewModel.automaticConnectionRetryEnabled)
+    }
+
+    func testCancellingConnectionStopsAutomaticRetries() {
+        let viewModel = AppViewModel()
+        viewModel.automaticConnectionRetryEnabled = true
+
+        viewModel.cancelConnectionAttempt()
+
+        XCTAssertFalse(viewModel.automaticConnectionRetryEnabled)
+        XCTAssertNil(viewModel.automaticConnectionRetryTask)
     }
 
     func testPinnedCommandsPersistPerScopeAndIgnoreDuplicates() {

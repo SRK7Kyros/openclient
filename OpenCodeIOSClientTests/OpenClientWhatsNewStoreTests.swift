@@ -99,6 +99,35 @@ final class OpenClientWhatsNewStoreTests: XCTestCase {
         ])
     }
 
+    func testCurrentCatalogDescribesInternationalizationRelease() {
+        let release = OpenClientReleaseNotesCatalog.releases.first { $0.version == "1.0.17" }
+
+        XCTAssertEqual(release?.title, "Hello, world")
+        XCTAssertEqual(release?.hero, .internationalization)
+        XCTAssertTrue(release?.features.isEmpty == true)
+        XCTAssertFalse(release?.showsSetup == true)
+        XCTAssertEqual(release?.internationalizationAnnouncements.map(\.localeIdentifier), ["pt-BR", "it"])
+        XCTAssertEqual(release?.internationalizationAnnouncements.map(\.nativeName), ["Português (Brasil)", "Italiano"])
+        XCTAssertTrue(release?.internationalizationAnnouncements.allSatisfy { $0.palette.count == 3 } == true)
+        XCTAssertNil(release?.internationalizationAnnouncements.first?.contributor)
+        XCTAssertEqual(release?.internationalizationAnnouncements.last?.contributor?.name, "Lorenzo Salami")
+        XCTAssertEqual(release?.internationalizationAnnouncements.last?.contributor?.handle, "@LSalami")
+        XCTAssertTrue(OpenClientLocalizationContribution.prompt.contains("https://github.com/ntoporcov/openclient"))
+        XCTAssertTrue(OpenClientLocalizationContribution.prompt.contains("[YOUR LANGUAGE]"))
+    }
+
+    func testNextVersionPresentsInternationalizationRelease() {
+        let store = OpenClientWhatsNewStore(
+            defaults: defaults,
+            currentVersion: "1.0.17",
+            releases: OpenClientReleaseNotesCatalog.releases,
+            hasExistingConnection: true
+        )
+
+        XCTAssertEqual(store.presentedRelease?.version, "1.0.17")
+        XCTAssertEqual(store.presentedRelease?.internationalizationAnnouncements.count, 2)
+    }
+
     private var release: OpenClientReleaseNotes {
         OpenClientReleaseNotes(
             version: "2.0",

@@ -342,7 +342,7 @@ final class AppShellFacade: ObservableObject {
     }
 
     func retryCachedServerConnection() {
-        connection.startConnection()
+        connection.retryCachedServerConnection()
     }
 
     func selectProjectContentTab(_ tab: OpenClientProjectContentTab) {
@@ -465,6 +465,10 @@ final class AppShellFacade: ObservableObject {
 
     func scheduleForegroundChatCatchUp(reason: String) {
         viewModel.scheduleForegroundChatCatchUp(reason: reason)
+    }
+
+    func applicationActivityChanged(isActive: Bool) {
+        viewModel.applicationActivityChanged(isActive: isActive)
     }
 
     private func bindActiveDirectoryStore(_ store: DirectoryStore) {

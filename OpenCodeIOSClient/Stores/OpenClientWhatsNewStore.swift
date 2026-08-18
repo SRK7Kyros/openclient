@@ -5,6 +5,7 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
     enum Hero: Equatable {
         case customization
         case activity
+        case internationalization
     }
 
     struct Feature: Identifiable, Equatable {
@@ -21,6 +22,44 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
         }
     }
 
+    struct InternationalizationAnnouncement: Identifiable, Equatable {
+        struct Contributor: Equatable {
+            let name: String
+            let handle: String
+        }
+
+        struct PaletteColor: Equatable {
+            let red: Double
+            let green: Double
+            let blue: Double
+        }
+
+        let localeIdentifier: String
+        let nativeGreeting: String
+        let nativeName: String
+        let detail: String
+        let palette: [PaletteColor]
+        let contributor: Contributor?
+
+        var id: String { localeIdentifier }
+
+        init(
+            localeIdentifier: String,
+            nativeGreeting: String,
+            nativeName: String,
+            detail: LocalizedStringResource,
+            palette: [PaletteColor],
+            contributor: Contributor? = nil
+        ) {
+            self.localeIdentifier = localeIdentifier
+            self.nativeGreeting = nativeGreeting
+            self.nativeName = nativeName
+            self.detail = String(localized: detail)
+            self.palette = palette
+            self.contributor = contributor
+        }
+    }
+
     let version: String
     let title: String
     let summary: String
@@ -28,6 +67,7 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
     let hero: Hero
     let featureSectionTitle: String
     let showsSetup: Bool
+    let internationalizationAnnouncements: [InternationalizationAnnouncement]
 
     var id: String { version }
 
@@ -38,7 +78,8 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
         features: [Feature],
         hero: Hero = .customization,
         featureSectionTitle: LocalizedStringResource = "Small changes, right where they count",
-        showsSetup: Bool = true
+        showsSetup: Bool = true,
+        internationalizationAnnouncements: [InternationalizationAnnouncement] = []
     ) {
         self.version = version
         self.title = String(localized: title)
@@ -47,6 +88,7 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
         self.hero = hero
         self.featureSectionTitle = String(localized: featureSectionTitle)
         self.showsSetup = showsSetup
+        self.internationalizationAnnouncements = internationalizationAnnouncements
     }
 }
 
@@ -109,7 +151,52 @@ enum OpenClientReleaseNotesCatalog {
             featureSectionTitle: "Every conversation, in motion",
             showsSetup: false
         ),
+        OpenClientReleaseNotes(
+            version: "1.0.17",
+            title: "Hello, world",
+            summary: "OpenClient now speaks Brazilian Portuguese and Italian, throughout the app and beyond.",
+            features: [],
+            hero: .internationalization,
+            showsSetup: false,
+            internationalizationAnnouncements: [
+                OpenClientReleaseNotes.InternationalizationAnnouncement(
+                    localeIdentifier: "pt-BR",
+                    nativeGreeting: "Olá!",
+                    nativeName: "Português (Brasil)",
+                    detail: "OpenClient is now available in Brazilian Portuguese across the app and its extensions.",
+                    palette: [
+                        .init(red: 0.00, green: 0.45, blue: 0.25),
+                        .init(red: 0.98, green: 0.76, blue: 0.04),
+                        .init(red: 0.03, green: 0.26, blue: 0.64),
+                    ]
+                ),
+                OpenClientReleaseNotes.InternationalizationAnnouncement(
+                    localeIdentifier: "it",
+                    nativeGreeting: "Ciao!",
+                    nativeName: "Italiano",
+                    detail: "OpenClient is now available in Italian across the app and its extensions.",
+                    palette: [
+                        .init(red: 0.00, green: 0.55, blue: 0.31),
+                        .init(red: 0.94, green: 0.94, blue: 0.90),
+                        .init(red: 0.82, green: 0.10, blue: 0.17),
+                    ],
+                    contributor: .init(name: "Lorenzo Salami", handle: "@LSalami")
+                ),
+            ]
+        ),
     ]
+}
+
+enum OpenClientLocalizationContribution {
+    static let prompt = String(localized: """
+    Help me contribute a [YOUR LANGUAGE] translation to OpenClient.
+
+    Clone https://github.com/ntoporcov/openclient and read AGENTS.md, LOCALIZATION.md, and any instructions relevant to the files you edit. Create a dedicated translation branch.
+
+    Translate every shipping String Catalog entry from English into [YOUR LANGUAGE] across the main app, App Shortcuts, Info.plist copy, the Live Activity extension, and the Share extension. Add the locale to REQUIRED_LANGUAGES in scripts/lint-localizations.rb and to CFBundleLocalizations for every target in project.yml. Use the existing Brazilian Portuguese and Italian localizations as structural examples. Preserve placeholders, format specifiers, URLs, commands, code, and product names exactly, and review translations in their UI context.
+
+    Regenerate the Xcode project as documented. Run ruby scripts/lint-localizations.rb and the full localization and build checks, then fix every failure. Commit the changes, push the branch, and open a pull request against main that names the language, summarizes the coverage, and lists the validation performed. Do not overwrite unrelated changes, and ask me before making an ambiguous terminology choice.
+    """)
 }
 
 enum OpenClientPluginSetup {

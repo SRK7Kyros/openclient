@@ -27,6 +27,7 @@
 		0C0E30CEDC1FE29FD5E273ED /* ExcalidrawDrawingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90F376AA42D496CBD68290E /* ExcalidrawDrawingSheet.swift */; };
 		0C2E5EDC137F50D5FFD7383A /* OpenClientSharePayloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8E1D2121B207C92884AF2B /* OpenClientSharePayloadStore.swift */; };
 		0C9C177AC9E771CA928161FD /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 3D043EDF3D1E9F6BFC08D273 /* GhosttyTerminal */; };
+		0D0ECE26727F1FEEB90C19A7 /* OpenClientInternationalizationAnnouncementCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FEB97D398479A5442C5C194 /* OpenClientInternationalizationAnnouncementCard.swift */; };
 		0D41361BFD53F13EA58E6A54 /* ForkSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02FC24D66B635B01B4F29AE5 /* ForkSessionSheet.swift */; };
 		0E6F60E08977B86AA1DE35A3 /* SessionListStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B139514D80415E620B9F722 /* SessionListStoreTests.swift */; };
 		0EE73B562BD2A545A71C3BF6 /* SessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5412AE7F684F6084E8DF091 /* SessionCoordinator.swift */; };
@@ -334,6 +335,7 @@
 		BF2EB54B77788971F7F57D43 /* OpenClientVisualImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2E3674A629126EEB539B64 /* OpenClientVisualImageView.swift */; };
 		BF46C26DEF4B2706BAF1E6D1 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5495928F452F10791C0614E4 /* SessionListView.swift */; };
 		BF9C50581431223AA4C85299 /* ChatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9403CD63018375C683CB8CB9 /* ChatPreviews.swift */; };
+		BFDEEDED60C7D296CDBBEFC6 /* OpenClientInternationalizationAnnouncementCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FEB97D398479A5442C5C194 /* OpenClientInternationalizationAnnouncementCard.swift */; };
 		C0E32813718BC60160CD3D73 /* Trees.icon in Resources */ = {isa = PBXBuildFile; fileRef = F98EEF7ACE0EB09C5337DD2B /* Trees.icon */; };
 		C11D54CABA26421308878A34 /* ProjectSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 266C15C3288E0BF0BE49CBA7 /* ProjectSettingsSheet.swift */; };
 		C2E99BF78B77317A9D7B1F32 /* ConnectionFacade.swift in Sources */ = {isa = PBXBuildFile; fileRef = EACDB794BA9593FF2A8A8C72 /* ConnectionFacade.swift */; };
@@ -516,6 +518,7 @@
 		1EA27A28B5A16E255240CE6F /* FeatureFacadeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFacadeTests.swift; sourceTree = "<group>"; };
 		1ED1CFA40C3D88668C282339 /* LiveActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityStore.swift; sourceTree = "<group>"; };
 		1FDAE3886336302FF6C52BA1 /* CommerceStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommerceStoreTests.swift; sourceTree = "<group>"; };
+		1FEB97D398479A5442C5C194 /* OpenClientInternationalizationAnnouncementCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClientInternationalizationAnnouncementCard.swift; sourceTree = "<group>"; };
 		21403F8E9E4C50E69390DA04 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		21A103549C5DFE87C5DECA1B /* WhatsNew */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WhatsNew; path = Resources/WhatsNew; sourceTree = SOURCE_ROOT; };
 		21A59E82C967314E56BABE5D /* BrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserView.swift; sourceTree = "<group>"; };
@@ -1031,6 +1034,7 @@
 		A7628843C9752C663CCACD5B /* Root */ = {
 			isa = PBXGroup;
 			children = (
+				1FEB97D398479A5442C5C194 /* OpenClientInternationalizationAnnouncementCard.swift */,
 				FEF5F421070FC7D9683E1F03 /* OpenClientWhatsNewView.swift */,
 				B92A6AF2F468C80FC3840F04 /* ProjectContentTabSelectorPreviews.swift */,
 				1CF3564009893D20694D105B /* ProjectContentView.swift */,
@@ -1765,6 +1769,7 @@
 				863E93DA29C0C40F696CFA24 /* OpenClientFeatureTypes.swift in Sources */,
 				F933C9CAA849BC48A7B594C5 /* OpenClientImageContentClient.swift in Sources */,
 				B7D4C8E7F54B605BCA4F4D09 /* OpenClientImageContentCoordinator.swift in Sources */,
+				0D0ECE26727F1FEEB90C19A7 /* OpenClientInternationalizationAnnouncementCard.swift in Sources */,
 				5309B4DF6575FCC68A0F1CBD /* OpenClientPaywallView.swift in Sources */,
 				FA5BECE4CC4D2148464C1BA6 /* OpenClientSharePayloadStore.swift in Sources */,
 				DEBF2CC3C842DFD2AB3792C5 /* OpenClientVideoStreamClient.swift in Sources */,
@@ -1939,6 +1944,7 @@
 				9141289FC70FEF3A687571C5 /* OpenClientFeatureTypes.swift in Sources */,
 				347DFB37BE6A4031EDD2D1E8 /* OpenClientImageContentClient.swift in Sources */,
 				402DF019DF6E12C2D3BBAD7C /* OpenClientImageContentCoordinator.swift in Sources */,
+				BFDEEDED60C7D296CDBBEFC6 /* OpenClientInternationalizationAnnouncementCard.swift in Sources */,
 				70E4E1C33A9EE3D0965C9018 /* OpenClientPaywallView.swift in Sources */,
 				9CF2CD2D68B22F2052447920 /* OpenClientSharePayloadStore.swift in Sources */,
 				A5EF7D73A91FF4C08A16960B /* OpenClientVideoStreamClient.swift in Sources */,
@@ -2072,11 +2078,11 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.16;
+				MARKETING_VERSION = 1.0.17;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
@@ -2084,12 +2090,12 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.16;
+				MARKETING_VERSION = 1.0.17;
 				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";

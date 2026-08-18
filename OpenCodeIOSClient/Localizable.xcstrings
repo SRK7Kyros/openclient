@@ -17,6 +17,146 @@
         }
       }
     },
+    "Bring your language next": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu idioma pode ser o próximo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua lingua potrebbe essere la prossima"
+          }
+        }
+      }
+    },
+    "Clone OpenClient and help me translate it into [YOUR LANGUAGE]...": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clone o OpenClient e me ajude a traduzi-lo para [SEU IDIOMA]..."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clona OpenClient e aiutami a tradurlo in [LA TUA LINGUA]..."
+          }
+        }
+      }
+    },
+    "Copy a ready-to-use prompt for your AI to translate OpenClient and open a pull request.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copie um prompt pronto para usar e peça à sua IA para traduzir o OpenClient e abrir um pull request."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia un prompt pronto all'uso per chiedere alla tua IA di tradurre OpenClient e aprire una pull request."
+          }
+        }
+      }
+    },
+    "Copy translation prompt": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar prompt de tradução"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia il prompt per la traduzione"
+          }
+        }
+      }
+    },
+    "Help me contribute a [YOUR LANGUAGE] translation to OpenClient.\n\nClone https://github.com/ntoporcov/openclient and read AGENTS.md, LOCALIZATION.md, and any instructions relevant to the files you edit. Create a dedicated translation branch.\n\nTranslate every shipping String Catalog entry from English into [YOUR LANGUAGE] across the main app, App Shortcuts, Info.plist copy, the Live Activity extension, and the Share extension. Add the locale to REQUIRED_LANGUAGES in scripts/lint-localizations.rb and to CFBundleLocalizations for every target in project.yml. Use the existing Brazilian Portuguese and Italian localizations as structural examples. Preserve placeholders, format specifiers, URLs, commands, code, and product names exactly, and review translations in their UI context.\n\nRegenerate the Xcode project as documented. Run ruby scripts/lint-localizations.rb and the full localization and build checks, then fix every failure. Commit the changes, push the branch, and open a pull request against main that names the language, summarizes the coverage, and lists the validation performed. Do not overwrite unrelated changes, and ask me before making an ambiguous terminology choice.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajude-me a contribuir com uma tradução do OpenClient para [SEU IDIOMA].\n\nClone https://github.com/ntoporcov/openclient e leia AGENTS.md, LOCALIZATION.md e todas as instruções relevantes para os arquivos que você editar. Crie uma branch dedicada à tradução.\n\nTraduza todas as entradas dos Catálogos de Strings distribuídos, do inglês para [SEU IDIOMA], no app principal, nos Atalhos de App, nos textos do Info.plist, na extensão de Atividade ao Vivo e na extensão de Compartilhamento. Adicione o locale a REQUIRED_LANGUAGES em scripts/lint-localizations.rb e a CFBundleLocalizations para todos os targets em project.yml. Use as localizações existentes em português do Brasil e italiano como exemplos estruturais. Preserve placeholders, especificadores de formato, URLs, comandos, código e nomes de produtos exatamente como estão e revise as traduções no contexto da interface.\n\nGere novamente o projeto Xcode conforme documentado. Execute ruby scripts/lint-localizations.rb e as verificações completas de localização e build e corrija todas as falhas. Faça commit das alterações, envie a branch e abra um pull request para main que informe o idioma, resuma a cobertura e liste as validações realizadas. Não sobrescreva alterações não relacionadas e pergunte antes de escolher um termo ambíguo."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aiutami a contribuire con una traduzione di OpenClient in [LA TUA LINGUA].\n\nClona https://github.com/ntoporcov/openclient e leggi AGENTS.md, LOCALIZATION.md e tutte le istruzioni pertinenti ai file che modifichi. Crea un branch dedicato alla traduzione.\n\nTraduci dall'inglese in [LA TUA LINGUA] ogni voce dei cataloghi di stringhe distribuiti per l'app principale, i Comandi Rapidi, i testi di Info.plist, l'estensione Attività in tempo reale e l'estensione Condivisione. Aggiungi la lingua a REQUIRED_LANGUAGES in scripts/lint-localizations.rb e a CFBundleLocalizations per ogni target in project.yml. Usa le localizzazioni esistenti in portoghese brasiliano e italiano come esempi strutturali. Mantieni invariati segnaposto, specificatori di formato, URL, comandi, codice e nomi dei prodotti e verifica le traduzioni nel loro contesto nell'interfaccia.\n\nRigenera il progetto Xcode come indicato nella documentazione. Esegui ruby scripts/lint-localizations.rb e i controlli completi di localizzazione e build, quindi correggi ogni errore. Esegui il commit delle modifiche, pubblica il branch e apri una pull request verso main che indichi la lingua, riepiloghi la copertura ed elenchi le verifiche eseguite. Non sovrascrivere modifiche non correlate e chiedimi conferma prima di scegliere un termine ambiguo."
+          }
+        }
+      }
+    },
+    "New language: %@. %@ Thank you, %@ (%@), for the translation.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "New language: %1$@. %2$@ Thank you, %3$@ (%4$@), for the translation."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novo idioma: %1$@. %2$@ Agradecemos a %3$@ (%4$@) pela tradução."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuova lingua: %1$@. %2$@ Grazie a %3$@ (%4$@) per la traduzione."
+          }
+        }
+      }
+    },
+    "Prompt copied": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt copiado"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt copiato"
+          }
+        }
+      }
+    },
+    "Thank you, %@ (%@), for translating OpenClient into %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Thank you, %1$@ (%2$@), for translating OpenClient into %3$@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obrigado, %1$@ (%2$@), por traduzir o OpenClient para %3$@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grazie, %1$@ (%2$@), per aver tradotto OpenClient in %3$@."
+          }
+        }
+      }
+    },
     "%@": {
       "localizations": {
         "pt-BR": {
@@ -6486,6 +6626,22 @@
         }
       }
     },
+    "Hello, world": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olá, mundo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciao, mondo"
+          }
+        }
+      }
+    },
     "Help": {
       "localizations": {
         "pt-BR": {
@@ -8201,6 +8357,22 @@
         }
       }
     },
+    "NEW LANGUAGES": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOVOS IDIOMAS"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NUOVE LINGUE"
+          }
+        }
+      }
+    },
     "NEW IN %@": {
       "localizations": {
         "pt-BR": {
@@ -8373,6 +8545,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rete"
+          }
+        }
+      }
+    },
+    "New language: %@. %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "New language: %1$@. %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novo idioma: %1$@. %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuova lingua: %1$@. %2$@"
           }
         }
       }
@@ -9987,6 +10181,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "OpenClient ha cercato file PNG, JPG e JPEG in questo progetto."
+          }
+        }
+      }
+    },
+    "OpenClient is now available in Brazilian Portuguese across the app and its extensions.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient agora está disponível em português do Brasil em todo o app e suas extensões."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient è ora disponibile in portoghese brasiliano nell'app e nelle sue estensioni."
+          }
+        }
+      }
+    },
+    "OpenClient is now available in Italian across the app and its extensions.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient agora está disponível em italiano em todo o app e suas extensões."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient è ora disponibile in italiano nell'app e nelle sue estensioni."
+          }
+        }
+      }
+    },
+    "OpenClient now speaks Brazilian Portuguese and Italian, throughout the app and beyond.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agora o OpenClient fala português do Brasil e italiano em todo o app e além."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient ora parla portoghese brasiliano e italiano, nell'app e non solo."
+          }
+        }
+      }
+    },
+    "OpenClient, in your language": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient, no seu idioma"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient, nella tua lingua"
           }
         }
       }

@@ -83,11 +83,13 @@ struct OpenCodeIOSClientApp: App {
                 Task { await composition.appShell.handleOpenURL(url) }
             }
             .onChange(of: scenePhase) { _, phase in
+                composition.appShell.applicationActivityChanged(isActive: phase == .active)
                 guard phase == .active else { return }
                 composition.appShell.scheduleForegroundChatCatchUp(reason: "app scene active")
             }
 #if canImport(UIKit)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                composition.appShell.applicationActivityChanged(isActive: true)
                 composition.appShell.scheduleForegroundChatCatchUp(reason: "application did become active")
             }
 #endif

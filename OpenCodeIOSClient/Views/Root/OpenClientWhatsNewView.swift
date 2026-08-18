@@ -26,10 +26,18 @@ struct OpenClientWhatsNewView: View {
                         OpenClientWhatsNewActivityExamples()
                     }
 
-                    OpenClientWhatsNewFeatureList(
-                        title: release.featureSectionTitle,
-                        features: release.features
-                    )
+                    if !release.internationalizationAnnouncements.isEmpty {
+                        OpenClientInternationalizationAnnouncementSection(
+                            announcements: release.internationalizationAnnouncements
+                        )
+                    }
+
+                    if !release.features.isEmpty {
+                        OpenClientWhatsNewFeatureList(
+                            title: release.featureSectionTitle,
+                            features: release.features
+                        )
+                    }
                     if release.showsSetup {
                         OpenClientWhatsNewSetupSection(connection: connection)
                     }
@@ -211,6 +219,8 @@ private struct OpenClientWhatsNewHero: View {
                         OpenClientWhatsNewIconStack()
                     case .activity:
                         OpenClientWhatsNewActivityMark()
+                    case .internationalization:
+                        OpenClientWhatsNewLanguageMark()
                     }
                 }
 

@@ -7,6 +7,7 @@ import FoundationModels
 extension AppViewModel {
     private static let maxRecentAppleIntelligenceWorkspaceCount = 4
     private static let minimumConnectionOverlayDuration: TimeInterval = 2.0
+    private static let automaticConnectionRetryDelays = [2, 5, 10, 30]
 
     var canTryAppleIntelligence: Bool {
 #if canImport(FoundationModels)
@@ -44,17 +45,37 @@ extension AppViewModel {
     }
 
     func connect() async {
+        connectionAttemptTask?.cancel()
+        connectionAttemptTask = nil
+        let attemptID = UUID()
+        connectionAttemptID = attemptID
+        await connect(attemptID: attemptID)
+        guard connectionAttemptID == attemptID else { return }
+        if isShowingConnectionOverlay {
+            await finishConnectionOverlayAfterAttempt(attemptID: attemptID)
+        } else {
+            connectionAttemptID = nil
+        }
+    }
+
+    private func connect(attemptID: UUID) async {
+        guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
+        let wasBrowsingLocalCache = backendMode == .cachedServer
         resetRecentProjectSessionsForConnectionChange()
         resetLocalCacheRuntimeState()
         let cacheServerID = config.recentServerID
         let cachedProjects = await loadCachedProjectsIfEnabled()
-        guard !Task.isCancelled, config.recentServerID == cacheServerID else { return }
+        guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false, config.recentServerID == cacheServerID else { return }
         if let cachedProjects {
             projects = projectCoordinator.bootstrapProjects(cachedProjects.projects, currentProject: nil)
         }
         await connectionCoordinator.connect(
             client: client,
+            isCurrentAttempt: { [weak self] in
+                self?.isCurrentConnectionAttempt(attemptID) == true
+            },
             applyBootstrap: { bootstrap in
+                guard self.isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
                 persistConfigAfterSuccessfulConnection()
                 loadNewSessionDefaults()
                 loadFunAndGamesPreferences()
@@ -69,41 +90,62 @@ extension AppViewModel {
                 loadProjectListPreferences()
                 connectionCoordinator.updateConnectionPhase(.preparingInterface)
                 await loadComposerOptions()
-                try? Task.checkCancellation()
+                guard self.isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
                 connectionCoordinator.updateConnectionPhase(.startingLiveUpdates)
                 startEventStream()
                 await runUITestBootstrapIfNeeded()
             },
             handleFailure: {
+                guard self.isCurrentConnectionAttempt(attemptID) else { return }
                 stopEventStream()
-                directoryStoreRegistry.reset()
+                if wasBrowsingLocalCache == false {
+                    directoryStoreRegistry.reset()
+                }
             }
         )
-        if !isConnected, cachedProjects != nil, usesLocalCache {
-            connectionStore.applyCachedServerConnection()
+        guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
+        if !isConnected, (cachedProjects != nil || wasBrowsingLocalCache), usesLocalCache {
+            connectionStore.applyCachedServerConnection(preservingError: wasBrowsingLocalCache)
             await liveActivityFacade.stopAll()
         }
+        guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
         if isConnected {
             beginRecentProjectSessionsLoadingIfPossible()
+            automaticConnectionRetryAttempt = 0
+            cancelAutomaticConnectionRetryTask()
+        } else {
+            scheduleAutomaticConnectionRetryIfNeeded()
         }
     }
 
     func startConnection() {
+        cancelAutomaticConnectionRetryTask()
         connectionAttemptTask?.cancel()
+        let attemptID = UUID()
+        connectionAttemptID = attemptID
         isShowingAddServerSheet = false
         connectionOverlayStartedAt = Date()
         isShowingConnectionOverlay = true
         connectionAttemptTask = Task { [weak self] in
-            await self?.connect()
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.connectionAttemptTask = nil
-            }
-            await self?.finishConnectionOverlayAfterAttempt()
+            guard let self else { return }
+            await self.connect(attemptID: attemptID)
+            guard self.connectionAttemptID == attemptID else { return }
+            self.connectionAttemptTask = nil
+            await self.finishConnectionOverlayAfterAttempt(attemptID: attemptID)
         }
     }
 
-    private func finishConnectionOverlayAfterAttempt() async {
+    func retryCachedServerConnection() {
+        guard backendMode == .cachedServer else { return }
+        if let savedServer = recentServerConfigs.first(where: { $0.recentServerID == config.recentServerID }) {
+            config = hydratedServerConfig(from: savedServer)
+        }
+        appendDebugLog("cached server retry requested server=\(config.recentServerID)")
+        startConnection()
+    }
+
+    private func finishConnectionOverlayAfterAttempt(attemptID: UUID) async {
+        guard connectionAttemptID == attemptID else { return }
         if isConnected {
             let elapsed = connectionOverlayStartedAt.map { Date().timeIntervalSince($0) } ?? Self.minimumConnectionOverlayDuration
             let remaining = max(0, Self.minimumConnectionOverlayDuration - elapsed)
@@ -114,18 +156,25 @@ extension AppViewModel {
 
         await MainActor.run { [weak self] in
             guard let self else { return }
-            guard self.connectionAttemptTask == nil else { return }
+            guard self.connectionAttemptID == attemptID, self.connectionAttemptTask == nil else { return }
+            self.connectionAttemptID = nil
             self.connectionOverlayStartedAt = nil
             self.isShowingConnectionOverlay = false
         }
     }
 
+    private func isCurrentConnectionAttempt(_ attemptID: UUID) -> Bool {
+        connectionAttemptID == attemptID
+    }
+
     func connect(to serverConfig: OpenCodeServerConfig) async {
+        stopAutomaticConnectionRetries()
         config = hydratedServerConfig(from: serverConfig)
         await connect()
     }
 
     func startConnection(to serverConfig: OpenCodeServerConfig) {
+        stopAutomaticConnectionRetries()
         config = hydratedServerConfig(from: serverConfig)
         startConnection()
     }
@@ -133,19 +182,97 @@ extension AppViewModel {
     @discardableResult
     func startAutomaticConnectionIfConfigured() -> Bool {
         guard !hasAttemptedAutomaticConnection else { return false }
-        hasAttemptedAutomaticConnection = true
 
         let environment = ProcessInfo.processInfo.environment
         guard environment["OPENCODE_UI_TEST_MODE"] != "1",
               environment["OPENCLIENT_SCREENSHOT_SCENE"] == nil,
               !isConnected,
-              backendMode == .none,
+              backendMode == .none || backendMode == .cachedServer,
               let server = appCustomizationStore.autoConnectServer(in: recentServerConfigs) else { return false }
-        startConnection(to: server)
+        hasAttemptedAutomaticConnection = true
+        automaticConnectionRetryEnabled = true
+        automaticConnectionRetryAttempt = 0
+        config = hydratedServerConfig(from: server)
+        startConnection()
         return true
     }
 
+    func applicationActivityChanged(isActive: Bool) {
+        isApplicationActive = isActive
+        guard isActive else {
+            cancelAutomaticConnectionRetryTask()
+            return
+        }
+        guard hasAttemptedAutomaticConnection else { return }
+        scheduleAutomaticConnectionRetryIfNeeded(immediate: true)
+    }
+
+    private func scheduleAutomaticConnectionRetryIfNeeded(immediate: Bool = false) {
+        guard automaticConnectionRetryTask == nil, canAutomaticallyRetryConnection else { return }
+        automaticConnectionRetryGeneration &+= 1
+        let generation = automaticConnectionRetryGeneration
+        automaticConnectionRetryTask = Task { [weak self] in
+            guard let self else { return }
+            var retriesImmediately = immediate
+
+            while self.automaticConnectionRetryGeneration == generation,
+                  self.canAutomaticallyRetryConnection {
+                if retriesImmediately {
+                    await Task.yield()
+                    retriesImmediately = false
+                } else {
+                    let index = min(self.automaticConnectionRetryAttempt, Self.automaticConnectionRetryDelays.count - 1)
+                    do {
+                        try await Task.sleep(for: .seconds(Self.automaticConnectionRetryDelays[index]))
+                    } catch {
+                        break
+                    }
+                }
+
+                guard self.automaticConnectionRetryGeneration == generation,
+                      self.canAutomaticallyRetryConnection,
+                      self.connectionAttemptID == nil,
+                      let server = self.appCustomizationStore.autoConnectServer(in: self.recentServerConfigs) else { break }
+
+                self.config = self.hydratedServerConfig(from: server)
+                await self.connect()
+                guard self.isConnected == false else { break }
+                self.automaticConnectionRetryAttempt += 1
+            }
+
+            if self.automaticConnectionRetryGeneration == generation {
+                self.automaticConnectionRetryTask = nil
+            }
+        }
+    }
+
+    private var canAutomaticallyRetryConnection: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return automaticConnectionRetryEnabled
+            && isApplicationActive
+            && isConnected == false
+            && isLoading == false
+            && backendMode != .appleIntelligence
+            && environment["OPENCODE_UI_TEST_MODE"] != "1"
+            && environment["OPENCLIENT_SCREENSHOT_SCENE"] == nil
+            && appCustomizationStore.autoConnectServer(in: recentServerConfigs) != nil
+    }
+
+    private func cancelAutomaticConnectionRetryTask() {
+        automaticConnectionRetryGeneration &+= 1
+        automaticConnectionRetryTask?.cancel()
+        automaticConnectionRetryTask = nil
+    }
+
+    private func stopAutomaticConnectionRetries() {
+        automaticConnectionRetryEnabled = false
+        automaticConnectionRetryAttempt = 0
+        cancelAutomaticConnectionRetryTask()
+    }
+
     func cancelConnectionAttempt() {
+        stopAutomaticConnectionRetries()
+        connectionAttemptID = nil
         connectionAttemptTask?.cancel()
         connectionAttemptTask = nil
         connectionOverlayStartedAt = nil
@@ -157,12 +284,14 @@ extension AppViewModel {
     }
 
     func presentAddServerSheet() {
+        stopAutomaticConnectionRetries()
         config = OpenCodeServerConfig()
         connectionStore.prepareAddServerSheet()
         isShowingAddServerSheet = true
     }
 
     func prepareToEditRecentServer(_ serverConfig: OpenCodeServerConfig) {
+        stopAutomaticConnectionRetries()
         config = hydratedServerConfig(from: serverConfig)
         connectionStore.prepareEditServerSheet(originalServerID: serverConfig.recentServerID)
         isShowingAddServerSheet = true
@@ -201,10 +330,13 @@ extension AppViewModel {
             connectionStore.applyErrorMessage(validationMessage)
             return
         }
+        stopAutomaticConnectionRetries()
         startConnection()
     }
 
     func disconnect() {
+        stopAutomaticConnectionRetries()
+        connectionAttemptID = nil
         connectionAttemptTask?.cancel()
         connectionAttemptTask = nil
         appleIntelligenceResponseTask?.cancel()
@@ -319,6 +451,7 @@ extension AppViewModel {
         }
 
         appleIntelligenceResponseTask?.cancel()
+        stopAutomaticConnectionRetries()
         stopEventStream()
         connectionStore.applyAppleIntelligenceMode()
         activeAppleIntelligenceWorkspaceID = workspace.id

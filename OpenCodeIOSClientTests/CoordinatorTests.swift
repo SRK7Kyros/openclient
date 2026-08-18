@@ -8,6 +8,81 @@ final class CoordinatorTests: XCTestCase {
         CoordinatorMockURLProtocol.requestHandler = nil
     }
 
+    func testConnectionCoordinatorConnectsAfterBootstrap() async {
+        CoordinatorMockURLProtocol.requestHandler = { request in
+            switch request.url?.path {
+            case "/global/health":
+                return try jsonResponse(for: request, body: #"{"healthy":true,"version":"1.2.3"}"#)
+            case "/project":
+                return try jsonResponse(for: request, body: "[]")
+            case "/project/current":
+                return try jsonResponse(for: request, body: "null")
+            default:
+                throw OpenCodeAPIError.invalidURL
+            }
+        }
+        let store = ConnectionStore()
+        let coordinator = ConnectionCoordinator(connectionStore: store)
+        var appliedBootstrap = false
+
+        await coordinator.connect(
+            client: makeClient(),
+            applyBootstrap: { _ in appliedBootstrap = true },
+            handleFailure: { XCTFail("Connection should succeed") }
+        )
+
+        XCTAssertTrue(appliedBootstrap)
+        XCTAssertTrue(store.isConnected)
+        XCTAssertEqual(store.backendMode, .server)
+        XCTAssertEqual(store.serverVersion, "1.2.3")
+        XCTAssertFalse(store.isLoading)
+    }
+
+    func testInvalidatedConnectionAttemptCannotFinishOrOverwriteNewerState() async {
+        CoordinatorMockURLProtocol.requestHandler = { request in
+            switch request.url?.path {
+            case "/global/health":
+                return try jsonResponse(for: request, body: #"{"healthy":true,"version":"old"}"#)
+            default:
+                throw OpenCodeAPIError.invalidURL
+            }
+        }
+        let store = ConnectionStore(backendMode: .cachedServer)
+        let coordinator = ConnectionCoordinator(connectionStore: store)
+        var attemptChecks = 0
+        var handledFailure = false
+
+        await coordinator.connect(
+            client: makeClient(),
+            isCurrentAttempt: {
+                attemptChecks += 1
+                guard attemptChecks == 1 else {
+                    store.applyErrorMessage("newer attempt")
+                    return false
+                }
+                return true
+            },
+            applyBootstrap: { _ in XCTFail("Stale attempt should not bootstrap") },
+            handleFailure: { handledFailure = true }
+        )
+
+        XCTAssertFalse(handledFailure)
+        XCTAssertEqual(store.backendMode, .cachedServer)
+        XCTAssertEqual(store.errorMessage, "newer attempt")
+        XCTAssertTrue(store.isLoading)
+        XCTAssertFalse(store.isConnected)
+    }
+
+    func testCachedConnectionFallbackCanPreserveRetryFailure() {
+        let store = ConnectionStore()
+        store.applyConnectionFailure(OpenCodeAPIError.timedOut)
+
+        store.applyCachedServerConnection(preservingError: true)
+
+        XCTAssertEqual(store.backendMode, .cachedServer)
+        XCTAssertEqual(store.errorMessage, OpenCodeAPIError.timedOut.localizedDescription)
+    }
+
     func testEventSyncCoordinatorMatchesSelectedSessionEvents() {
         let coordinator = EventSyncCoordinator()
         let selected = "ses_selected"

@@ -327,16 +327,22 @@ private struct CachedServerBanner: View {
             Text("Browsing downloaded chats")
                 .font(.subheadline.weight(.semibold))
             Spacer(minLength: 8)
-            Button("Retry", action: retry)
-                .font(.subheadline.weight(.semibold))
+            Button(action: retry) {
+                Text("Retry")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("cache.retry")
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 2)
         .background(.regularMaterial, in: Capsule())
         .overlay {
             Capsule().stroke(.primary.opacity(0.1), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cache.offline-banner")
     }
 }

@@ -749,7 +749,13 @@ final class AppViewModel: ObservableObject {
     var recentProjectSessionsLoadTask: Task<Void, Never>?
     var recentProjectSessionsLoadGeneration = 0
     var connectionAttemptTask: Task<Void, Never>?
+    var connectionAttemptID: UUID?
     var hasAttemptedAutomaticConnection = false
+    var automaticConnectionRetryTask: Task<Void, Never>?
+    var automaticConnectionRetryGeneration: UInt = 0
+    var automaticConnectionRetryAttempt = 0
+    var automaticConnectionRetryEnabled = false
+    var isApplicationActive = true
     var appleIntelligenceResponseTask: Task<Void, Never>?
     var activeAppleIntelligenceWorkspaceURL: URL?
     var currentAppleIntelligenceWorkspace: AppleIntelligenceWorkspaceRecord?

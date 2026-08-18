@@ -307,7 +307,12 @@ final class OpenCodeEventManager {
                 }
             }
 
-            await streamTask.value
+            await withTaskCancellationHandler {
+                await streamTask.value
+            } onCancel: {
+                streamTask.cancel()
+                heartbeatTask.cancel()
+            }
             heartbeatTask.cancel()
 
             await batcher.flush()

@@ -56,6 +56,19 @@ final class AppShellFacadeTests: XCTestCase {
         XCTAssertTrue(shell.hidesShellForConnectionExperience)
     }
 
+    func testCachedRetryStartsVisibleConnectionAttempt() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        viewModel.backendMode = .cachedServer
+
+        shell.retryCachedServerConnection()
+
+        XCTAssertTrue(viewModel.isShowingConnectionOverlay)
+        XCTAssertNotNil(viewModel.connectionAttemptTask)
+        XCTAssertNotNil(viewModel.connectionAttemptID)
+        viewModel.cancelConnectionAttempt()
+    }
+
     func testProjectLoadingRouteAppliesOnlyToCompactEmptyDirectory() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade

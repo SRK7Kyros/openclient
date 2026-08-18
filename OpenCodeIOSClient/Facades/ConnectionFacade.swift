@@ -60,6 +60,10 @@ final class ConnectionFacade: ObservableObject {
         viewModel.startConnection()
     }
 
+    func retryCachedServerConnection() {
+        viewModel.retryCachedServerConnection()
+    }
+
     func startConnection(to serverConfig: OpenCodeServerConfig) {
         viewModel.startConnection(to: serverConfig)
     }

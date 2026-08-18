@@ -10,11 +10,17 @@ final class ConnectionCoordinator {
 
     func connect(
         client: OpenCodeAPIClient,
+        isCurrentAttempt: @MainActor () -> Bool = { true },
         applyBootstrap: @MainActor (OpenCodeGlobalBootstrap) async -> Void,
         handleFailure: @MainActor () -> Void
     ) async {
+        guard isCurrentAttempt() else { return }
         connectionStore.beginConnecting()
-        defer { connectionStore.finishConnecting() }
+        defer {
+            if isCurrentAttempt() {
+                connectionStore.finishConnecting()
+            }
+        }
 
         do {
             connectionStore.updateConnectionPhase(.checkingServer)
@@ -22,6 +28,7 @@ final class ConnectionCoordinator {
                 try await client.health()
             }
             try Task.checkCancellation()
+            guard isCurrentAttempt() else { return }
 
             connectionStore.updateConnectionPhase(.loadingWorkspace)
             let bootstrap = try await Self.withTimeout(seconds: 10) {
@@ -34,17 +41,21 @@ final class ConnectionCoordinator {
                 )
             }
             try Task.checkCancellation()
+            guard isCurrentAttempt() else { return }
             connectionStore.updateConnectionPhase(.preparingInterface)
             await applyBootstrap(bootstrap)
             try Task.checkCancellation()
+            guard isCurrentAttempt() else { return }
             connectionStore.applySuccessfulServerConnection(
                 version: bootstrap.health.version,
                 healthy: bootstrap.health.healthy
             )
         } catch is CancellationError {
+            guard isCurrentAttempt() else { return }
             handleFailure()
             connectionStore.applyConnectionCancellation()
         } catch {
+            guard isCurrentAttempt() else { return }
             handleFailure()
             connectionStore.applyConnectionFailure(error)
         }
