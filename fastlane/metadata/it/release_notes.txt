@@ -1,0 +1,5 @@
+OpenClient è ora disponibile in portoghese brasiliano e italiano in tutta l'app, nei widget, nelle Attività in tempo reale e nelle estensioni.
+
+Questo aggiornamento rende inoltre più affidabile la riconnessione automatica e migliora i nuovi tentativi di connessione al server mentre esplori le chat scaricate.
+
+Grazie a Lorenzo Salami (@LSalami) per aver contribuito con la traduzione italiana.

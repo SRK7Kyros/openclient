@@ -83,6 +83,34 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertEqual(store.errorMessage, OpenCodeAPIError.timedOut.localizedDescription)
     }
 
+    func testCachedConnectionRequiresExplicitOfferAcceptance() {
+        let store = ConnectionStore()
+        store.applyConnectionFailure(OpenCodeAPIError.timedOut)
+
+        store.offerCachedServerConnection()
+
+        XCTAssertEqual(store.backendMode, .none)
+        XCTAssertFalse(store.isConnected)
+        XCTAssertTrue(store.isOfferingCachedServerConnection)
+        XCTAssertEqual(store.errorMessage, OpenCodeAPIError.timedOut.localizedDescription)
+
+        store.applyCachedServerConnection()
+
+        XCTAssertEqual(store.backendMode, .cachedServer)
+        XCTAssertFalse(store.isOfferingCachedServerConnection)
+        XCTAssertNil(store.errorMessage)
+    }
+
+    func testStartingAnotherConnectionDismissesCachedConnectionOffer() {
+        let store = ConnectionStore()
+        store.offerCachedServerConnection()
+
+        store.beginConnecting()
+
+        XCTAssertFalse(store.isOfferingCachedServerConnection)
+        XCTAssertTrue(store.isLoading)
+    }
+
     func testEventSyncCoordinatorMatchesSelectedSessionEvents() {
         let coordinator = EventSyncCoordinator()
         let selected = "ses_selected"

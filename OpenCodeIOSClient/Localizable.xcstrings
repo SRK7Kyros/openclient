@@ -2509,6 +2509,22 @@
         }
       }
     },
+    "Browse Downloaded Chats": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver chats baixados"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfoglia le chat scaricate"
+          }
+        }
+      }
+    },
     "Browsing downloaded chats": {
       "localizations": {
         "pt-BR": {
@@ -10085,6 +10101,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "OpenClient non è riuscito a inviare la risposta dell'attività in tempo reale."
+          }
+        }
+      }
+    },
+    "OpenClient couldn't connect to this server. Try again, or browse downloaded chats in read-only mode.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O OpenClient não conseguiu se conectar a este servidor. Tente novamente ou veja os chats baixados no modo somente leitura."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenClient non è riuscito a connettersi a questo server. Riprova oppure consulta le chat scaricate in modalità di sola lettura."
           }
         }
       }

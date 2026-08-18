@@ -51,6 +51,7 @@ final class ConnectionFacade: ObservableObject {
         viewModel.appCustomizationStore.autoConnectLandingDestination
     }
     var isBrowsingLocalCache: Bool { viewModel.backendMode == .cachedServer }
+    var isOfferingCachedServerConnection: Bool { viewModel.connectionStore.isOfferingCachedServerConnection }
     var errorMessage: String? { viewModel.errorMessage }
     var isLoading: Bool { viewModel.isLoading }
     var isEditingSavedServer: Bool { viewModel.isEditingSavedServer }
@@ -62,6 +63,18 @@ final class ConnectionFacade: ObservableObject {
 
     func retryCachedServerConnection() {
         viewModel.retryCachedServerConnection()
+    }
+
+    func retryOfferedServerConnection() {
+        viewModel.retryOfferedServerConnection()
+    }
+
+    func browseDownloadedServerData() {
+        viewModel.browseDownloadedServerData()
+    }
+
+    func dismissCachedServerConnectionOffer() {
+        viewModel.dismissCachedServerConnectionOffer()
     }
 
     func startConnection(to serverConfig: OpenCodeServerConfig) {

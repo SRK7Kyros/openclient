@@ -51,6 +51,16 @@ struct ConnectionSheetView: View {
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
+            } else if facade.isOfferingCachedServerConnection {
+                CachedConnectionRecoveryView(
+                    config: facade.config,
+                    errorMessage: facade.errorMessage,
+                    retry: facade.retryOfferedServerConnection,
+                    browseDownloadedData: facade.browseDownloadedServerData,
+                    editServer: facade.dismissCachedServerConnectionOffer
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
             }
         }
         .presentationDetents(detents, selection: $selectedDetent)
@@ -632,6 +642,75 @@ struct ConnectingServerView: View {
                 .controlSize(.large)
             }
         }
+    }
+}
+
+private struct CachedConnectionRecoveryView: View {
+    let config: OpenCodeServerConfig
+    let errorMessage: String?
+    let retry: () -> Void
+    let browseDownloadedData: () -> Void
+    let editServer: () -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 16) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(.orange)
+
+                VStack(spacing: 8) {
+                    Text("Connection Failed")
+                        .font(.title2.bold())
+
+                    Text(config.displayName)
+                        .font(.headline)
+
+                    Text("OpenClient couldn't connect to this server. Try again, or browse downloaded chats in read-only mode.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let errorMessage, errorMessage.isEmpty == false {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: 420)
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 24)
+
+            VStack(spacing: 12) {
+                Button("Try Again", action: retry)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("connection.recovery.retry")
+
+                Button("Browse Downloaded Chats", action: browseDownloadedData)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("connection.recovery.browse-cache")
+
+                Button("Edit Server", action: editServer)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("connection.recovery.edit-server")
+            }
+            .controlSize(.large)
+            .frame(maxWidth: 420)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .opencodeGlassSurface(in: Rectangle())
+        .background(Color.black.opacity(0.04).ignoresSafeArea())
+        .ignoresSafeArea()
+        .accessibilityIdentifier("connection.cache-recovery")
     }
 }
 

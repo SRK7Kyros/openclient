@@ -1,0 +1,42 @@
+OpenClient offre l'integrazione nativa più completa tra iPhone, iPad e OpenCode per il tuo server autogestito.
+
+Tieni le sessioni di programmazione sempre a portata di mano, anche quando sei lontano dalla scrivania. Esplora i progetti, riprendi le chat, controlla l'attività degli strumenti, rispondi alle richieste di autorizzazione e alle domande e segui il lavoro in corso da un'interfaccia nativa e veloce, progettata per iOS e iPadOS.
+
+OpenClient è pensato per chi usa già OpenCode e desidera qualcosa di più di una finestra di chat remota. È un centro di controllo mobile per agenti attivi, attività di lunga durata, rapidi approfondimenti e controlli da remoto.
+
+Funzionalità principali di OpenCode:
+
+- Connettiti al tuo server OpenCode autogestito
+- Salva i server recenti e riconnettiti rapidamente
+- Esplora progetti, spazi di lavoro e cronologia delle sessioni
+- Apri sessioni esistenti o creane di nuove
+- Continua le conversazioni da iPhone o iPad
+- Segui in tempo reale le risposte dell'assistente e l'attività degli strumenti
+- Consulta ragionamenti, messaggi, output dei comandi e riferimenti ai file
+- Invia prompt di testo e allega file compatibili da iOS
+- Disegna idee, annotazioni per l'interfaccia e diagrammi di architettura con la lavagna Excalidraw integrata
+- Detta i prompt quando scrivere non è pratico
+- Usa comandi, menzioni degli agenti, modelli e opzioni di sessione disponibili sul server
+- Segui le attività della sessione mentre il lavoro è in corso
+- Rispondi alle richieste di autorizzazione senza tornare al computer
+- Rispondi a domande a scelta multipla o personalizzate da un'interfaccia nativa
+- Visualizza e gestisci lo stato dei server MCP quando supportato dalla configurazione di OpenCode
+- Esamina i file del progetto e il contesto del controllo versione dall'app
+
+Integrazioni con iOS e iPadOS:
+
+- Interfaccia SwiftUI nativa ottimizzata per iPhone e iPad
+- Layout a più colonne su iPad per progetti, sessioni e chat
+- Attività in tempo reale per seguire le sessioni dalla schermata di blocco e dalla Dynamic Island
+- Widget della schermata Home per le sessioni recenti e fissate
+- Comandi Rapidi e widget di controllo per accedere velocemente alle azioni comuni di OpenClient
+- Archiviazione sicura delle password dei server nel Portachiavi
+- Condivisione tramite gruppo di app per i widget, senza memorizzare la password del server nei dati del widget
+- Selettore file nativo per aggiungere allegati compatibili
+- Allegati di disegni basati su Excalidraw esportati direttamente nella chat
+- Controlli di composizione adatti alla dettatura vocale
+- Link diretti dai widget al server, al progetto e alla sessione corretti
+
+Privacy e gestione autonoma:
+
+OpenClient è progettato per un uso privato e autogestito. Scegli tu a quale server OpenCode connetterti e i dati delle sessioni restano associati alla tua configurazione di OpenCode. Le credenziali del server vengono archiviate in modo sicuro sul dispositivo e OpenClient non fornisce né gestisce un backend OpenCode per tuo conto.

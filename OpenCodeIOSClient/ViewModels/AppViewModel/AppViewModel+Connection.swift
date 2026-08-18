@@ -104,8 +104,13 @@ extension AppViewModel {
             }
         )
         guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
-        if !isConnected, (cachedProjects != nil || wasBrowsingLocalCache), usesLocalCache {
+        if !isConnected, wasBrowsingLocalCache, usesLocalCache {
             connectionStore.applyCachedServerConnection(preservingError: wasBrowsingLocalCache)
+            await liveActivityFacade.stopAll()
+        } else if !isConnected,
+                  cachedProjects?.projects.isEmpty == false,
+                  usesLocalCache {
+            connectionStore.offerCachedServerConnection()
             await liveActivityFacade.stopAll()
         }
         guard isCurrentConnectionAttempt(attemptID), Task.isCancelled == false else { return }
@@ -142,6 +147,23 @@ extension AppViewModel {
         }
         appendDebugLog("cached server retry requested server=\(config.recentServerID)")
         startConnection()
+    }
+
+    func retryOfferedServerConnection() {
+        guard connectionStore.isOfferingCachedServerConnection else { return }
+        startConnection()
+    }
+
+    func browseDownloadedServerData() {
+        guard connectionStore.isOfferingCachedServerConnection else { return }
+        stopAutomaticConnectionRetries()
+        connectionStore.applyCachedServerConnection()
+    }
+
+    func dismissCachedServerConnectionOffer() {
+        guard connectionStore.isOfferingCachedServerConnection else { return }
+        stopAutomaticConnectionRetries()
+        connectionStore.dismissCachedServerConnectionOffer()
     }
 
     private func finishConnectionOverlayAfterAttempt(attemptID: UUID) async {
@@ -252,6 +274,7 @@ extension AppViewModel {
             && isApplicationActive
             && isConnected == false
             && isLoading == false
+            && connectionStore.isOfferingCachedServerConnection == false
             && backendMode != .appleIntelligence
             && environment["OPENCODE_UI_TEST_MODE"] != "1"
             && environment["OPENCLIENT_SCREENSHOT_SCENE"] == nil

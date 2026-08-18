@@ -1,0 +1,5 @@
+O OpenClient agora está disponível em português do Brasil e italiano em todo o app, widgets, Atividades ao Vivo e extensões.
+
+Esta atualização também torna a reconexão automática mais confiável e melhora as novas tentativas de conexão com o servidor enquanto você navega por conversas baixadas.
+
+Agradecemos a Lorenzo Salami (@LSalami) pela contribuição da tradução para o italiano.

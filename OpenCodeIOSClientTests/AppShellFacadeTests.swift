@@ -69,6 +69,39 @@ final class AppShellFacadeTests: XCTestCase {
         viewModel.cancelConnectionAttempt()
     }
 
+    func testCachedConnectionOfferKeepsShellGatedUntilUserAccepts() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        viewModel.connectionStore.applyConnectionFailure(OpenCodeAPIError.timedOut)
+        viewModel.connectionStore.offerCachedServerConnection()
+
+        XCTAssertTrue(shell.connection.isOfferingCachedServerConnection)
+        XCTAssertFalse(shell.isBrowsingLocalCache)
+        XCTAssertEqual(shell.primarySheet, .connection)
+        XCTAssertTrue(shell.hidesShellForConnectionExperience)
+
+        shell.connection.browseDownloadedServerData()
+
+        XCTAssertFalse(shell.connection.isOfferingCachedServerConnection)
+        XCTAssertTrue(shell.isBrowsingLocalCache)
+        XCTAssertNil(shell.primarySheet)
+        XCTAssertFalse(shell.hidesShellForConnectionExperience)
+    }
+
+    func testDismissingCachedConnectionOfferReturnsToServerSelection() {
+        let viewModel = AppViewModel()
+        let shell = viewModel.appShellFacade
+        viewModel.connectionStore.applyConnectionFailure(OpenCodeAPIError.timedOut)
+        viewModel.connectionStore.offerCachedServerConnection()
+
+        shell.connection.dismissCachedServerConnectionOffer()
+
+        XCTAssertFalse(shell.connection.isOfferingCachedServerConnection)
+        XCTAssertFalse(shell.isBrowsingLocalCache)
+        XCTAssertEqual(shell.primarySheet, .connection)
+        XCTAssertEqual(viewModel.errorMessage, OpenCodeAPIError.timedOut.localizedDescription)
+    }
+
     func testProjectLoadingRouteAppliesOnlyToCompactEmptyDirectory() {
         let viewModel = AppViewModel()
         let shell = viewModel.appShellFacade

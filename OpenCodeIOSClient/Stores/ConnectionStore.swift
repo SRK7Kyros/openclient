@@ -47,6 +47,7 @@ final class ConnectionStore: ObservableObject {
     @Published var errorMessage: String?
     @Published var isLoading: Bool
     @Published var connectionPhase: OpenClientConnectionPhase
+    @Published var isOfferingCachedServerConnection: Bool
     @Published var recentServerConfigs: [OpenCodeServerConfig]
     @Published var hasSavedServer: Bool
     @Published var showSavedServerPrompt: Bool
@@ -59,6 +60,7 @@ final class ConnectionStore: ObservableObject {
         errorMessage: String? = nil,
         isLoading: Bool = false,
         connectionPhase: OpenClientConnectionPhase = .idle,
+        isOfferingCachedServerConnection: Bool = false,
         recentServerConfigs: [OpenCodeServerConfig] = [],
         hasSavedServer: Bool = false,
         showSavedServerPrompt: Bool = false,
@@ -70,6 +72,7 @@ final class ConnectionStore: ObservableObject {
         self.errorMessage = errorMessage
         self.isLoading = isLoading
         self.connectionPhase = connectionPhase
+        self.isOfferingCachedServerConnection = isOfferingCachedServerConnection
         self.recentServerConfigs = recentServerConfigs
         self.hasSavedServer = hasSavedServer
         self.showSavedServerPrompt = showSavedServerPrompt
@@ -79,6 +82,7 @@ final class ConnectionStore: ObservableObject {
     func beginConnecting() {
         isLoading = true
         errorMessage = nil
+        isOfferingCachedServerConnection = false
         connectionPhase = .checkingServer
     }
 
@@ -106,6 +110,7 @@ final class ConnectionStore: ObservableObject {
         serverVersion = version
         errorMessage = nil
         isConnected = healthy
+        isOfferingCachedServerConnection = false
         connectionPhase = .idle
     }
 
@@ -113,6 +118,7 @@ final class ConnectionStore: ObservableObject {
         backendMode = .none
         isConnected = false
         errorMessage = error.localizedDescription
+        isOfferingCachedServerConnection = false
         connectionPhase = .idle
     }
 
@@ -121,7 +127,19 @@ final class ConnectionStore: ObservableObject {
         isConnected = false
         isLoading = false
         errorMessage = nil
+        isOfferingCachedServerConnection = false
         connectionPhase = .idle
+    }
+
+    func offerCachedServerConnection() {
+        backendMode = .none
+        isConnected = false
+        isOfferingCachedServerConnection = true
+        connectionPhase = .idle
+    }
+
+    func dismissCachedServerConnectionOffer() {
+        isOfferingCachedServerConnection = false
     }
 
     func applyCachedServerConnection(preservingError: Bool = false) {
@@ -131,6 +149,7 @@ final class ConnectionStore: ObservableObject {
         if preservingError == false {
             errorMessage = nil
         }
+        isOfferingCachedServerConnection = false
         connectionPhase = .idle
     }
 
@@ -139,6 +158,7 @@ final class ConnectionStore: ObservableObject {
         isConnected = false
         serverVersion = ""
         errorMessage = nil
+        isOfferingCachedServerConnection = false
         connectionPhase = .idle
         if let showPrompt {
             showSavedServerPrompt = showPrompt
@@ -150,6 +170,7 @@ final class ConnectionStore: ObservableObject {
         isConnected = false
         serverVersion = ""
         errorMessage = nil
+        isOfferingCachedServerConnection = false
     }
 
     func prepareAddServerSheet() {

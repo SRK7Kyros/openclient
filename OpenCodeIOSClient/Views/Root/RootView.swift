@@ -70,18 +70,6 @@ struct RootView<ChatDestination: View>: View {
             appShell
                 .opacity(isShowingConnectionExperience ? 0 : 1)
 
-            if shell.isBrowsingLocalCache, !shell.isShowingConnectionOverlay {
-                VStack {
-                    CachedServerBanner {
-                        shell.retryCachedServerConnection()
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             if let message = shell.openURLNavigationMessage {
                 RootDeepLinkProgressOverlay(message: message)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -169,68 +157,74 @@ struct RootView<ChatDestination: View>: View {
 
     private var splitShell: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
-            ProjectListView(
-                facade: shell.projects,
-                connection: shell.connection,
-                configurations: shell.configurations,
-                games: shell.funAndGames,
-                bridge: bridge,
-                isActivitySelected: shell.isActivitySelected,
-                onActivityChosen: {
-                    shell.selectActivity()
-                    withAnimation(opencodeSelectionAnimation) {
-                        columnVisibility = .doubleColumn
-                        preferredCompactColumn = .content
+            offlineBannerColumn(.sidebar) {
+                ProjectListView(
+                    facade: shell.projects,
+                    connection: shell.connection,
+                    configurations: shell.configurations,
+                    games: shell.funAndGames,
+                    bridge: bridge,
+                    isActivitySelected: shell.isActivitySelected,
+                    onActivityChosen: {
+                        shell.selectActivity()
+                        withAnimation(opencodeSelectionAnimation) {
+                            columnVisibility = .doubleColumn
+                            preferredCompactColumn = .content
+                        }
                     }
-                }
-            ) {
-                guard shell.hasCurrentProject else { return }
-                shell.selectProjectContent()
+                ) {
+                    guard shell.hasCurrentProject else { return }
+                    shell.selectProjectContent()
 
-                withAnimation(opencodeSelectionAnimation) {
-                    showProjectContentOrDetail()
+                    withAnimation(opencodeSelectionAnimation) {
+                        showProjectContentOrDetail()
+                    }
                 }
             }
         } content: {
-            switch shell.contentRoute(isCompact: horizontalSizeClass == .compact) {
-            case .selectProject:
-                ContentUnavailableView("Select a Project", systemImage: "folder")
-            case .loadingProject:
-                CompactRouteLoadingView(title: "Loading project...")
-            case .projectContent:
-                ProjectContentView(shell: shell) {
-                    withAnimation(opencodeSelectionAnimation) {
-                        preferredCompactColumn = .detail
+            offlineBannerColumn(.content) {
+                switch shell.contentRoute(isCompact: horizontalSizeClass == .compact) {
+                case .selectProject:
+                    ContentUnavailableView("Select a Project", systemImage: "folder")
+                case .loadingProject:
+                    CompactRouteLoadingView(title: "Loading project...")
+                case .projectContent:
+                    ProjectContentView(shell: shell) {
+                        withAnimation(opencodeSelectionAnimation) {
+                            preferredCompactColumn = .detail
+                        }
                     }
-                }
-            case .activity:
-                ActivityView(facade: shell.activity, connection: shell.connection) {
-                    withAnimation(opencodeSelectionAnimation) {
-                        showDetailColumn()
+                case .activity:
+                    ActivityView(facade: shell.activity, connection: shell.connection) {
+                        withAnimation(opencodeSelectionAnimation) {
+                            showDetailColumn()
+                        }
                     }
                 }
             }
         } detail: {
-            switch shell.detailRoute(isCompact: horizontalSizeClass == .compact) {
-            case .gitDiff:
-                GitDiffView(facade: shell.projectFiles)
-            case .gitFile:
-                ProjectFileContentView(facade: shell.projectFiles)
-            case .mcp:
-                ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
-            case let .terminal(id):
-                TerminalDetailView(facade: shell.terminal, terminalID: id)
-                    .id(id)
-            case .selectTerminal:
-                ContentUnavailableView("Select a Terminal", systemImage: "terminal", description: Text("Choose a terminal session from the list."))
-            case let .loadingChat(sessionID):
-                CompactRouteLoadingView(title: "Loading chat...")
-                    .id(sessionID)
-            case let .chat(route):
-                ChatRouteView(route: route, destination: chatDestination)
-                    .equatable()
-            case .selectSession:
-                ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
+            offlineBannerColumn(.detail) {
+                switch shell.detailRoute(isCompact: horizontalSizeClass == .compact) {
+                case .gitDiff:
+                    GitDiffView(facade: shell.projectFiles)
+                case .gitFile:
+                    ProjectFileContentView(facade: shell.projectFiles)
+                case .mcp:
+                    ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
+                case let .terminal(id):
+                    TerminalDetailView(facade: shell.terminal, terminalID: id)
+                        .id(id)
+                case .selectTerminal:
+                    ContentUnavailableView("Select a Terminal", systemImage: "terminal", description: Text("Choose a terminal session from the list."))
+                case let .loadingChat(sessionID):
+                    CompactRouteLoadingView(title: "Loading chat...")
+                        .id(sessionID)
+                case let .chat(route):
+                    ChatRouteView(route: route, destination: chatDestination)
+                        .equatable()
+                case .selectSession:
+                    ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
+                }
             }
         }
         .onChange(of: shell.selectedSessionID) { _, sessionID in
@@ -273,6 +267,25 @@ struct RootView<ChatDestination: View>: View {
         .onAppear {
             showCurrentRoute()
         }
+    }
+
+    private func offlineBannerColumn<Content: View>(
+        _ column: NavigationSplitViewColumn,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if shell.isBrowsingLocalCache,
+                   !shell.isShowingConnectionOverlay,
+                   preferredCompactColumn == column {
+                    CachedServerBanner {
+                        shell.retryCachedServerConnection()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
     }
 
     private func showCurrentRoute() {

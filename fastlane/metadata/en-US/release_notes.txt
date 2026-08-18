@@ -1,1 +1,5 @@
+OpenClient now speaks Brazilian Portuguese and Italian throughout the app, widgets, Live Activities, and extensions.
 
+This update also makes automatic reconnection more resilient and improves retrying your server while browsing downloaded chats.
+
+Thank you to Lorenzo Salami (@LSalami) for contributing the Italian translation.
