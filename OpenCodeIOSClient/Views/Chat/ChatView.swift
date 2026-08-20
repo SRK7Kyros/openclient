@@ -2229,9 +2229,10 @@ struct ChatView: View {
                 },
                 rowContent: { row in
                     transcriptRowContent(for: row)
+                        .frame(maxWidth: chatContentMaximumWidth)
+                        .frame(maxWidth: .infinity)
                 }
             )
-            .frame(maxWidth: chatContentMaximumWidth)
             .onChange(of: chatStore.messages.count) { _, count in
                 if count == 0 {
                     additionalLeadingMessageCount = 0
