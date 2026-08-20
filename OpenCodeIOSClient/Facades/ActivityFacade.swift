@@ -48,7 +48,8 @@ final class ActivityFacade: ObservableObject {
             recentRows: [],
             isLoading: false,
             isReadOnly: false,
-            showsLastUserMessage: true
+            showsLastUserMessage: true,
+            selectedSessionID: nil
         )
 
         let projects: [ProjectFilterSnapshot]
@@ -58,6 +59,7 @@ final class ActivityFacade: ObservableObject {
         let isLoading: Bool
         let isReadOnly: Bool
         let showsLastUserMessage: Bool
+        let selectedSessionID: String?
 
         var isEmpty: Bool { needsInputRows.isEmpty && workingRows.isEmpty && recentRows.isEmpty }
 
@@ -363,7 +365,8 @@ final class ActivityFacade: ObservableObject {
             isLoading: !hasCompletedInitialCacheHydration
                 || ((isPreparing || viewModel.sessionListStore.isLoadingRecentProjectSessions) && sortedRows.isEmpty),
             isReadOnly: viewModel.isBrowsingLocalCache,
-            showsLastUserMessage: viewModel.appCustomizationStore.showsActivityLastUserMessage
+            showsLastUserMessage: viewModel.appCustomizationStore.showsActivityLastUserMessage,
+            selectedSessionID: viewModel.selectedSession?.id
         )
     }
 

@@ -184,6 +184,29 @@ final class ActivityFacadeTests: XCTestCase {
         XCTAssertEqual(viewModel.activityFacade.snapshot.recentRows.map(\.recent.session.id), [newer.id, older.id])
     }
 
+    func testSnapshotTracksSelectedActivitySession() async throws {
+        let viewModel = AppViewModel()
+        let project = makeProject(id: "project", directory: "/tmp/project")
+        let session = makeSession(
+            id: "selected",
+            title: "Selected",
+            directory: project.worktree,
+            projectID: project.id,
+            updated: 1_000
+        )
+        viewModel.projects = [project]
+        viewModel.sessionListStore.setRecentSessions([session], for: project.worktree)
+        let store = viewModel.directoryStoreRegistry.store(for: project.worktree)
+        _ = store.upsertSessions([session])
+        let facade = viewModel.activityFacade
+        let row = try XCTUnwrap(facade.snapshot.recentRows.first)
+
+        facade.prepareSelection(row)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(facade.snapshot.selectedSessionID, session.id)
+    }
+
     func testSnapshotOrdersWithinSectionByLatestUserMessageInsteadOfSessionUpdate() {
         let viewModel = AppViewModel()
         let project = makeProject(id: "project", directory: "/tmp/project")

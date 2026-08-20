@@ -1916,6 +1916,7 @@ struct ChatView: View {
 #if os(iOS)
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 #endif
 
     @ObservedObject private var connectionStore: ConnectionStore
@@ -2043,6 +2044,7 @@ struct ChatView: View {
     private let outgoingRequestDelayMS = 720
     private let thinkingRevealHoldMS = 140
     private let eagerRefreshMinimumInterval: TimeInterval = 4
+    private let regularWidthChatMaximum: CGFloat = 720
 
     private static let emptyContextMetrics = OpenCodeSessionContextMetrics(
         totalCost: 0,
@@ -2158,6 +2160,14 @@ struct ChatView: View {
         pendingOutgoingSend != nil || preparingOutgoingMessageID != nil || animatingOutgoingMessageID != nil
     }
 
+    private var chatContentMaximumWidth: CGFloat {
+#if os(iOS)
+        horizontalSizeClass == .regular ? regularWidthChatMaximum : .infinity
+#else
+        .infinity
+#endif
+    }
+
     var body: some View {
         ZStack {
             OpenCodePlatformColor.groupedBackground
@@ -2221,6 +2231,7 @@ struct ChatView: View {
                     transcriptRowContent(for: row)
                 }
             )
+            .frame(maxWidth: chatContentMaximumWidth)
             .onChange(of: chatStore.messages.count) { _, count in
                 if count == 0 {
                     additionalLeadingMessageCount = 0
@@ -2252,6 +2263,7 @@ struct ChatView: View {
         }
         .overlay(alignment: .bottom) {
             composerOverlay
+                .frame(maxWidth: chatContentMaximumWidth)
         }
         .overlay(alignment: .top) {
             ZStack(alignment: .top) {

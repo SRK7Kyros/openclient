@@ -323,7 +323,11 @@ private struct ActivityContent: View, Equatable {
                     }
                     Task { await facade.open(row) }
                 } label: {
-                    ActivitySessionRow(row: row, showsLastUserMessage: showsLastUserMessage)
+                    ActivitySessionRow(
+                        row: row,
+                        showsLastUserMessage: showsLastUserMessage,
+                        isSelected: snapshot.selectedSessionID == row.recent.session.id
+                    )
                 }
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets(top: 7, leading: 16, bottom: 7, trailing: 16))
@@ -410,6 +414,7 @@ private struct ActivityRecentSection: Identifiable {
 struct ActivitySessionRow: View {
     let row: ActivityFacade.RowSnapshot
     let showsLastUserMessage: Bool
+    var isSelected = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -492,21 +497,26 @@ struct ActivitySessionRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(15)
-        .background(
-            row.needsInput
-                ? Color.orange.opacity(0.1)
-                : (row.isWorking ? Color.accentColor.opacity(0.09) : OpenCodePlatformColor.secondaryGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(
-                    row.needsInput
-                        ? Color.orange.opacity(0.24)
-                        : (row.isWorking ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.06))
-                )
+                .strokeBorder(cardBorder, lineWidth: isSelected ? 2 : 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var cardBackground: Color {
+        if row.needsInput { return Color.orange.opacity(0.1) }
+        if row.isWorking { return Color.accentColor.opacity(0.09) }
+        return OpenCodePlatformColor.secondaryGroupedBackground
+    }
+
+    private var cardBorder: Color {
+        if isSelected { return Color.accentColor.opacity(0.82) }
+        if row.needsInput { return Color.orange.opacity(0.24) }
+        if row.isWorking { return Color.accentColor.opacity(0.2) }
+        return Color.primary.opacity(0.06)
     }
 
     private var title: String {

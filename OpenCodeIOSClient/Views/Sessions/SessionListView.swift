@@ -375,14 +375,9 @@ private struct SessionListContent: View, Equatable {
         case .activity:
             ActivitySessionRow(
                 row: row.activityRow,
-                showsLastUserMessage: snapshot.showsActivityLastUserMessage
+                showsLastUserMessage: snapshot.showsActivityLastUserMessage,
+                isSelected: row.isSelected
             )
-            .overlay {
-                if row.isSelected {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1.4)
-                }
-            }
         }
     }
 
