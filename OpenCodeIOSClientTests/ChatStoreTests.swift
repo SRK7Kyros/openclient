@@ -89,6 +89,21 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertTrue(projection.retainedIndices.isSuperset(of: [17, 18, 19]))
     }
 
+    func testTranscriptTailSpacingDoesNotStackStreamingReserveUnderProgress() {
+        XCTAssertEqual(
+            ChatTranscriptTailSpacing.height(showsProgress: true, hasStreamingMessage: true),
+            ChatTranscriptTailSpacing.progressHeight
+        )
+        XCTAssertEqual(
+            ChatTranscriptTailSpacing.height(showsProgress: false, hasStreamingMessage: true),
+            ChatTranscriptTailSpacing.streamingReserveHeight
+        )
+        XCTAssertEqual(
+            ChatTranscriptTailSpacing.height(showsProgress: false, hasStreamingMessage: false),
+            0
+        )
+    }
+
     func testMessageBubbleVisibilityPolicyHidesConfiguredPartTypes() {
         let tool = OpenCodePart(
             id: "part_tool",

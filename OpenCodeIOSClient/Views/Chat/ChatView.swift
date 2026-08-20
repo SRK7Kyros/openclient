@@ -774,7 +774,7 @@ private enum ChatTranscriptRow: Identifiable {
     case previousUserContext(OpenCodeMessageEnvelope)
     case olderMessages(count: Int)
     case displayItem(ChatDisplayItem)
-    case thinking(isVisible: Bool, toolName: String?)
+    case thinking(isVisible: Bool, toolName: String?, height: CGFloat)
     case bottomAnchor
 
     var id: String {
@@ -804,13 +804,23 @@ private extension ChatTranscriptRow {
             return "\(id):\(message.renderSignature)"
         case let .olderMessages(count):
             return "\(id):\(count)"
-        case let .thinking(isVisible, toolName):
-            return "\(id):\(isVisible):\(toolName ?? "")"
+        case let .thinking(isVisible, toolName, height):
+            return "\(id):\(isVisible):\(toolName ?? ""):\(height)"
         case .bottomAnchor:
             return id
         case let .displayItem(item):
             return item.renderSignature
         }
+    }
+}
+
+enum ChatTranscriptTailSpacing {
+    static let progressHeight: CGFloat = 64
+    static let streamingReserveHeight: CGFloat = 44
+
+    static func height(showsProgress: Bool, hasStreamingMessage: Bool) -> CGFloat {
+        if showsProgress { return progressHeight }
+        return hasStreamingMessage ? streamingReserveHeight : 0
     }
 }
 
@@ -1495,7 +1505,6 @@ private struct MessageBubbleSnapshot: Equatable {
     let expandedReasoningPartIDs: Set<String>
     let expandedContextGroupIDs: Set<String>
     let showsAllActivity: Bool
-    let streamingReservePadding: CGFloat
 }
 
 private struct MessageRowRenderSnapshot {
@@ -1516,7 +1525,6 @@ private struct LargeMessageChunkRowRenderSnapshot {
     let animatesStreamingText: Bool
     let streamingAnimationID: String
     let bottomPadding: CGFloat
-    let streamingReservePadding: CGFloat
 }
 
 private struct ThinkingRowRenderSnapshot {
@@ -1580,6 +1588,7 @@ private struct ChatDisplaySnapshot {
     let items: [ChatDisplayItem]
     let showsThinking: Bool
     let thinkingToolName: String?
+    let tailHeight: CGFloat
 
     var itemIDs: [String] {
         items.map(\.id) + (showsThinking ? [ChatScrollTarget.thinkingRow] : [])
@@ -1743,7 +1752,6 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             videoStreams: videoStreams,
             videoPlaybackStore: videoPlaybackStore
         )
-        .padding(.bottom, snapshot.streamingReservePadding)
     }
 }
 
@@ -1905,6 +1913,10 @@ private struct EquatableMessageComposerHost: View, Equatable {
 
 struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
+#if os(iOS)
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+#endif
 
     @ObservedObject private var connectionStore: ConnectionStore
     @ObservedObject private var projectStore: ProjectStore
@@ -1925,6 +1937,7 @@ struct ChatView: View {
     let sessionID: String
     let presentationRequest: Int
     private let onDismissChildSession: (() -> Void)?
+    private let isDedicatedWindow: Bool
 
     @MainActor
     init(
@@ -1934,11 +1947,18 @@ struct ChatView: View {
         videoStreams: OpenClientVideoStreamCoordinator? = nil,
         sessionID: String,
         presentationRequest: Int = 0,
-        onDismissChildSession: (() -> Void)? = nil
+        onDismissChildSession: (() -> Void)? = nil,
+        preferredDirectoryKey: String? = nil,
+        isDedicatedWindow: Bool = false
     ) {
         _connectionStore = ObservedObject(wrappedValue: chatFacade.connectionStore)
         _projectStore = ObservedObject(wrappedValue: chatFacade.projectStore)
-        _directoryStore = ObservedObject(wrappedValue: chatFacade.directoryStore(forSessionID: sessionID))
+        _directoryStore = ObservedObject(
+            wrappedValue: chatFacade.directoryStore(
+                forSessionID: sessionID,
+                preferredDirectoryKey: preferredDirectoryKey
+            )
+        )
         _sessionListStore = ObservedObject(wrappedValue: chatFacade.sessionListStore)
         _chatStore = ObservedObject(wrappedValue: chatFacade.chatStore)
         _appCustomizationStore = ObservedObject(wrappedValue: chatFacade.appCustomizationStore)
@@ -1955,6 +1975,7 @@ struct ChatView: View {
         self.sessionID = sessionID
         self.presentationRequest = presentationRequest
         self.onDismissChildSession = onDismissChildSession
+        self.isDedicatedWindow = isDedicatedWindow
     }
 
     @Namespace private var toolbarGlassNamespace
@@ -2185,7 +2206,9 @@ struct ChatView: View {
                     }
                 },
                 onAppear: { _ in
-                    chatFacade.setActiveChatSessionID(sessionID)
+                    if !isDedicatedWindow {
+                        chatFacade.setActiveChatSessionID(sessionID)
+                    }
                     hasCompletedInitialHydrationSnap = chatSourceMessageCount > 0
                     updateDelayedLoadingIndicator()
                     scheduleInitialBottomReadjustments()
@@ -2276,7 +2299,9 @@ struct ChatView: View {
             eagerRefreshTask?.cancel()
             keyboardMeasuredHeight = 0
             showsDelayedLoadingIndicator = false
-            chatFacade.clearActiveChatSessionIfMatching(sessionID)
+            if !isDedicatedWindow {
+                chatFacade.clearActiveChatSessionIfMatching(sessionID)
+            }
         }
         .toolbar { chatToolbar }
 #if DEBUG
@@ -3168,13 +3193,18 @@ struct ChatView: View {
         let items = displayedChatItems(for: messages)
         let showsThinking = shouldShowThinking(in: messages)
         let thinkingToolName = activeRunningToolName(in: messages)
+        let tailHeight = ChatTranscriptTailSpacing.height(
+            showsProgress: showsThinking,
+            hasStreamingMessage: messages.contains(where: isStreamingMessage)
+        )
         let snapshot = ChatDisplaySnapshot(
             messages: messages,
             hiddenMessageCount: window.hiddenMessageCount,
             previousUserMessage: previousUserMessage(before: messages),
             items: items,
             showsThinking: showsThinking,
-            thinkingToolName: thinkingToolName
+            thinkingToolName: thinkingToolName,
+            tailHeight: tailHeight
         )
         return TimedChatDisplaySnapshot(snapshot: snapshot)
     }
@@ -3377,7 +3407,7 @@ struct ChatView: View {
         }
     }
 
-    private func thinkingRowListItem(isVisible: Bool, toolName: String?) -> some View {
+    private func thinkingRowListItem(isVisible: Bool, toolName: String?, height: CGFloat) -> some View {
         let snapshot = thinkingRowRenderSnapshot(toolName: toolName)
         return ZStack(alignment: .leading) {
             if isVisible {
@@ -3392,7 +3422,7 @@ struct ChatView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: isVisible ? 64 : 0, alignment: .center)
+        .frame(height: height, alignment: .center)
         .transition(.identity)
     }
 
@@ -3412,7 +3442,11 @@ struct ChatView: View {
             rows.append(.olderMessages(count: displaySnapshot.hiddenMessageCount))
         }
         rows.append(contentsOf: displaySnapshot.items.map(ChatTranscriptRow.displayItem))
-        rows.append(.thinking(isVisible: displaySnapshot.showsThinking, toolName: displaySnapshot.thinkingToolName))
+        rows.append(.thinking(
+            isVisible: displaySnapshot.showsThinking,
+            toolName: displaySnapshot.thinkingToolName,
+            height: displaySnapshot.tailHeight
+        ))
         rows.append(.bottomAnchor)
         return rows
     }
@@ -3446,8 +3480,8 @@ struct ChatView: View {
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
         case let .displayItem(item):
             chatRow(for: item)
-        case let .thinking(isVisible, toolName):
-            thinkingRowListItem(isVisible: isVisible, toolName: toolName)
+        case let .thinking(isVisible, toolName, height):
+            thinkingRowListItem(isVisible: isVisible, toolName: toolName, height: height)
         case .bottomAnchor:
             bottomAnchorListItem
         }
@@ -3506,7 +3540,7 @@ struct ChatView: View {
                 messageChunkContextMenu(for: item.message)
             }
             .transition(.identity)
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: snapshot.bottomPadding + snapshot.streamingReservePadding, trailing: 16))
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: snapshot.bottomPadding, trailing: 16))
     }
 
     private func largeMessageChunkRowRenderSnapshot(for item: LargeMessageChunkDisplayItem) -> LargeMessageChunkRowRenderSnapshot {
@@ -3517,8 +3551,7 @@ struct ChatView: View {
             isStreamingTail: isStreaming && item.chunk.isTail,
             animatesStreamingText: shouldAnimateStreamingText,
             streamingAnimationID: item.id,
-            bottomPadding: item.chunk.isTail ? 6 : 0,
-            streamingReservePadding: isStreaming && item.chunk.isTail ? 44 : 0
+            bottomPadding: item.chunk.isTail ? 6 : 0
         )
     }
 
@@ -3613,8 +3646,7 @@ struct ChatView: View {
             animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
             expandedReasoningPartIDs: expandedReasoningPartIDs,
             expandedContextGroupIDs: Set(expandedContextGroupIDs.filter { $0.hasPrefix("context-\(message.id)-") }),
-            showsAllActivity: expandedEarlierActivityMessageIDs.contains(message.id),
-            streamingReservePadding: isStreaming ? 44 : 0
+            showsAllActivity: expandedEarlierActivityMessageIDs.contains(message.id)
         )
     }
 
@@ -4081,6 +4113,29 @@ struct ChatView: View {
                     onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
                 )
             }
+
+            #if os(iOS)
+            if supportsMultipleWindows && !isDedicatedWindow {
+                if #available(iOS 26.0, *) {
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        openWindow(
+                            id: OpenClientChatWindowRoute.sceneID,
+                            value: chatFacade.windowRoute(for: liveSession)
+                        )
+                    } label: {
+                        Image(systemName: "macwindow.badge.plus")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .opencodeToolbarGlassID("open-chat-window-toolbar", in: toolbarGlassNamespace)
+                    }
+                    .accessibilityLabel("Open Chat in New Window")
+                    .accessibilityIdentifier("chat.toolbar.openWindow")
+                }
+            }
+            #endif
         }
     }
 
@@ -5362,7 +5417,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             let row = rows[indexPath.item]
             let allowsAnimations = row.id == ChatScrollTarget.bottomAnchor || row.id == ChatScrollTarget.thinkingRow || animatedRowIDs.contains(row.id)
             let thinkingEntryGeneration: Int? = {
-                if case let .thinking(isVisible, _) = row, isVisible {
+                if case let .thinking(isVisible, _, _) = row, isVisible {
                     return self.thinkingEntryGeneration
                 }
                 return nil
@@ -5511,7 +5566,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
         private static func isThinkingVisible(in rows: [ChatTranscriptRow]) -> Bool {
             rows.contains { row in
-                if case let .thinking(isVisible, _) = row {
+                if case let .thinking(isVisible, _, _) = row {
                     return isVisible
                 }
                 return false

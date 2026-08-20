@@ -249,6 +249,30 @@ final class ChatFacadeTests: XCTestCase {
         XCTAssertTrue(viewModel.chatFacade.directoryStore(forSessionID: "session-unknown") === activeStore)
     }
 
+    func testChatWindowRoutePreservesServerAndOwningDirectory() {
+        let viewModel = makeViewModel()
+        viewModel.config = OpenCodeServerConfig(
+            name: "Test",
+            baseURL: "https://example.com",
+            username: "tester"
+        )
+        let ownerStore = viewModel.directoryStoreRegistry.store(for: "/tmp/owner")
+        let session = makeSession(id: "session-window")
+        ownerStore.sessions = [session]
+
+        let route = viewModel.chatFacade.windowRoute(for: session)
+
+        XCTAssertEqual(route.serverID, "https://example.com|tester")
+        XCTAssertEqual(route.directoryKey, "/tmp/owner")
+        XCTAssertEqual(route.sessionID, session.id)
+        XCTAssertTrue(
+            viewModel.chatFacade.directoryStore(
+                forSessionID: "session-not-hydrated",
+                preferredDirectoryKey: route.directoryKey
+            ) === ownerStore
+        )
+    }
+
     func testActiveChatLifecycleClearsOnlyMatchingSessionAndUpdatesChatStore() {
         let viewModel = makeViewModel()
         let facade = viewModel.chatFacade

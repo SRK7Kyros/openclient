@@ -9746,6 +9746,22 @@
         }
       }
     },
+    "Open Chat in New Window": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir conversa em uma nova janela"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la chat in una nuova finestra"
+          }
+        }
+      }
+    },
     "Open Source": {
       "localizations": {
         "pt-BR": {

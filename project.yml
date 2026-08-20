@@ -122,6 +122,8 @@ targets:
           - en
           - pt-BR
           - it
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
         UIApplicationSupportsIndirectInputEvents: true
         NSSupportsLiveActivities: true
         UIBackgroundModes:

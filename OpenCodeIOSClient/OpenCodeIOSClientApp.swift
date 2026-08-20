@@ -94,6 +94,23 @@ struct OpenCodeIOSClientApp: App {
             }
 #endif
         }
+
+        WindowGroup(id: OpenClientChatWindowRoute.sceneID, for: OpenClientChatWindowRoute.self) { $route in
+            if let route {
+                NavigationStack {
+                    ChatView(
+                        chatFacade: composition.chat,
+                        browser: composition.appShell.browser,
+                        imageContent: composition.imageContent,
+                        videoStreams: composition.videoStreams,
+                        sessionID: route.sessionID,
+                        preferredDirectoryKey: route.directoryKey,
+                        isDedicatedWindow: true
+                    )
+                }
+                .opencodeSoftScrollEdgeEffect()
+            }
+        }
     }
 
     private var rootView: some View {

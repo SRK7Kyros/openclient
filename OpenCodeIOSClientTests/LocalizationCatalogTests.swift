@@ -59,6 +59,21 @@ final class LocalizationCatalogTests: XCTestCase {
         }
     }
 
+    func testMainAppEnablesMultipleScenes() throws {
+        let repositoryURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let data = try Data(
+            contentsOf: repositoryURL.appendingPathComponent("OpenCodeIOSClient/Generated-Info.plist")
+        )
+        let info = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+        let sceneManifest = try XCTUnwrap(info["UIApplicationSceneManifest"] as? [String: Any])
+
+        XCTAssertEqual(sceneManifest["UIApplicationSupportsMultipleScenes"] as? Bool, true)
+    }
+
     private func catalogStrings(at path: String) throws -> [String: Any] {
         let repositoryURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

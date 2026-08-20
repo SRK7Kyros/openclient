@@ -1,6 +1,14 @@
 import Combine
 import Foundation
 
+struct OpenClientChatWindowRoute: Codable, Hashable, Sendable {
+    static let sceneID = "chat"
+
+    let serverID: String
+    let directoryKey: String
+    let sessionID: String
+}
+
 enum OpenClientChatCommands {
     static let fork = OpenCodeCommand(
         name: "fork",
@@ -173,9 +181,27 @@ final class ChatFacade: ObservableObject {
         liveActivityBackgroundBridge = bridge
     }
 
-    func directoryStore(forSessionID sessionID: String) -> DirectoryStore {
-        viewModel.directoryStoreRegistry.ownerStore(forSessionID: sessionID)
-            ?? viewModel.directoryStoreRegistry.activeStore
+    func directoryStore(forSessionID sessionID: String, preferredDirectoryKey: String? = nil) -> DirectoryStore {
+        if let owner = viewModel.directoryStoreRegistry.ownerStore(forSessionID: sessionID) {
+            return owner
+        }
+        if let preferredDirectoryKey {
+            return viewModel.directoryStoreRegistry.store(
+                for: DirectoryStoreRegistry.directory(forKey: preferredDirectoryKey)
+            )
+        }
+        return viewModel.directoryStoreRegistry.activeStore
+    }
+
+    func windowRoute(for session: OpenCodeSession) -> OpenClientChatWindowRoute {
+        let ownerKey = viewModel.directoryStoreRegistry
+            .ownerStore(forSessionID: session.id)
+            .flatMap { viewModel.directoryStoreRegistry.key(for: $0) }
+        return OpenClientChatWindowRoute(
+            serverID: viewModel.config.recentServerID,
+            directoryKey: ownerKey ?? DirectoryStoreRegistry.key(for: session.directory),
+            sessionID: session.id
+        )
     }
 
     var activeChatSessionID: String? {

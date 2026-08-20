@@ -63,6 +63,11 @@
 	</dict>
 	<key>OpenCodeSharedKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.ntoporcov.openclient.shared</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
