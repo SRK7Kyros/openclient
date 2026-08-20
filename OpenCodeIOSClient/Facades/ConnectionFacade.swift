@@ -46,6 +46,8 @@ final class ConnectionFacade: ObservableObject {
     var recentServerConfigs: [OpenCodeServerConfig] { viewModel.recentServerConfigs }
     var appIconStore: AppIconStore { viewModel.appIconStore }
     var showsChatActivityShimmer: Bool { viewModel.appCustomizationStore.showsChatActivityShimmer }
+    var showsToolCalls: Bool { viewModel.appCustomizationStore.showsToolCalls }
+    var showsReasoningBlocks: Bool { viewModel.appCustomizationStore.showsReasoningBlocks }
     var autoConnectServerID: String? { viewModel.appCustomizationStore.autoConnectServerID }
     var autoConnectLandingDestination: AutoConnectLandingDestination {
         viewModel.appCustomizationStore.autoConnectLandingDestination
@@ -92,6 +94,14 @@ final class ConnectionFacade: ObservableObject {
 
     func setShowsChatActivityShimmer(_ shows: Bool) {
         viewModel.appCustomizationStore.setShowsChatActivityShimmer(shows)
+    }
+
+    func setShowsToolCalls(_ shows: Bool) {
+        viewModel.appCustomizationStore.setShowsToolCalls(shows)
+    }
+
+    func setShowsReasoningBlocks(_ shows: Bool) {
+        viewModel.appCustomizationStore.setShowsReasoningBlocks(shows)
     }
 
     func setAutoConnectServerID(_ serverID: String?) {

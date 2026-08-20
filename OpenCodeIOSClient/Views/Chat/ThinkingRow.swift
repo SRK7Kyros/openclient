@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ThinkingRow: View {
     var animateEntry = false
+    var tint: Color = .secondary
+    var title: LocalizedStringResource = "Thinking"
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -27,11 +29,11 @@ struct ThinkingRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(.secondary)
+                        .fill(tint)
                         .frame(width: 6, height: 6)
                         .scaleEffect(0.72 + (phase * 0.73))
                         .opacity(1 - (phase * 0.8))
-                    Text("Thinking")
+                    Text(title)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                         .opacity(1 - (phase * 0.28))
@@ -55,9 +57,9 @@ struct ThinkingRow: View {
             .fill(
                 LinearGradient(
                     colors: [
-                        .white.opacity(0.04 + (phase * 0.14)),
+                        tint.opacity(0.04 + (phase * 0.14)),
                         .clear,
-                        .white.opacity(0.02 + (phase * 0.06))
+                        tint.opacity(0.02 + (phase * 0.06))
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -65,7 +67,7 @@ struct ThinkingRow: View {
             )
             .overlay {
                 shape
-                    .strokeBorder(.white.opacity(0.08 + (phase * 0.18)), lineWidth: 1)
+                    .strokeBorder(tint.opacity(0.08 + (phase * 0.18)), lineWidth: 1)
             }
             .blendMode(.screen)
             .opacity(reduceMotion ? 0.14 : 1)

@@ -291,6 +291,18 @@ struct RootConfigurationsView: View {
                     set: { facade.setShowsChatActivityShimmer($0) }
                 ))
                 .accessibilityIdentifier("configurations.chat-activity-shimmer")
+
+                Toggle("Show Tool Calls", isOn: Binding(
+                    get: { facade.showsToolCalls },
+                    set: { facade.setShowsToolCalls($0) }
+                ))
+                .accessibilityIdentifier("configurations.show-tool-calls")
+
+                Toggle("Show Reasoning Blocks", isOn: Binding(
+                    get: { facade.showsReasoningBlocks },
+                    set: { facade.setShowsReasoningBlocks($0) }
+                ))
+                .accessibilityIdentifier("configurations.show-reasoning-blocks")
             } header: {
                 Text("Appearance")
             } footer: {

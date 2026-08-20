@@ -14035,6 +14035,38 @@
         }
       }
     },
+    "Show Reasoning Blocks": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar blocos de raciocínio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra blocchi di ragionamento"
+          }
+        }
+      }
+    },
+    "Show Tool Calls": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar chamadas de ferramentas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra chiamate agli strumenti"
+          }
+        }
+      }
+    },
     "Show Workspaces": {
       "localizations": {
         "pt-BR": {

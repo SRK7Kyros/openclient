@@ -41,6 +41,48 @@ enum MessageBubbleUserPartPolicy {
     }
 }
 
+enum MessageBubblePartVisibilityPolicy {
+    static func shouldDisplay(
+        _ part: OpenCodePart,
+        showsToolCalls: Bool,
+        showsReasoningBlocks: Bool
+    ) -> Bool {
+        if !showsToolCalls, OpenCodeToolActivityPolicy.isToolCall(part) { return false }
+        if !showsReasoningBlocks, isReasoningPart(part) { return false }
+        return true
+    }
+
+    static func isReasoningPart(_ part: OpenCodePart) -> Bool {
+        if part.type == "reasoning" { return true }
+        return part.type == "text" && (part.reason?.lowercased().contains("reasoning") == true)
+    }
+}
+
+enum MessageBubbleMessageVisibilityPolicy {
+    static func shouldDisplay(
+        _ message: OpenCodeMessageEnvelope,
+        showsToolCalls: Bool,
+        showsReasoningBlocks: Bool
+    ) -> Bool {
+        if message.info.error != nil { return true }
+
+        return message.parts.enumerated().contains { index, part in
+            if (message.info.role ?? "").lowercased() == "user",
+               !MessageBubbleUserPartPolicy.shouldDisplay(part, at: index, in: message.parts) {
+                return false
+            }
+            guard MessageBubblePartVisibilityPolicy.shouldDisplay(
+                part,
+                showsToolCalls: showsToolCalls,
+                showsReasoningBlocks: showsReasoningBlocks
+            ) else { return false }
+            if part.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { return true }
+            if part.type == "file", part.url != nil { return true }
+            return OpenCodeToolActivityPolicy.isToolCall(part)
+        }
+    }
+}
+
 enum MessageBubbleDisplayIdentity {
     static func partID(index: Int, part: OpenCodePart) -> String {
         if let id = part.id?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
@@ -60,6 +102,7 @@ struct MessageBubble: View {
     let currentSessionID: String?
     let isStreamingMessage: Bool
     let animatesStreamingText: Bool
+    let showsToolCalls: Bool
     let hidesReasoningBlocks: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
@@ -110,6 +153,8 @@ struct MessageBubble: View {
         let key = MessageBubbleDisplayEntryCacheKey(
             messageID: effectiveMessage.id,
             isUser: isUser,
+            showsToolCalls: showsToolCalls,
+            hidesReasoningBlocks: hidesReasoningBlocks,
             parts: parts.map(displayEntryCachePartKey(for:))
         )
         let plan = displayEntryCache.plan(for: key) {
@@ -703,12 +748,7 @@ struct MessageBubble: View {
     }
 
     private func isReasoningPart(_ part: OpenCodePart) -> Bool {
-        if part.type == "reasoning" {
-            return true
-        }
-
-        let lowerReason = part.reason?.lowercased() ?? ""
-        return part.type == "text" && lowerReason.contains("reasoning")
+        MessageBubblePartVisibilityPolicy.isReasoningPart(part)
     }
 
     private func attachment(for part: OpenCodePart) -> OpenCodeComposerAttachment? {
@@ -826,6 +866,11 @@ struct MessageBubble: View {
     }
 
     private func shouldIncludePartInDisplayPlan(_ part: OpenCodePart) -> Bool {
+        guard MessageBubblePartVisibilityPolicy.shouldDisplay(
+            part,
+            showsToolCalls: showsToolCalls,
+            showsReasoningBlocks: !hidesReasoningBlocks
+        ) else { return false }
         if renderableText(for: part) != nil { return true }
         if activityStyle(for: part) != nil { return true }
         if shouldShowUnknownStreamingPartPlaceholder(part) { return true }
@@ -893,7 +938,7 @@ struct MessageBubble: View {
 
     private func activityStyle(for part: OpenCodePart) -> ActivityStyle? {
         let tool = toolName(for: part)
-        let running = isRunning(part)
+        let running = OpenCodeToolActivityPolicy.isRunning(part)
         let appearance = OpenCodeToolActivityAppearance.resolve(tool)
 
         switch tool {
@@ -1080,10 +1125,7 @@ struct MessageBubble: View {
     }
 
     private func toolName(for part: OpenCodePart) -> String {
-        if part.type == "tool" {
-            return part.tool ?? ""
-        }
-        return part.tool ?? part.type
+        OpenCodeToolActivityPolicy.toolName(for: part)
     }
 
     private func filename(from path: String?) -> String? {
@@ -1183,11 +1225,7 @@ struct MessageBubble: View {
     }
 
     private func isRunning(_ part: OpenCodePart) -> Bool {
-        if let status = part.state?.status?.lowercased() {
-            return status == "running" || status == "pending" || status == "in_progress"
-        }
-        guard let reason = part.reason?.lowercased() else { return false }
-        return reason == "start" || reason == "started" || reason == "running"
+        OpenCodeToolActivityPolicy.isRunning(part)
     }
 }
 
@@ -1277,6 +1315,8 @@ private struct MessageBubbleDisplayEntryCacheKey: Equatable {
 
     let messageID: String
     let isUser: Bool
+    let showsToolCalls: Bool
+    let hidesReasoningBlocks: Bool
     let parts: [PartKey]
 }
 

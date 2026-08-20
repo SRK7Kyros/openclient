@@ -15,12 +15,16 @@ final class AppCustomizationStoreTests: XCTestCase {
 
         let store = AppCustomizationStore(defaults: defaults)
         XCTAssertTrue(store.showsChatActivityShimmer)
+        XCTAssertTrue(store.showsToolCalls)
+        XCTAssertTrue(store.showsReasoningBlocks)
         XCTAssertTrue(store.showsActivityLastUserMessage)
         XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertNil(store.autoConnectServerID)
         XCTAssertEqual(store.autoConnectLandingDestination, .projects)
 
         store.setShowsChatActivityShimmer(false)
+        store.setShowsToolCalls(false)
+        store.setShowsReasoningBlocks(false)
         store.setShowsActivityLastUserMessage(false)
         store.setSessionCardStyle(.activity)
         store.setAutoConnectServerID("server-one")
@@ -28,6 +32,8 @@ final class AppCustomizationStoreTests: XCTestCase {
 
         let restored = AppCustomizationStore(defaults: defaults)
         XCTAssertFalse(restored.showsChatActivityShimmer)
+        XCTAssertFalse(restored.showsToolCalls)
+        XCTAssertFalse(restored.showsReasoningBlocks)
         XCTAssertFalse(restored.showsActivityLastUserMessage)
         XCTAssertEqual(restored.sessionCardStyle, .activity)
         XCTAssertEqual(restored.autoConnectServerID, "server-one")
@@ -49,6 +55,8 @@ final class AppCustomizationStoreTests: XCTestCase {
         let store = AppCustomizationStore(defaults: defaults)
 
         XCTAssertFalse(store.showsChatActivityShimmer)
+        XCTAssertTrue(store.showsToolCalls)
+        XCTAssertTrue(store.showsReasoningBlocks)
         XCTAssertTrue(store.showsActivityLastUserMessage)
         XCTAssertEqual(store.sessionCardStyle, .simple)
         XCTAssertEqual(store.autoConnectServerID, "server-one")

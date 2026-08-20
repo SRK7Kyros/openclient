@@ -774,7 +774,7 @@ private enum ChatTranscriptRow: Identifiable {
     case previousUserContext(OpenCodeMessageEnvelope)
     case olderMessages(count: Int)
     case displayItem(ChatDisplayItem)
-    case thinking(isVisible: Bool)
+    case thinking(isVisible: Bool, toolName: String?)
     case bottomAnchor
 
     var id: String {
@@ -804,8 +804,8 @@ private extension ChatTranscriptRow {
             return "\(id):\(message.renderSignature)"
         case let .olderMessages(count):
             return "\(id):\(count)"
-        case let .thinking(isVisible):
-            return "\(id):\(isVisible)"
+        case let .thinking(isVisible, toolName):
+            return "\(id):\(isVisible):\(toolName ?? "")"
         case .bottomAnchor:
             return id
         case let .displayItem(item):
@@ -991,6 +991,8 @@ private struct ChatDisplayItemCacheKey: Equatable {
     let messages: [MessageKey]
     let findPlaceGameID: String?
     let findBugGameID: String?
+    let showsToolCalls: Bool
+    let showsReasoningBlocks: Bool
 }
 
 private final class ChatDisplayItemCache {
@@ -1486,6 +1488,7 @@ private struct MessageBubbleSnapshot: Equatable {
     let currentSessionID: String?
     let isStreamingMessage: Bool
     let animatesStreamingText: Bool
+    let showsToolCalls: Bool
     let hidesReasoningBlocks: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
@@ -1518,6 +1521,7 @@ private struct LargeMessageChunkRowRenderSnapshot {
 
 private struct ThinkingRowRenderSnapshot {
     let animateEntry: Bool
+    let toolName: String?
 }
 
 private struct BottomRefreshRenderSnapshot {
@@ -1575,6 +1579,7 @@ private struct ChatDisplaySnapshot {
     let previousUserMessage: OpenCodeMessageEnvelope?
     let items: [ChatDisplayItem]
     let showsThinking: Bool
+    let thinkingToolName: String?
 
     var itemIDs: [String] {
         items.map(\.id) + (showsThinking ? [ChatScrollTarget.thinkingRow] : [])
@@ -1716,6 +1721,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             currentSessionID: snapshot.currentSessionID,
             isStreamingMessage: snapshot.isStreamingMessage,
             animatesStreamingText: snapshot.animatesStreamingText,
+            showsToolCalls: snapshot.showsToolCalls,
             hidesReasoningBlocks: snapshot.hidesReasoningBlocks,
             reserveEntryFromComposer: snapshot.reserveEntryFromComposer,
             animateEntryFromComposer: snapshot.animateEntryFromComposer,
@@ -1905,6 +1911,7 @@ struct ChatView: View {
     @ObservedObject private var directoryStore: DirectoryStore
     @ObservedObject private var sessionListStore: SessionListStore
     @ObservedObject private var chatStore: ChatStore
+    @ObservedObject private var appCustomizationStore: AppCustomizationStore
     private let chatFacade: ChatFacade
     @ObservedObject private var sessionInteractionStore: SessionInteractionStore
     @ObservedObject private var composerStore: ComposerStore
@@ -1934,6 +1941,7 @@ struct ChatView: View {
         _directoryStore = ObservedObject(wrappedValue: chatFacade.directoryStore(forSessionID: sessionID))
         _sessionListStore = ObservedObject(wrappedValue: chatFacade.sessionListStore)
         _chatStore = ObservedObject(wrappedValue: chatFacade.chatStore)
+        _appCustomizationStore = ObservedObject(wrappedValue: chatFacade.appCustomizationStore)
         self.chatFacade = chatFacade
         _sessionInteractionStore = ObservedObject(wrappedValue: chatFacade.sessionInteractionStore)
         _composerStore = ObservedObject(wrappedValue: chatFacade.composerStore)
@@ -2068,7 +2076,7 @@ struct ChatView: View {
     }
 
     private var showsChatActivityShimmer: Bool {
-        isSessionBusy && chatFacade.showsChatActivityShimmer
+        isSessionBusy && appCustomizationStore.showsChatActivityShimmer
     }
 
     private var isComposerBusy: Bool {
@@ -3159,12 +3167,14 @@ struct ChatView: View {
         let messages = window.messages
         let items = displayedChatItems(for: messages)
         let showsThinking = shouldShowThinking(in: messages)
+        let thinkingToolName = activeRunningToolName(in: messages)
         let snapshot = ChatDisplaySnapshot(
             messages: messages,
             hiddenMessageCount: window.hiddenMessageCount,
             previousUserMessage: previousUserMessage(before: messages),
             items: items,
-            showsThinking: showsThinking
+            showsThinking: showsThinking,
+            thinkingToolName: thinkingToolName
         )
         return TimedChatDisplaySnapshot(snapshot: snapshot)
     }
@@ -3255,7 +3265,9 @@ struct ChatView: View {
                 displayItemCacheMessageKey(for: message)
             },
             findPlaceGameID: findPlaceGame(for: sessionID)?.city.id,
-            findBugGameID: findBugGame(for: sessionID)?.language.id
+            findBugGameID: findBugGame(for: sessionID)?.language.id,
+            showsToolCalls: appCustomizationStore.showsToolCalls,
+            showsReasoningBlocks: appCustomizationStore.showsReasoningBlocks
         )
 
         return chatDisplayItemCache.items(for: key, messagesByID: messagesByID) {
@@ -3281,7 +3293,9 @@ struct ChatView: View {
         let key = ChatDisplayItemCacheKey(
             messages: messageKeys,
             findPlaceGameID: findPlaceGameID,
-            findBugGameID: findBugGameID
+            findBugGameID: findBugGameID,
+            showsToolCalls: appCustomizationStore.showsToolCalls,
+            showsReasoningBlocks: appCustomizationStore.showsReasoningBlocks
         )
         let cacheResult = chatDisplayItemCache.timedItems(for: key, messagesByID: messagesByID) {
             makeDisplayItems(from: messages)
@@ -3363,11 +3377,15 @@ struct ChatView: View {
         }
     }
 
-    private func thinkingRowListItem(isVisible: Bool) -> some View {
-        let snapshot = thinkingRowRenderSnapshot
+    private func thinkingRowListItem(isVisible: Bool, toolName: String?) -> some View {
+        let snapshot = thinkingRowRenderSnapshot(toolName: toolName)
         return ZStack(alignment: .leading) {
             if isVisible {
-                ThinkingRow(animateEntry: snapshot.animateEntry)
+                ThinkingRow(
+                    animateEntry: snapshot.animateEntry,
+                    tint: snapshot.toolName.map { OpenCodeToolActivityAppearance.resolve($0).tint } ?? .secondary,
+                    title: snapshot.toolName == nil ? "Thinking" : "Working"
+                )
                     .padding(.horizontal, 16)
             } else {
                 Color.clear
@@ -3378,8 +3396,8 @@ struct ChatView: View {
         .transition(.identity)
     }
 
-    private var thinkingRowRenderSnapshot: ThinkingRowRenderSnapshot {
-        ThinkingRowRenderSnapshot(animateEntry: pendingOutgoingSend != nil)
+    private func thinkingRowRenderSnapshot(toolName: String?) -> ThinkingRowRenderSnapshot {
+        ThinkingRowRenderSnapshot(animateEntry: pendingOutgoingSend != nil, toolName: toolName)
     }
 
     private func transcriptRows(for displaySnapshot: ChatDisplaySnapshot) -> [ChatTranscriptRow] {
@@ -3394,7 +3412,7 @@ struct ChatView: View {
             rows.append(.olderMessages(count: displaySnapshot.hiddenMessageCount))
         }
         rows.append(contentsOf: displaySnapshot.items.map(ChatTranscriptRow.displayItem))
-        rows.append(.thinking(isVisible: displaySnapshot.showsThinking))
+        rows.append(.thinking(isVisible: displaySnapshot.showsThinking, toolName: displaySnapshot.thinkingToolName))
         rows.append(.bottomAnchor)
         return rows
     }
@@ -3428,8 +3446,8 @@ struct ChatView: View {
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
         case let .displayItem(item):
             chatRow(for: item)
-        case let .thinking(isVisible):
-            thinkingRowListItem(isVisible: isVisible)
+        case let .thinking(isVisible, toolName):
+            thinkingRowListItem(isVisible: isVisible, toolName: toolName)
         case .bottomAnchor:
             bottomAnchorListItem
         }
@@ -3589,7 +3607,8 @@ struct ChatView: View {
             currentSessionID: sessionID,
             isStreamingMessage: isStreaming,
             animatesStreamingText: shouldAnimateStreamingText,
-            hidesReasoningBlocks: isFunAndGamesSession(sessionID),
+            showsToolCalls: appCustomizationStore.showsToolCalls,
+            hidesReasoningBlocks: !appCustomizationStore.showsReasoningBlocks || isFunAndGamesSession(sessionID),
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
             animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
             expandedReasoningPartIDs: expandedReasoningPartIDs,
@@ -3713,25 +3732,11 @@ struct ChatView: View {
     }
 
     private func shouldDisplayMessageRow(_ message: OpenCodeMessageEnvelope) -> Bool {
-        if message.info.error != nil { return true }
-        if message.parts.isEmpty { return false }
-
-        return message.parts.contains { part in
-            if let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-                return true
-            }
-            if part.type == "file", part.url != nil {
-                return true
-            }
-            if part.type == "tool", part.tool?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                return true
-            }
-            if !["", "text", "reasoning", "step-start", "step-finish", "patch"].contains(part.type),
-               part.tool != nil || part.state != nil {
-                return true
-            }
-            return false
-        }
+        MessageBubbleMessageVisibilityPolicy.shouldDisplay(
+            message,
+            showsToolCalls: appCustomizationStore.showsToolCalls,
+            showsReasoningBlocks: appCustomizationStore.showsReasoningBlocks && !isFunAndGamesSession(sessionID)
+        )
     }
 
     private func compactionSummary(for boundary: OpenCodeMessageEnvelope, at index: Int, in messages: [OpenCodeMessageEnvelope]) -> OpenCodeMessageEnvelope? {
@@ -3876,6 +3881,12 @@ struct ChatView: View {
 
         guard isSessionBusy else { return false }
         guard isThinkingRowRevealAllowed else { return false }
+        if !appCustomizationStore.showsToolCalls, !appCustomizationStore.showsReasoningBlocks {
+            return true
+        }
+        if !appCustomizationStore.showsToolCalls, activeRunningToolName(in: messages) != nil {
+            return true
+        }
         guard let lastUserIndex = messages.lastIndex(where: { ($0.info.role ?? "").lowercased() == "user" }) else {
             return false
         }
@@ -3885,12 +3896,23 @@ struct ChatView: View {
             .contains { message in
                 guard (message.info.role ?? "").lowercased() == "assistant" else { return false }
                 return message.parts.contains { part in
+                    guard MessageBubblePartVisibilityPolicy.shouldDisplay(
+                        part,
+                        showsToolCalls: appCustomizationStore.showsToolCalls,
+                        showsReasoningBlocks: appCustomizationStore.showsReasoningBlocks && !isFunAndGamesSession(sessionID)
+                    ) else { return false }
                     guard let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
                     return !text.isEmpty
                 }
             }
 
         return !assistantTextAfterUser
+    }
+
+    private func activeRunningToolName(in messages: [OpenCodeMessageEnvelope]) -> String? {
+        guard isSessionBusy else { return nil }
+        guard let message = messages.reversed().first(where: { isStreamingMessage($0) }) else { return nil }
+        return OpenCodeToolActivityPolicy.latestRunningToolName(in: message)
     }
 
     private func isStreamingMessage(_ message: OpenCodeMessageEnvelope) -> Bool {
@@ -4117,7 +4139,9 @@ struct ChatView: View {
         let reasoning = expandedReasoningPartIDs.sorted().joined(separator: "|")
         let context = expandedContextGroupIDs.sorted().joined(separator: "|")
         let activity = expandedEarlierActivityMessageIDs.sorted().joined(separator: "|")
-        return "reasoning:\(reasoning)#context:\(context)#activity:\(activity)"
+        let tools = appCustomizationStore.showsToolCalls
+        let reasoningBlocks = appCustomizationStore.showsReasoningBlocks
+        return "reasoning:\(reasoning)#context:\(context)#activity:\(activity)#tools:\(tools)#reasoningBlocks:\(reasoningBlocks)"
     }
 
     private func pruneExpandedReasoningParts() {
@@ -5338,7 +5362,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
             let row = rows[indexPath.item]
             let allowsAnimations = row.id == ChatScrollTarget.bottomAnchor || row.id == ChatScrollTarget.thinkingRow || animatedRowIDs.contains(row.id)
             let thinkingEntryGeneration: Int? = {
-                if case let .thinking(isVisible) = row, isVisible {
+                if case let .thinking(isVisible, _) = row, isVisible {
                     return self.thinkingEntryGeneration
                 }
                 return nil
@@ -5487,7 +5511,7 @@ private struct ChatTranscriptCollectionView<RowContent: View>: UIViewRepresentab
 
         private static func isThinkingVisible(in rows: [ChatTranscriptRow]) -> Bool {
             rows.contains { row in
-                if case let .thinking(isVisible) = row {
+                if case let .thinking(isVisible, _) = row {
                     return isVisible
                 }
                 return false

@@ -33,6 +33,8 @@ enum AutoConnectLandingDestination: String, Codable, CaseIterable, Identifiable 
 
 struct AppCustomizationPreferences: Codable, Equatable {
     var showsChatActivityShimmer: Bool
+    var showsToolCalls: Bool
+    var showsReasoningBlocks: Bool
     var showsActivityLastUserMessage: Bool
     var sessionCardStyle: SessionCardStyle
     var autoConnectServerID: String?
@@ -40,12 +42,16 @@ struct AppCustomizationPreferences: Codable, Equatable {
 
     init(
         showsChatActivityShimmer: Bool = true,
+        showsToolCalls: Bool = true,
+        showsReasoningBlocks: Bool = true,
         showsActivityLastUserMessage: Bool = true,
         sessionCardStyle: SessionCardStyle = .simple,
         autoConnectServerID: String? = nil,
         autoConnectLandingDestination: AutoConnectLandingDestination = .projects
     ) {
         self.showsChatActivityShimmer = showsChatActivityShimmer
+        self.showsToolCalls = showsToolCalls
+        self.showsReasoningBlocks = showsReasoningBlocks
         self.showsActivityLastUserMessage = showsActivityLastUserMessage
         self.sessionCardStyle = sessionCardStyle
         self.autoConnectServerID = autoConnectServerID
@@ -54,6 +60,8 @@ struct AppCustomizationPreferences: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case showsChatActivityShimmer
+        case showsToolCalls
+        case showsReasoningBlocks
         case showsActivityLastUserMessage
         case sessionCardStyle
         case autoConnectServerID
@@ -63,6 +71,8 @@ struct AppCustomizationPreferences: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         showsChatActivityShimmer = try container.decodeIfPresent(Bool.self, forKey: .showsChatActivityShimmer) ?? true
+        showsToolCalls = try container.decodeIfPresent(Bool.self, forKey: .showsToolCalls) ?? true
+        showsReasoningBlocks = try container.decodeIfPresent(Bool.self, forKey: .showsReasoningBlocks) ?? true
         showsActivityLastUserMessage = try container.decodeIfPresent(Bool.self, forKey: .showsActivityLastUserMessage) ?? true
         sessionCardStyle = try container.decodeIfPresent(String.self, forKey: .sessionCardStyle)
             .flatMap(SessionCardStyle.init(rawValue:)) ?? .simple
@@ -97,6 +107,14 @@ final class AppCustomizationStore: ObservableObject {
         preferences.showsChatActivityShimmer
     }
 
+    var showsToolCalls: Bool {
+        preferences.showsToolCalls
+    }
+
+    var showsReasoningBlocks: Bool {
+        preferences.showsReasoningBlocks
+    }
+
     var autoConnectServerID: String? {
         preferences.autoConnectServerID
     }
@@ -116,6 +134,18 @@ final class AppCustomizationStore: ObservableObject {
     func setShowsChatActivityShimmer(_ shows: Bool) {
         guard preferences.showsChatActivityShimmer != shows else { return }
         preferences.showsChatActivityShimmer = shows
+        persist()
+    }
+
+    func setShowsToolCalls(_ shows: Bool) {
+        guard preferences.showsToolCalls != shows else { return }
+        preferences.showsToolCalls = shows
+        persist()
+    }
+
+    func setShowsReasoningBlocks(_ shows: Bool) {
+        guard preferences.showsReasoningBlocks != shows else { return }
+        preferences.showsReasoningBlocks = shows
         persist()
     }
 

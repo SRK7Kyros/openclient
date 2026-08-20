@@ -89,6 +89,37 @@ struct OpenCodeToolActivityAppearance {
     }
 }
 
+enum OpenCodeToolActivityPolicy {
+    private static let nonToolPartNames: Set<String> = [
+        "", "agent", "file", "reasoning", "step-start", "step-finish", "text",
+    ]
+
+    static func toolName(for part: OpenCodePart) -> String {
+        if part.type == "tool" {
+            return part.tool ?? ""
+        }
+        return part.tool ?? part.type
+    }
+
+    static func isToolCall(_ part: OpenCodePart) -> Bool {
+        !nonToolPartNames.contains(toolName(for: part).lowercased())
+    }
+
+    static func isRunning(_ part: OpenCodePart) -> Bool {
+        if let status = part.state?.status?.lowercased() {
+            return status == "running" || status == "pending" || status == "in_progress"
+        }
+        guard let reason = part.reason?.lowercased() else { return false }
+        return reason == "start" || reason == "started" || reason == "running"
+    }
+
+    static func latestRunningToolName(in message: OpenCodeMessageEnvelope) -> String? {
+        message.parts.reversed().first(where: { part in
+            isToolCall(part) && isRunning(part)
+        }).map { toolName(for: $0) }
+    }
+}
+
 struct ActivityRow: View {
     let style: ActivityStyle
     var compact: Bool = false

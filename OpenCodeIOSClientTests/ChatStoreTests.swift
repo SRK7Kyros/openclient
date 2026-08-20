@@ -89,6 +89,136 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertTrue(projection.retainedIndices.isSuperset(of: [17, 18, 19]))
     }
 
+    func testMessageBubbleVisibilityPolicyHidesConfiguredPartTypes() {
+        let tool = OpenCodePart(
+            id: "part_tool",
+            messageID: "msg_1",
+            sessionID: "ses_1",
+            type: "tool",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "read",
+            callID: "call_1",
+            state: nil,
+            text: nil
+        )
+        let reasoning = OpenCodePart(
+            id: "part_reasoning",
+            messageID: "msg_1",
+            sessionID: "ses_1",
+            type: "reasoning",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: "Thinking"
+        )
+
+        XCTAssertTrue(MessageBubblePartVisibilityPolicy.shouldDisplay(tool, showsToolCalls: true, showsReasoningBlocks: true))
+        XCTAssertFalse(MessageBubblePartVisibilityPolicy.shouldDisplay(tool, showsToolCalls: false, showsReasoningBlocks: true))
+        XCTAssertTrue(MessageBubblePartVisibilityPolicy.shouldDisplay(reasoning, showsToolCalls: true, showsReasoningBlocks: true))
+        XCTAssertFalse(MessageBubblePartVisibilityPolicy.shouldDisplay(reasoning, showsToolCalls: true, showsReasoningBlocks: false))
+    }
+
+    func testMessageBubbleVisibilityPolicyRemovesHiddenOnlyRowsButKeepsMixedMessages() {
+        let sessionID = "ses_1"
+        let tool = OpenCodePart(
+            id: "part_tool",
+            messageID: "msg_tool",
+            sessionID: sessionID,
+            type: "tool",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "bash",
+            callID: "call_1",
+            state: OpenCodeToolState(status: "running", title: nil, error: nil, input: nil, output: nil, metadata: nil),
+            text: nil
+        )
+        let reasoning = OpenCodePart(
+            id: "part_reasoning",
+            messageID: "msg_reasoning",
+            sessionID: sessionID,
+            type: "reasoning",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: "Thinking"
+        )
+        let answer = OpenCodePart(
+            id: "part_answer",
+            messageID: "msg_mixed",
+            sessionID: sessionID,
+            type: "text",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: "Answer"
+        )
+        var toolOnly = message(id: "msg_tool", role: "assistant", text: "", sessionID: sessionID)
+        toolOnly.parts = [tool]
+        var reasoningOnly = message(id: "msg_reasoning", role: "assistant", text: "", sessionID: sessionID)
+        reasoningOnly.parts = [reasoning]
+        var mixed = message(id: "msg_mixed", role: "assistant", text: "", sessionID: sessionID)
+        mixed.parts = [tool, reasoning, answer]
+
+        XCTAssertFalse(MessageBubbleMessageVisibilityPolicy.shouldDisplay(toolOnly, showsToolCalls: false, showsReasoningBlocks: true))
+        XCTAssertFalse(MessageBubbleMessageVisibilityPolicy.shouldDisplay(reasoningOnly, showsToolCalls: true, showsReasoningBlocks: false))
+        XCTAssertTrue(MessageBubbleMessageVisibilityPolicy.shouldDisplay(mixed, showsToolCalls: false, showsReasoningBlocks: false))
+    }
+
+    func testToolActivityPolicyRecognizesLegacyToolsAndSelectsLatestRunningTool() {
+        let sessionID = "ses_1"
+        let completed = OpenCodePart(
+            id: "part_completed",
+            messageID: "msg_1",
+            sessionID: sessionID,
+            type: "tool",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "read",
+            callID: "call_1",
+            state: OpenCodeToolState(status: "completed", title: nil, error: nil, input: nil, output: nil, metadata: nil),
+            text: nil
+        )
+        let running = OpenCodePart(
+            id: "part_running",
+            messageID: "msg_1",
+            sessionID: sessionID,
+            type: "bash",
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: "bash",
+            callID: "call_2",
+            state: OpenCodeToolState(status: "running", title: nil, error: nil, input: nil, output: nil, metadata: nil),
+            text: nil
+        )
+        var assistant = message(id: "msg_1", role: "assistant", text: "", sessionID: sessionID)
+        assistant.parts = [completed, running]
+
+        XCTAssertTrue(OpenCodeToolActivityPolicy.isToolCall(running))
+        XCTAssertEqual(OpenCodeToolActivityPolicy.latestRunningToolName(in: assistant), "bash")
+        XCTAssertEqual(OpenCodeToolActivityAppearance.resolve("bash").tint, .green)
+    }
+
     func testAttachmentCardLayoutPreservesCommonImageAspectRatios() {
         XCTAssertEqual(
             AttachmentCardLayout.fittedImageSize(sourceSize: CGSize(width: 2_000, height: 1_000)),
