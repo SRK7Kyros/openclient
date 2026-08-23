@@ -543,7 +543,6 @@ final class SessionListFacade: ObservableObject {
               let part = message.parts.last,
               let tool = part.tool,
               ["running", "pending", "in_progress"].contains(part.state?.status?.lowercased() ?? "") else { return [] }
-
         let id = part.id ?? part.callID ?? "\(message.id):\(tool)"
         let title = activityToolTitle(part: part, tool: tool)
         let input = part.state?.input

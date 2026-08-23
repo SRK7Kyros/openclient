@@ -286,8 +286,9 @@ final class ActivityFacade: ObservableObject {
             _ = store.upsertSessions([canonicalSession])
         }
         if let messages = result.1 {
-            store.applyCanonicalMessages(messages, forSessionID: session.id)
-            viewModel.persistLoadedMessagesToLocalCache(messages, sessionID: session.id)
+            let existingMessages = store.syncState.messageEnvelopes(forSessionID: session.id)
+            let mergedMessages = ChatStore.mergingCanonicalMessagePage(messages, into: existingMessages)
+            store.applyCanonicalMessages(mergedMessages, forSessionID: session.id)
         }
         if let todos = result.2 {
             store.applyTodos(todos, forSessionID: session.id)

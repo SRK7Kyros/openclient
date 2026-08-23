@@ -322,7 +322,9 @@ private struct SessionListContent: View, Equatable {
             if !snapshot.isReadOnly {
                 deleteButton(for: row.session)
                 renameButton(for: row.session)
+#if !targetEnvironment(macCatalyst)
                 liveActivityButton(for: row.session)
+#endif
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -332,7 +334,9 @@ private struct SessionListContent: View, Equatable {
             if !snapshot.isReadOnly {
                 deleteButton(for: row.session)
                 renameButton(for: row.session)
+#if !targetEnvironment(macCatalyst)
                 liveActivityButton(for: row.session)
+#endif
             }
         }
     }

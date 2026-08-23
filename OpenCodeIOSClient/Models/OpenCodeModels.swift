@@ -412,7 +412,9 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
         for envelope in envelopes {
             envelopeByID[envelope.info.id] = envelope
         }
-        let canonicalEnvelopes = envelopeByID.values.sorted { $0.info.id < $1.info.id }
+        let canonicalEnvelopes = envelopeByID.values.sorted {
+            OpenCodeMessage.isOrderedBefore($0.info, $1.info)
+        }
         let canonicalMessageIDs = Set(canonicalEnvelopes.map(\.id))
         for messageID in previousMessageIDs.subtracting(canonicalMessageIDs) {
             partsByMessageID[messageID] = nil
@@ -536,7 +538,7 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
         } else {
             messages.append(message)
         }
-        messagesBySessionID[sessionID] = messages.sorted { $0.id < $1.id }
+        messagesBySessionID[sessionID] = messages.sorted(by: OpenCodeMessage.isOrderedBefore)
         return true
     }
 
@@ -605,7 +607,7 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
 
         let parentID = messages
             .filter { ($0.role ?? "").lowercased() == "user" }
-            .max { $0.id < $1.id }?
+            .max(by: OpenCodeMessage.isOrderedBefore)?
             .id
         messages.append(
             OpenCodeMessage(
@@ -618,7 +620,7 @@ struct OpenCodeDirectorySyncState: Equatable, Sendable {
                 parentID: parentID
             )
         )
-        messagesBySessionID[sessionID] = messages.sorted { $0.id < $1.id }
+        messagesBySessionID[sessionID] = messages.sorted(by: OpenCodeMessage.isOrderedBefore)
     }
 
     mutating func removeMessage(sessionID: String, messageID: String) -> Bool {
@@ -710,6 +712,20 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
         self.cost = cost
         self.tokens = tokens
         self.system = system
+    }
+
+    static func isOrderedBefore(_ lhs: OpenCodeMessage, _ rhs: OpenCodeMessage) -> Bool {
+        // Server messages have creation times; timestamp-free optimistic messages stay at the tail.
+        switch (lhs.time?.created, rhs.time?.created) {
+        case let (lhsCreated?, rhsCreated?) where lhsCreated != rhsCreated:
+            return lhsCreated < rhsCreated
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            return lhs.id < rhs.id
+        }
     }
 
     var isCompactionSummary: Bool {

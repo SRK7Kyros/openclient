@@ -193,6 +193,8 @@ def emitted_entries(stringsdata_root, target, table, errors)
   pattern = File.join(stringsdata_root, "#{target}.build", "Objects-normal", "**", "*.stringsdata")
   paths = Dir.glob(pattern)
   if paths.empty?
+    return {} if ENV["EFFECTIVE_PLATFORM_NAME"] == "-maccatalyst" && target != "OpenCodeIOSClient"
+
     errors << "No .stringsdata found for #{target} under #{stringsdata_root}"
     return {}
   end

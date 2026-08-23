@@ -152,6 +152,34 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testListMessagesUsesLimitAndDirectoryQueryItems() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/session/ses_test/message")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "limit", value: "20"),
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            expectation.fulfill()
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("[]".utf8)
+            )
+        }
+
+        _ = try await client.listMessages(sessionID: "ses_test", limit: 20, directory: "/tmp/project")
+
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
     func testGetSessionUsesExactScopedEndpoint() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral

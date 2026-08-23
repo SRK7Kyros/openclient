@@ -96,13 +96,17 @@ struct ProjectContentView: View {
     }
 
     private var usesNativeSearchRoleComposeTab: Bool {
-#if os(iOS) || targetEnvironment(macCatalyst)
+#if targetEnvironment(macCatalyst)
+        return false
+#else
+#if os(iOS)
         if #available(iOS 18.0, *) {
             return horizontalSizeClass == .compact
         }
 #endif
 
         return false
+#endif
     }
 
     @ViewBuilder
@@ -195,7 +199,7 @@ struct ProjectContentView: View {
                 }
             }
 
-            if !snapshot.isReadOnly {
+            if !snapshot.isReadOnly, usesNativeSearchRoleComposeTab {
                 Tab(value: ProjectNativeTab.compose, role: .search) {
                     EmptyView()
                 } label: {
@@ -205,7 +209,7 @@ struct ProjectContentView: View {
                 }
             }
         }
-        .opencodeSearchTabSelectionActivation()
+        .opencodeSearchTabSelectionActivation(isEnabled: usesNativeSearchRoleComposeTab)
         .opencodeProjectBrowserAccessory(browser: shell.browser)
     }
 

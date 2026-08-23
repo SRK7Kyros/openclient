@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 #endif
 
@@ -10,7 +10,7 @@ final class LiveActivityStore: ObservableObject {
     @Published var activeSessionIDs: Set<String>
     var previewRefreshTasksBySessionID: [String: Task<Void, Never>]
     var refreshTasksBySessionID: [String: Task<Void, Never>]
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
     var lastStatesBySessionID: [String: OpenCodeChatActivityAttributes.ContentState]
 #endif
 
@@ -22,7 +22,7 @@ final class LiveActivityStore: ObservableObject {
         self.activeSessionIDs = activeSessionIDs
         self.previewRefreshTasksBySessionID = previewRefreshTasksBySessionID
         self.refreshTasksBySessionID = refreshTasksBySessionID
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         self.lastStatesBySessionID = [:]
 #endif
     }
@@ -67,7 +67,7 @@ final class LiveActivityStore: ObservableObject {
         refreshTasksBySessionID[sessionID] != nil
     }
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
     func setLastState(_ state: OpenCodeChatActivityAttributes.ContentState?, for sessionID: String) {
         lastStatesBySessionID[sessionID] = state
     }

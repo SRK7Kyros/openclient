@@ -548,6 +548,21 @@ final class ChatFacadeTests: XCTestCase {
         XCTAssertTrue(facade.copyChatBreadcrumbs().contains("facade breadcrumb"))
     }
 
+    func testStopSessionTargetsTheChatSessionInsteadOfTheSelectedSession() async {
+        let viewModel = makeViewModel()
+        let selectedSession = makeSession(id: "session-selected")
+        let focusedSession = makeSession(id: "session-focused")
+        viewModel.selectedSession = selectedSession
+        viewModel.connectionStore.backendMode = .appleIntelligence
+        viewModel.sessionStatuses[selectedSession.id] = "busy"
+        viewModel.sessionStatuses[focusedSession.id] = "busy"
+
+        await viewModel.chatFacade.stopSession(focusedSession)
+
+        XCTAssertEqual(viewModel.sessionStatuses[focusedSession.id], "idle")
+        XCTAssertEqual(viewModel.sessionStatuses[selectedSession.id], "busy")
+    }
+
     private func makeViewModel() -> AppViewModel {
         let viewModel = AppViewModel()
         viewModel.modelConfigurationStore.availableAgents = [

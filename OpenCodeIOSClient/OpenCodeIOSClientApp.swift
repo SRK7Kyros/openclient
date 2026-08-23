@@ -78,6 +78,7 @@ struct OpenCodeIOSClientApp: App {
 #endif
             }
             .opencodeSoftScrollEdgeEffect()
+            .opencodeDismissesSheetsOnBackgroundTap()
             .onOpenURL { url in
                 composition.appShell.prepareOpenURLPresentation(url)
                 Task { await composition.appShell.handleOpenURL(url) }
@@ -94,6 +95,9 @@ struct OpenCodeIOSClientApp: App {
             }
 #endif
         }
+        .commands {
+            OpenClientFocusedChatCommands()
+        }
 
         WindowGroup(id: OpenClientChatWindowRoute.sceneID, for: OpenClientChatWindowRoute.self) { $route in
             if let route {
@@ -109,6 +113,7 @@ struct OpenCodeIOSClientApp: App {
                     )
                 }
                 .opencodeSoftScrollEdgeEffect()
+                .opencodeDismissesSheetsOnBackgroundTap()
             }
         }
     }
@@ -127,6 +132,47 @@ struct OpenCodeIOSClientApp: App {
                 sessionID: sessionID,
                 presentationRequest: presentationRequest
             )
+        }
+    }
+}
+
+private struct StopCurrentChatFocusedValueKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+private struct SwitchToRecentlyOpenedSessionFocusedValueKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+extension FocusedValues {
+    var stopCurrentChat: (() -> Void)? {
+        get { self[StopCurrentChatFocusedValueKey.self] }
+        set { self[StopCurrentChatFocusedValueKey.self] = newValue }
+    }
+
+    var switchToRecentlyOpenedSession: (() -> Void)? {
+        get { self[SwitchToRecentlyOpenedSessionFocusedValueKey.self] }
+        set { self[SwitchToRecentlyOpenedSessionFocusedValueKey.self] = newValue }
+    }
+}
+
+private struct OpenClientFocusedChatCommands: Commands {
+    @FocusedValue(\.stopCurrentChat) private var stopCurrentChat
+    @FocusedValue(\.switchToRecentlyOpenedSession) private var switchToRecentlyOpenedSession
+
+    var body: some Commands {
+        CommandGroup(after: .textEditing) {
+            Button("Stop Stream") {
+                stopCurrentChat?()
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .disabled(stopCurrentChat == nil)
+
+            Button("Previous Session") {
+                switchToRecentlyOpenedSession?()
+            }
+            .keyboardShortcut("`", modifiers: .command)
+            .disabled(switchToRecentlyOpenedSession == nil)
         }
     }
 }

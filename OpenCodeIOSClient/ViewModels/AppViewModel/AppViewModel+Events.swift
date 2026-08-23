@@ -440,17 +440,19 @@ extension AppViewModel {
             return false
         }
 
-        chatStore.enqueuePendingTranscriptEvent(
-            OpenCodePendingTranscriptEvent(
-                typedEvent: managed.typed,
-                eventType: managed.envelope.type,
-                sessionID: managedEventSessionID(for: managed),
-                messageID: managed.envelope.properties.messageID ?? managed.envelope.properties.part?.messageID ?? managed.envelope.properties.info?.id,
-                partID: managed.envelope.properties.partID ?? managed.envelope.properties.part?.id,
-                deltaCharacterCount: transcriptDeltaCharacterCount(for: managed),
-                enqueuedAt: Date()
-            )
+        let event = OpenCodePendingTranscriptEvent(
+            typedEvent: managed.typed,
+            eventType: managed.envelope.type,
+            sessionID: managedEventSessionID(for: managed),
+            messageID: managed.envelope.properties.messageID ?? managed.envelope.properties.part?.messageID ?? managed.envelope.properties.info?.id,
+            partID: managed.envelope.properties.partID ?? managed.envelope.properties.part?.id,
+            deltaCharacterCount: transcriptDeltaCharacterCount(for: managed),
+            enqueuedAt: Date()
         )
+        guard chatStore.enqueuePendingTranscriptEventIfAvailable(event, in: directoryStore.syncState) else {
+            appendDebugLog("drop message.part.delta: missing canonical part")
+            return true
+        }
         triggerStreamPartHapticIfNeeded(for: managed)
         scheduleStreamDeltaFlush()
         flushBurstPendingTranscriptEventsIfNeeded()

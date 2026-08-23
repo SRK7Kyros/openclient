@@ -83,6 +83,12 @@ final class ChatStore: ObservableObject {
     }
 
     func beginSelectingSession(sessionID: String, cachedMessages: [OpenCodeMessageEnvelope]) {
+        if preparedSessionID != sessionID {
+            clearPendingTranscriptEvents()
+            streamDeltaFlushTask?.cancel()
+            streamDeltaFlushTask = nil
+            streamDeltaFlushGeneration &+= 1
+        }
         if !isLoadingSelectedSession {
             isLoadingSelectedSession = true
         }
@@ -243,7 +249,26 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    private static func deduplicatedMessages(_ messages: [OpenCodeMessageEnvelope]) -> [OpenCodeMessageEnvelope] {
+    nonisolated static func mergingCanonicalMessagePage(
+        _ page: [OpenCodeMessageEnvelope],
+        into existingMessages: [OpenCodeMessageEnvelope]
+    ) -> [OpenCodeMessageEnvelope] {
+        var merged = deduplicatedMessages(existingMessages)
+        var indexByID = Dictionary(uniqueKeysWithValues: merged.indices.map { (merged[$0].id, $0) })
+        for message in deduplicatedMessages(page) {
+            if let index = indexByID[message.id] {
+                merged[index] = message
+            } else {
+                indexByID[message.id] = merged.count
+                merged.append(message)
+            }
+        }
+        return merged.sorted {
+            OpenCodeMessage.isOrderedBefore($0.info, $1.info)
+        }
+    }
+
+    nonisolated private static func deduplicatedMessages(_ messages: [OpenCodeMessageEnvelope]) -> [OpenCodeMessageEnvelope] {
         var result: [OpenCodeMessageEnvelope] = []
         var messageIndexByID: [String: Int] = [:]
         for var message in messages {
@@ -270,7 +295,9 @@ final class ChatStore: ObservableObject {
                 result.append(message)
             }
         }
-        return result
+        return result.sorted {
+            OpenCodeMessage.isOrderedBefore($0.info, $1.info)
+        }
     }
 
     func clearCachedMessages(forSessionID sessionID: String) {
@@ -381,6 +408,16 @@ final class ChatStore: ObservableObject {
         if pendingTranscriptOldestDate == nil || event.enqueuedAt < pendingTranscriptOldestDate! {
             pendingTranscriptOldestDate = event.enqueuedAt
         }
+    }
+
+    @discardableResult
+    func enqueuePendingTranscriptEventIfAvailable(
+        _ event: OpenCodePendingTranscriptEvent,
+        in syncState: OpenCodeDirectorySyncState
+    ) -> Bool {
+        guard Self.canDrainPendingTranscriptEvent(event, in: syncState) else { return false }
+        enqueuePendingTranscriptEvent(event)
+        return true
     }
 
     func replacePendingTranscriptEvents(_ events: [OpenCodePendingTranscriptEvent]) {

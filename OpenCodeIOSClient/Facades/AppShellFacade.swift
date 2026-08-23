@@ -241,6 +241,10 @@ final class AppShellFacade: ObservableObject {
         let selectedTab: OpenClientProjectContentTab = connection.isBrowsingLocalCache
             ? .sessions
             : viewModel.projectStore.selectedContentTab
+        let isTerminalAvailable = supportsTerminal
+            && connection.isConnected
+            && !connection.isUsingAppleIntelligence
+            && viewModel.effectiveSelectedDirectory != nil
         let scopeTitle = viewModel.projectScopeTitle
         return ProjectContentSnapshot(
             selectedTab: selectedTab,
@@ -249,7 +253,7 @@ final class AppShellFacade: ObservableObject {
                 case .git:
                     return !connection.isBrowsingLocalCache && projectFiles.hasGitProject
                 case .terminal:
-                    return connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil
+                    return isTerminalAvailable
                 case .mcp:
                     return !connection.isBrowsingLocalCache
                 case .sessions:
@@ -263,11 +267,19 @@ final class AppShellFacade: ObservableObject {
             isLoadingVCS: files.isLoadingVCS,
             isLoadingFileTree: files.isLoadingFileTree,
             isLoadingMCP: mcp.snapshot.isLoading,
-            isTerminalAvailable: connection.isConnected && !connection.isUsingAppleIntelligence && viewModel.effectiveSelectedDirectory != nil,
+            isTerminalAvailable: isTerminalAvailable,
             isReadOnly: connection.isBrowsingLocalCache,
             currentProjectID: projects.currentProject?.id,
             effectiveSelectedDirectory: viewModel.effectiveSelectedDirectory
         )
+    }
+
+    private var supportsTerminal: Bool {
+#if targetEnvironment(macCatalyst)
+        false
+#else
+        true
+#endif
     }
 
     func contentRoute(isCompact: Bool) -> AppShellContentRoute {

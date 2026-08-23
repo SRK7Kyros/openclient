@@ -104,7 +104,7 @@
 		3781AB208B728108C5F33335 /* OpenCodeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C2E4443213AED890D5731AD /* OpenCodeModels.swift */; };
 		3816A16B5010AD947F73652E /* ConnectionPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCCD275C8D3DA6880342860D /* ConnectionPreviews.swift */; };
 		383D2A52E27FF310F943BC35 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
-		3877B2A2FE5000CB5F8297BF /* OpenCodeShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B704D01F1CE0126BE72A5498 /* OpenCodeShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3877B2A2FE5000CB5F8297BF /* OpenCodeShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B704D01F1CE0126BE72A5498 /* OpenCodeShareExtension.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		388CC9DEF534E908A47C44FA /* ChatGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B166D24C208B9DEA796C69 /* ChatGlassStyle.swift */; };
 		38AA07580990DD026ACBF3E6 /* AppCustomizationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4656E3BC31735E599B5478 /* AppCustomizationStore.swift */; };
 		3915976CEA93B12AEE38D37E /* OpenClientWhatsNewStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C80CEA11A0E5EB30646A7CA /* OpenClientWhatsNewStoreTests.swift */; };
@@ -401,7 +401,7 @@
 		E484AA99A8055915AE617A1C /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 84D7ED5C5910878060F530B4 /* InfoPlist.xcstrings */; };
 		E659C43A30A60D37CCE988B6 /* HelpPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB059EBF27890693F2A6FFD /* HelpPreviews.swift */; };
 		E68003F153F1CCF48AF626D9 /* RootPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BE7E13EEA52B67A4D5D7E93 /* RootPreviews.swift */; };
-		E76E4E67BD3E269B61327402 /* OpenCodeChatActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C237D3E4A11603721D0A94BF /* OpenCodeChatActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E76E4E67BD3E269B61327402 /* OpenCodeChatActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C237D3E4A11603721D0A94BF /* OpenCodeChatActivityExtension.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E966A04474DFD488DC0BA271 /* OpenCodeLiveActivityActionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC220CA26635182C3304FB1D /* OpenCodeLiveActivityActionClient.swift */; };
 		EBB1478D0A2A67E9D9159AE2 /* OpenClientVisualVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 962071EDD5F2EE93FC66DDA2 /* OpenClientVisualVideoView.swift */; };
 		EC1510E633AC425471C1A0EE /* ModelToolbarMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9330DFD0E36A44A30ADA81F4 /* ModelToolbarMenu.swift */; };
@@ -2039,6 +2039,9 @@
 		};
 		2880A2D6C864D580BBB6BAB6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (
+				ios,
+			);
 			target = 3A4666958AE1034C80B61FAB /* OpenCodeChatActivityExtension */;
 			targetProxy = AD35B4A97173C75491EA33A5 /* PBXContainerItemProxy */;
 		};
@@ -2049,6 +2052,9 @@
 		};
 		8C406482BF6102E114809B3F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (
+				ios,
+			);
 			target = 3FA005BF49CBCE2F53A0A028 /* OpenCodeShareExtension */;
 			targetProxy = F4B550719B3F26E70E861F66 /* PBXContainerItemProxy */;
 		};
@@ -2139,12 +2145,14 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACCATALYST_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
 				PRODUCT_NAME = OpenClient;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2203,12 +2211,14 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACCATALYST_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
 				PRODUCT_NAME = OpenClient;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";

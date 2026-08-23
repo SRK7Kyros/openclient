@@ -78,7 +78,7 @@ extension AppViewModel {
         liveActivityFacade.isActive(sessionID: session.id)
     }
 
-    #if canImport(ActivityKit) && os(iOS)
+    #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
     func liveActivityTranscriptLines(for session: OpenCodeSession) -> [OpenCodeChatActivityLine] {
         liveActivityFacade.transcriptLines(for: session)
     }
@@ -90,7 +90,7 @@ extension AppViewModel {
             await ensureAllSessionsLoaded()
         }
 
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         let activitySnapshot = LiveActivityCoordinator.sessionSnapshot(for: deepLink.sessionID)
         #else
         let activitySnapshot: LiveActivitySessionSnapshot? = nil

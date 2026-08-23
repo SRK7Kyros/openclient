@@ -223,8 +223,10 @@ struct ProjectListView: View {
                     facade.presentNewChat()
                 }
             )
-            .padding(.horizontal, 16)
+            .padding(.leading, 16)
+            .padding(.trailing, projectListBottomBarTrailingPadding)
             .padding(.top, 8)
+            .padding(.bottom, projectListBottomBarBottomPadding)
         }
         .task(id: snapshot.recentLoadKey) {
             guard !isScreenshotScene else { return }
@@ -331,6 +333,22 @@ struct ProjectListView: View {
                 isEditingProjects = false
             }
         }
+    }
+
+    private var projectListBottomBarTrailingPadding: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        24
+        #else
+        16
+        #endif
+    }
+
+    private var projectListBottomBarBottomPadding: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        16
+        #else
+        0
+        #endif
     }
 
     private var projectEditMode: Binding<EditMode> {

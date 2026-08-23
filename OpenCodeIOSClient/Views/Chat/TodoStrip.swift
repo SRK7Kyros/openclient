@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 #elseif canImport(UIKit)
 import UIKit
@@ -580,7 +580,7 @@ private func shortFileLabel(for attachment: OpenCodeComposerAttachment) -> Local
 private func image(for attachment: OpenCodeComposerAttachment) -> Image? {
     guard let data = dataPayload(from: attachment.dataURL) else { return nil }
 
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
     guard let platformImage = NSImage(data: data) else { return nil }
     return Image(nsImage: platformImage)
 #elseif canImport(UIKit)
@@ -594,7 +594,7 @@ private func image(for attachment: OpenCodeComposerAttachment) -> Image? {
 private func imageDimensions(for attachment: OpenCodeComposerAttachment) -> CGSize? {
     guard let data = dataPayload(from: attachment.dataURL) else { return nil }
 
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
     return NSImage(data: data)?.size
 #elseif canImport(UIKit)
     return UIImage(data: data)?.size

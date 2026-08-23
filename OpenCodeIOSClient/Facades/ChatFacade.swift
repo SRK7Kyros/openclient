@@ -475,6 +475,10 @@ final class ChatFacade: ObservableObject {
         viewModel.reserveUserPromptIfAllowed()
     }
 
+    func refundReservedUserPromptIfNeeded() {
+        viewModel.refundReservedUserPromptIfNeeded()
+    }
+
     @discardableResult
     func compactSession(
         sessionID: String,
@@ -612,12 +616,11 @@ final class ChatFacade: ObservableObject {
         viewModel.removeOptimisticUserMessage(messageID: messageID, sessionID: sessionID)
     }
 
-    func stopCurrentSession() async {
+    func stopSession(_ session: OpenCodeSession) async {
         guard !isReadOnly else { return }
-        let sessionID = viewModel.selectedSession?.id
-        let accepted = await viewModel.stopCurrentSession()
-        if accepted, let sessionID {
-            liveActivityBackgroundBridge?.cancel(sessionID: sessionID, reason: "Stopped")
+        let accepted = await viewModel.stopSession(session)
+        if accepted {
+            liveActivityBackgroundBridge?.cancel(sessionID: session.id, reason: "Stopped")
         }
     }
 

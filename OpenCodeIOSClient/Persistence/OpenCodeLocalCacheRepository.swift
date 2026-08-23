@@ -249,7 +249,7 @@ struct OpenCodeCachedMessageState: Sendable {
         state.replaceMessages(envelopes, forSessionID: sessionID)
         messages = state.messagesBySessionID[sessionID] ?? []
         partsByMessageID = state.partsByMessageID
-        immediateMessages = Self.immediateTranscript(in: envelopes)
+        immediateMessages = Self.immediateTranscript(in: state.messageEnvelopes(forSessionID: sessionID))
     }
 
     private static func immediateTranscript(in messages: [OpenCodeMessageEnvelope]) -> [OpenCodeMessageEnvelope] {

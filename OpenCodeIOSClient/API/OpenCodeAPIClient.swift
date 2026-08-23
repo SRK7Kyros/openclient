@@ -289,15 +289,19 @@ struct OpenCodeAPIClient: Sendable {
     }
 
     func listMessages(sessionID: String, limit: Int? = nil, directory: String? = nil) async throws -> [OpenCodeMessageEnvelope] {
-        var path = "/session/\(sessionID)/message"
         var queryItems: [URLQueryItem] = []
         if let limit {
-            path += "?limit=\(limit)"
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
         }
         if let directory, !directory.isEmpty {
             queryItems.append(URLQueryItem(name: "directory", value: directory))
         }
-        return try await send(path: path, method: "GET", queryItems: queryItems, directoryHeader: directory)
+        return try await send(
+            path: "/session/\(sessionID)/message",
+            method: "GET",
+            queryItems: queryItems,
+            directoryHeader: directory
+        )
     }
 
     func getMessage(sessionID: String, messageID: String) async throws -> OpenCodeMessageEnvelope {

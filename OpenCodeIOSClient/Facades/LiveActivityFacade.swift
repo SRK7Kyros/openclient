@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 #endif
 
@@ -44,7 +44,7 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func start(session: OpenCodeSession, userVisibleErrors: Bool = true) async {
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         do {
             let state = state(for: session)
             let config = viewModel.config
@@ -82,7 +82,7 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func reconcile() {
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         viewModel.activeLiveActivitySessionIDs.formUnion(LiveActivityCoordinator.activeSessionIDs())
         for (sessionID, state) in LiveActivityCoordinator.currentStatesBySessionID() {
             viewModel.liveActivityStore.setLastState(state, for: sessionID)
@@ -91,7 +91,7 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func stop(sessionID: String, immediate: Bool = false) async {
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         viewModel.liveActivityStore.cancelRefresh(for: sessionID)
         viewModel.liveActivityStore.cancelPreviewRefresh(for: sessionID)
         let session = sessionSnapshot(for: sessionID)
@@ -111,7 +111,7 @@ final class LiveActivityFacade: ObservableObject {
     }
 
     func refresh(sessionID: String? = nil, endIfIdle: Bool = false, immediate: Bool = false) {
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         if let sessionID, !immediate, !endIfIdle {
             guard isActive(sessionID: sessionID) else { return }
             guard LiveActivitySnapshotBuilder.shouldScheduleRefresh(
@@ -223,7 +223,7 @@ final class LiveActivityFacade: ObservableObject {
         }, for: sessionID)
     }
 
-    #if canImport(ActivityKit) && os(iOS)
+    #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
     func transcriptLines(for session: OpenCodeSession) -> [OpenCodeChatActivityLine] {
         LiveActivitySnapshotBuilder.transcriptLines(for: snapshotInput(for: session))
     }
@@ -265,7 +265,7 @@ final class LiveActivityFacade: ObservableObject {
             return session
         }
 
-        #if canImport(ActivityKit) && os(iOS)
+        #if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
         guard let activitySnapshot = LiveActivityCoordinator.sessionSnapshot(for: sessionID) else { return nil }
         return LiveActivityCoordinator.resolveSession(
             sessionID: sessionID,

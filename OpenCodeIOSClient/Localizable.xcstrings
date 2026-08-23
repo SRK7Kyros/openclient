@@ -11401,6 +11401,22 @@
         }
       }
     },
+    "Previous Session": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessão anterior"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessione precedente"
+          }
+        }
+      }
+    },
     "Previous prompt": {
       "localizations": {
         "pt-BR": {

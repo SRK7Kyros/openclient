@@ -28,6 +28,7 @@ struct ActivityView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .padding(.bottom, newChatBottomPadding)
             }
         }
         .navigationTitle("Activity")
@@ -53,6 +54,14 @@ struct ActivityView: View {
         .task {
             await facade.prepareForPresentation()
         }
+    }
+
+    private var newChatBottomPadding: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        16
+        #else
+        0
+        #endif
     }
 
     private var projectFilterMenu: some View {
@@ -346,6 +355,7 @@ private struct ActivityContent: View, Equatable {
                             Label("Delete", systemImage: "trash")
                         }
 
+#if !targetEnvironment(macCatalyst)
                         Button {
                             Task { await facade.toggleLiveActivity(row) }
                         } label: {
@@ -355,6 +365,7 @@ private struct ActivityContent: View, Equatable {
                             )
                         }
                         .tint(.indigo)
+#endif
                     }
                 }
             }
@@ -712,9 +723,9 @@ struct ActivityTailPreview: View {
             }
         }
 
-        let suffix = String(characters[lowerBound...]).drop {
+        let suffix = String(characters[lowerBound...]).drop(while: {
             $0.isWhitespace || $0 == "." || $0 == "·"
-        }
+        })
         return "…" + suffix
     }
 

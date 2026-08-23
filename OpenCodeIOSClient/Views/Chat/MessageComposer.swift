@@ -466,6 +466,17 @@ struct MessageComposer: View {
     var allowsTextTools = true
     var allowsSessionTools = true
     var autoFocus = false
+    var agentTitle: String = ""
+    var selectableAgents: [OpenCodeAgent] = []
+    var modelTitle: String = ""
+    var providerGroups: [ChatFacade.ToolbarProviderGroup] = []
+    var reasoningVariants: [ChatFacade.ToolbarReasoningVariant] = []
+    var reasoningTitle: String = ""
+    var contextSnapshot: OpenCodeSessionContextSnapshot?
+    var onSelectAgent: ((String) -> Void)?
+    var onSelectModel: ((OpenCodeModelReference) -> Void)?
+    var onSelectReasoningVariant: ((String?) -> Void)?
+    var onShowContextMetrics: (() -> Void)?
 
 #if canImport(PhotosUI) && canImport(UIKit)
     private enum AttachmentImportLimits {
@@ -568,6 +579,10 @@ struct MessageComposer: View {
 
     private var composerActionButtonSize: CGFloat {
         composerActionSlotHeight
+    }
+
+    private var catalystControlHitTargetSize: CGFloat {
+        44
     }
 
     private var composerGlassMergeSpacing: CGFloat {
@@ -924,13 +939,12 @@ struct MessageComposer: View {
     #endif
 
     private var iosComposer: some View {
-        HStack(alignment: .bottom, spacing: 5) {
-            accessoryContainer
-                .zIndex(3)
-
-            composerInputGlassContainer
-                .frame(maxWidth: .infinity)
-                .zIndex(1)
+        Group {
+            #if targetEnvironment(macCatalyst)
+            catalystComposer
+            #else
+            mobileComposer
+            #endif
         }
         .shadow(color: .black.opacity(0.12), radius: 16, y: 5)
         .animation(opencodeSelectionAnimation, value: isBusy)
@@ -978,6 +992,17 @@ struct MessageComposer: View {
         }
     }
 
+    private var mobileComposer: some View {
+        HStack(alignment: .bottom, spacing: 5) {
+            accessoryContainer
+                .zIndex(3)
+
+            composerInputGlassContainer
+                .frame(maxWidth: .infinity)
+                .zIndex(1)
+        }
+    }
+
     private var accessoryContainer: some View {
         collapsedAccessoryButton
     }
@@ -989,6 +1014,298 @@ struct MessageComposer: View {
             }
         }
     }
+
+    #if targetEnvironment(macCatalyst)
+    private var catalystComposer: some View {
+        VStack(spacing: 4) {
+            composerTextFieldContent
+                .frame(maxWidth: .infinity)
+
+            catalystComposerControlBar
+                .padding(.bottom, 8)
+        }
+        .padding(.top, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.clear)
+                .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .onTapGesture {}
+        }
+        .padding(.bottom, 10)
+    }
+
+    private var catalystComposerControlBar: some View {
+        HStack(spacing: 6) {
+            catalystAccessoryButton
+
+            catalystSelectorMenus
+
+            Spacer()
+
+            if let onShowContextMetrics {
+                SessionContextUsageToolbarButton(
+                    context: contextSnapshot,
+                    hitTargetSize: catalystControlHitTargetSize,
+                    action: onShowContextMetrics
+                )
+            }
+
+            if showsStopStreamButton {
+                catalystStopStreamButton
+                    .transition(stopStreamButtonTransition)
+            }
+
+            catalystPrimaryActionSlot
+        }
+        .padding(6)
+        .frame(minHeight: 44)
+    }
+
+    @ViewBuilder
+    private var catalystSelectorMenus: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 6) {
+                catalystSelectorMenuRow
+            }
+        } else {
+            catalystSelectorMenuRow
+        }
+    }
+
+    private var catalystSelectorMenuRow: some View {
+        HStack(spacing: 6) {
+            if !agentTitle.isEmpty, let onSelectAgent {
+                StablePickerMenu(
+                    elements: selectableAgents.map { agent in
+                        .action(
+                            id: agent.name,
+                            title: agent.name.capitalized,
+                            systemImage: "person.crop.circle",
+                            isSelected: agent.name.caseInsensitiveCompare(agentTitle) == .orderedSame
+                        )
+                    },
+                    accessibilityLabel: String(localized: "Agent"),
+                    accessibilityValue: agentTitle,
+                    accessibilityIdentifier: "chat.composer.agent",
+                    onSelect: onSelectAgent
+                ) {
+                    catalystSelectorLabel(
+                        title: agentTitle.capitalized,
+                        systemImage: "person.crop.circle"
+                    )
+                }
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
+            }
+
+            if !modelTitle.isEmpty, onSelectModel != nil {
+                StablePickerMenu(
+                    elements: modelMenuElements,
+                    accessibilityLabel: String(localized: "Model"),
+                    accessibilityValue: modelTitle,
+                    accessibilityIdentifier: "chat.composer.model",
+                    onSelect: selectModel
+                ) {
+                    catalystSelectorLabel(
+                        title: modelTitle,
+                        systemImage: "cpu"
+                    )
+                }
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
+            }
+
+            if !reasoningVariants.isEmpty, let onSelectReasoningVariant {
+                StablePickerMenu(
+                    elements: reasoningMenuElements,
+                    accessibilityLabel: String(localized: "Reasoning"),
+                    accessibilityValue: reasoningTitle,
+                    accessibilityIdentifier: "chat.composer.reasoning",
+                    onSelect: { actionID in
+                        if actionID == "reasoning:default" {
+                            onSelectReasoningVariant(nil)
+                        } else if actionID.hasPrefix("reasoning:variant:") {
+                            onSelectReasoningVariant(String(actionID.dropFirst("reasoning:variant:".count)))
+                        }
+                    }
+                ) {
+                    catalystSelectorLabel(
+                        title: reasoningTitle,
+                        systemImage: "brain.head.profile"
+                    )
+                }
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
+            }
+        }
+    }
+
+    private var catalystAccessoryButton: some View {
+        Button(action: presentAccessoryMenu) {
+            Image(systemName: "plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: catalystControlHitTargetSize, height: catalystControlHitTargetSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open composer menu")
+        .accessibilityIdentifier("chat.composer.menu")
+    }
+
+    private var catalystPrimaryActionSlot: some View {
+        ZStack {
+            if showsSendActionButton {
+                catalystSendActionButton
+                    .transition(sendActionButtonTransition)
+            }
+
+            if showsMicActionButton {
+                catalystMicActionButton
+                    .transition(micActionButtonTransition)
+            }
+        }
+        .frame(width: catalystControlHitTargetSize, height: catalystControlHitTargetSize)
+    }
+
+    private var catalystSendActionButton: some View {
+        Button {
+            guard isSendActionButtonEnabled else { return }
+            onSend()
+        } label: {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(isSendActionButtonEnabled ? 1 : 0.68))
+                .frame(width: 32, height: 32)
+                .background(Color.accentColor.opacity(0.82), in: Circle())
+                .frame(width: catalystControlHitTargetSize, height: catalystControlHitTargetSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .disabled(!isSendActionButtonEnabled)
+        .accessibilityLabel("Send")
+        .accessibilityIdentifier("chat.send")
+    }
+
+    private var catalystMicActionButton: some View {
+        Button {
+            if isDictating {
+                stopDictation()
+            } else {
+                startDictation()
+            }
+        } label: {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(micActionForeground)
+                .frame(width: 32, height: 32)
+                .background(Color.primary.opacity(0.07), in: Circle())
+                .frame(width: catalystControlHitTargetSize, height: catalystControlHitTargetSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .disabled(!showsMicActionButton)
+        .accessibilityLabel(micActionAccessibilityLabel)
+        .accessibilityIdentifier(micActionAccessibilityIdentifier)
+    }
+
+    private var catalystStopStreamButton: some View {
+        Button {
+            OpenCodeHaptics.impact(.soft)
+            onStop()
+        } label: {
+            Image(systemName: "stop.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Color.red.opacity(0.72), in: Circle())
+                .frame(width: catalystControlHitTargetSize, height: catalystControlHitTargetSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Stop Stream")
+        .accessibilityIdentifier("chat.stream.stop")
+    }
+
+    private func catalystSelectorLabel(title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 32)
+            .contentShape(Capsule())
+            .opencodeConcentricGlassSurface(
+                isInteractive: true,
+                minimumCornerRadius: 16,
+                in: Capsule()
+            )
+            .frame(minHeight: catalystControlHitTargetSize)
+            .contentShape(Rectangle())
+    }
+
+    private var modelMenuElements: [StablePickerMenuElement] {
+        [StablePickerMenuElement.submenu(
+            id: "models",
+            title: String(localized: "Model"),
+            children: providerGroups.map { provider in
+                .submenu(
+                    id: "provider:\(provider.id)",
+                    title: provider.name,
+                    children: provider.models.map { model in
+                        .action(
+                            id: "model:\(provider.id):\(model.id)",
+                            title: model.name,
+                            systemImage: nil,
+                            isSelected: model.name == modelTitle
+                        )
+                    }
+                )
+            }
+        )]
+    }
+
+    private var reasoningMenuElements: [StablePickerMenuElement] {
+        [.inline(
+            id: "reasoning",
+            title: nil,
+            children: [
+                .action(
+                    id: "reasoning:default",
+                    title: String(localized: "Default"),
+                    systemImage: "sparkles",
+                    isSelected: reasoningTitle == String(localized: "Default")
+                )
+            ] + reasoningVariants.map { variant in
+                .action(
+                    id: "reasoning:variant:\(variant.id)",
+                    title: variant.title,
+                    systemImage: "brain.head.profile",
+                    isSelected: variant.title == reasoningTitle
+                )
+            }
+        )]
+    }
+
+    private func selectModel(_ actionID: String) {
+        guard let onSelectModel else { return }
+        for provider in providerGroups {
+            if let model = provider.models.first(where: {
+                "model:\(provider.id):\($0.id)" == actionID
+            }) {
+                onSelectModel(OpenCodeModelReference(providerID: provider.id, modelID: model.id))
+                return
+            }
+        }
+    }
+    #endif
 
     private func startDictation() {
         guard !hasDraftContent else { return }
@@ -1058,6 +1375,13 @@ struct MessageComposer: View {
 
     @ViewBuilder
     private var composerTextFieldGlass: some View {
+        composerTextFieldContent
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .opencodeGlassSurface(isInteractive: true, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var composerTextFieldContent: some View {
         #if canImport(UIKit)
         ComposerTextView(
             text: textBinding,
@@ -1071,8 +1395,6 @@ struct MessageComposer: View {
             onFocusChange: onFocusChange
         )
         .frame(minHeight: ComposerTextViewMetrics.minimumHeight)
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .opencodeGlassSurface(isInteractive: true, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityIdentifier("chat.input")
         #else
         TextField("Message", text: textBinding, axis: .vertical)
@@ -1080,7 +1402,6 @@ struct MessageComposer: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .frame(minHeight: composerActionSlotHeight)
-            .opencodeGlassSurface(isInteractive: true, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .accessibilityIdentifier("chat.input")
             .simultaneousGesture(TapGesture().onEnded {
                 dismissAccessoryMenu()
@@ -1243,12 +1564,7 @@ struct MessageComposer: View {
     }
 
     private var collapsedAccessoryButton: some View {
-        Button {
-            OpenCodeHaptics.impact(.soft)
-            withAnimation(opencodeSelectionAnimation) {
-                isAccessoryMenuOpen = true
-            }
-        } label: {
+        Button(action: presentAccessoryMenu) {
             Image(systemName: "plus")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
@@ -1260,6 +1576,13 @@ struct MessageComposer: View {
         .contentShape(Circle())
         .opencodeToolbarGlassID("composer-plus-menu", in: accessoryGlassNamespace)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 4)
+    }
+
+    private func presentAccessoryMenu() {
+        OpenCodeHaptics.impact(.soft)
+        withAnimation(opencodeSelectionAnimation) {
+            isAccessoryMenuOpen = true
+        }
     }
 
     private func prominentActionForeground(isEnabled: Bool) -> Color {
@@ -2330,6 +2653,45 @@ final class ComposerPlaceholderTextView: UITextView {
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         bounds.insetBy(dx: -8, dy: -8).contains(point)
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        var commands = [UIKeyCommand]()
+
+        let submitCommand = UIKeyCommand(
+            title: "",
+            action: #selector(submitIfPossible),
+            input: "\r",
+            modifierFlags: []
+        )
+        commands.append(submitCommand)
+
+        let submitEnterCommand = UIKeyCommand(
+            title: "",
+            action: #selector(submitIfPossible),
+            input: "\n",
+            modifierFlags: []
+        )
+        commands.append(submitEnterCommand)
+
+        let newlineCommand = UIKeyCommand(
+            title: "",
+            action: #selector(insertShiftNewline),
+            input: "\r",
+            modifierFlags: .shift
+        )
+        commands.append(newlineCommand)
+
+        return commands
+    }
+
+    @objc private func submitIfPossible() {
+        guard canSubmit else { return }
+        onSubmit?()
+    }
+
+    @objc private func insertShiftNewline() {
+        insertText("\n")
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

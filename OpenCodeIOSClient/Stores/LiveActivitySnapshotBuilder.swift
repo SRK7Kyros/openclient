@@ -1,6 +1,6 @@
 import Foundation
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 
 struct LiveActivitySnapshotInput {

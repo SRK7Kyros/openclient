@@ -31,6 +31,7 @@ struct ProjectSettingsSheet: View {
                         .accessibilityIdentifier("project.settings.showActivityLastUserMessage")
                     }
 
+#if !targetEnvironment(macCatalyst)
                     Toggle("Auto-start Live Activity", isOn: Binding(
                         get: { facade.settingsSnapshot.isLiveActivityAutoStartEnabled },
                         set: { facade.setLiveActivityAutoStartEnabled($0) }
@@ -39,6 +40,7 @@ struct ProjectSettingsSheet: View {
                     Text("Start a Live Activity automatically when a session begins working in this project.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+#endif
                 }
 
                 Section("Actions") {

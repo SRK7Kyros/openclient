@@ -360,7 +360,7 @@ private struct TerminalModifierBar: View {
     }
 }
 
-#if canImport(UIKit) && canImport(GhosttyTerminal)
+#if canImport(UIKit) && canImport(GhosttyTerminal) && !targetEnvironment(macCatalyst)
 import GhosttyTerminal
 import UIKit
 
@@ -1070,7 +1070,7 @@ private struct TerminalHostView: View {
     let fontSize: Float
 
     var body: some View {
-        ContentUnavailableView("Terminal requires iOS", systemImage: "terminal")
+        ContentUnavailableView("Unavailable", systemImage: "terminal")
     }
 }
 #endif

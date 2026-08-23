@@ -4,6 +4,41 @@ import XCTest
 
 @MainActor
 final class DirectoryStoreTests: XCTestCase {
+    func testPreviouslyOpenedSessionUsesMostRecentAvailableSelection() {
+        let first = session(id: "ses_first", directory: "/tmp/project")
+        let second = session(id: "ses_second", directory: "/tmp/project")
+        let third = session(id: "ses_third", directory: "/tmp/project")
+        let store = DirectoryStore(sessions: [first, second, third], selectedSession: first)
+
+        store.selectedSession = second
+        store.selectedSession = third
+
+        XCTAssertEqual(store.previouslyOpenedSession(excluding: third.id)?.id, second.id)
+
+        store.selectedSession = second
+
+        XCTAssertEqual(store.previouslyOpenedSession(excluding: second.id)?.id, third.id)
+    }
+
+    func testSessionSwitcherFreezesRecentCandidatesAndAdvancesSelection() {
+        let first = session(id: "ses_first", directory: "/tmp/project")
+        let second = session(id: "ses_second", directory: "/tmp/project")
+        let third = session(id: "ses_third", directory: "/tmp/project")
+        let store = DirectoryStore(sessions: [first, second, third], selectedSession: first)
+        store.selectedSession = second
+        store.selectedSession = third
+
+        XCTAssertEqual(store.advanceSessionSwitcher(from: third.id)?.id, second.id)
+        XCTAssertEqual(store.advanceSessionSwitcher(from: second.id)?.id, first.id)
+        store.revealSessionSwitcher()
+        XCTAssertEqual(store.sessionSwitcherPresentation?.selectedSessionID, first.id)
+
+        let selectedSession = store.finishSessionSwitcher()
+
+        XCTAssertEqual(selectedSession?.id, first.id)
+        XCTAssertNil(store.sessionSwitcherPresentation)
+    }
+
     func testUpsertSessionsPreservesExistingSessionsAndMergesUpdates() {
         let existing = OpenCodeSession(id: "existing", title: "Old", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)
         let updated = OpenCodeSession(id: "existing", title: "Updated", workspaceID: nil, directory: "/tmp/project", projectID: "project", parentID: nil)

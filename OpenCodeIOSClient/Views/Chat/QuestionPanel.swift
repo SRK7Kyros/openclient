@@ -76,6 +76,7 @@ private struct QuestionRequestCarousel: View {
                     }
                     .scrollTargetLayout()
                 }
+                .scrollClipDisabled()
                 .contentMargins(.horizontal, 24, for: .scrollContent)
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .always))

@@ -619,17 +619,23 @@ private struct BrowserErrorView: View {
 extension View {
     @ViewBuilder
     func opencodeProjectBrowserAccessory(browser: BrowserStore) -> some View {
-        #if os(iOS) || targetEnvironment(macCatalyst)
-        if #available(iOS 26.1, *) {
-            self.tabViewBottomAccessory(isEnabled: browser.presentation == .collapsed) {
-                BrowserAccessoryRow(
-                    browser: browser,
-                    accessibilityIdentifier: "browser.projectAccessory"
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+        #if targetEnvironment(macCatalyst)
+        if #available(macCatalyst 26.0, *) {
+            self.tabViewBottomAccessory {
+                if browser.presentation == .collapsed {
+                    BrowserAccessoryRow(
+                        browser: browser,
+                        accessibilityIdentifier: "browser.projectAccessory"
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .animation(.snappy(duration: 0.3, extraBounce: 0.02), value: browser.presentation)
-        } else if #available(iOS 26.0, *) {
+        } else {
+            self
+        }
+        #elseif os(iOS)
+        if #available(iOS 26.0, *) {
             self.tabViewBottomAccessory {
                 if browser.presentation == .collapsed {
                     BrowserAccessoryRow(

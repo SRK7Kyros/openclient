@@ -46,7 +46,7 @@ targets:
     type: application
     productName: OpenClient
     platform: iOS
-    supportedDestinations: [iOS]
+    supportedDestinations: [iOS, macCatalyst]
     deploymentTarget: "17.0"
     sources:
       - path: OpenCodeIOSClient
@@ -87,8 +87,10 @@ targets:
     dependencies:
       - target: OpenCodeChatActivityExtension
         embed: true
+        destinationFilters: [iOS]
       - target: OpenCodeShareExtension
         embed: true
+        destinationFilters: [iOS]
       - package: HighlighterSwift
         product: Highlighter
       - package: GhosttyKit
@@ -158,7 +160,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient
         PRODUCT_NAME: OpenClient
-        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator macosx
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "Liquidy Trees"
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
@@ -166,7 +168,9 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SWIFT_EMIT_LOC_STRINGS: YES
         TARGETED_DEVICE_FAMILY: 1,2
-        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MACCATALYST: YES
+        MACCATALYST_DEPLOYMENT_TARGET: "14.0"
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         CODE_SIGN_ENTITLEMENTS: OpenCodeIOSClient/OpenCodeIOSClient.entitlements
     scheme:

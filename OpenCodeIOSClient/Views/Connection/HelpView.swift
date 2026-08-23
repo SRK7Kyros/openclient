@@ -5,7 +5,7 @@ import WebKit
 #if canImport(UIKit)
 import UIKit
 #endif
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 #endif
 

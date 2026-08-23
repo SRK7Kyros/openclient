@@ -1160,6 +1160,42 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(syncState.partsByMessageID["msg_new"]?.first?.text, "new")
     }
 
+    func testDirectorySyncOrdersMessagesByCreationTimeAcrossIdentifierRollover() {
+        let beforeRollover = message(
+            id: "msg_ffdf4c869002UnMgGIBK3IkWiK",
+            role: "assistant",
+            text: "Before rollover",
+            created: 1_786_672_105_577
+        )
+        let afterRollover = message(
+            id: "msg_00336e353001iqV1Ewk4n4w1sW",
+            role: "user",
+            text: "After rollover",
+            created: 1_786_752_323_000
+        )
+
+        let merged = ChatStore.mergingCanonicalMessagePage([afterRollover], into: [beforeRollover])
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages(Array(merged.reversed()), forSessionID: "ses_test")
+
+        XCTAssertEqual(merged.map(\.id), [beforeRollover.id, afterRollover.id])
+        XCTAssertEqual(
+            syncState.messageEnvelopes(forSessionID: "ses_test").map(\.id),
+            [beforeRollover.id, afterRollover.id]
+        )
+        XCTAssertEqual(syncState.messageEnvelopes(forSessionID: "ses_test", suffix: 1).first?.id, afterRollover.id)
+    }
+
+    func testDirectorySyncKeepsTimestampFreeOptimisticMessageAtEnd() {
+        let canonical = message(id: "msg_z", role: "assistant", text: "Canonical", created: 1)
+        let optimistic = message(id: "msg_0", role: "user", text: "Optimistic")
+        var syncState = OpenCodeDirectorySyncState()
+
+        syncState.replaceMessages([optimistic, canonical], forSessionID: "ses_test")
+
+        XCTAssertEqual(syncState.messageEnvelopes(forSessionID: "ses_test").map(\.id), [canonical.id, optimistic.id])
+    }
+
     func testDirectorySyncAcceptsNewerFullPartUpdate() {
         var syncState = OpenCodeDirectorySyncState()
         let initial = OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
@@ -1442,6 +1478,45 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertTrue(store.hasPendingTranscriptEvents)
         XCTAssertEqual(store.pendingTranscriptEventCount, 1)
         XCTAssertEqual(store.pendingTranscriptCharacterCount, 11)
+    }
+
+    func testChatStoreMergesLatestCanonicalPageIntoCachedHistory() {
+        let old = message(id: "msg_old", role: "user", text: "Old", sessionID: "ses_test", created: 1)
+        let stale = message(id: "msg_latest", role: "assistant", text: "Stale", sessionID: "ses_test", created: 2)
+        let current = message(id: "msg_latest", role: "assistant", text: "Current", sessionID: "ses_test", created: 2)
+        let new = message(id: "msg_new", role: "assistant", text: "New", sessionID: "ses_test", created: 3)
+
+        let merged = ChatStore.mergingCanonicalMessagePage([current, new], into: [old, stale])
+
+        XCTAssertEqual(merged.map(\.id), ["msg_old", "msg_latest", "msg_new"])
+        XCTAssertEqual(merged[1].parts.first?.text, "Current")
+    }
+
+    @MainActor
+    func testChatStoreIgnoresDeltaUntilCanonicalPartExists() {
+        let store = ChatStore()
+        let event = pendingDelta(delta: "Hello")
+
+        XCTAssertFalse(store.enqueuePendingTranscriptEventIfAvailable(event, in: OpenCodeDirectorySyncState()))
+        XCTAssertFalse(store.hasPendingTranscriptEvents)
+
+        var syncState = OpenCodeDirectorySyncState()
+        syncState.replaceMessages([
+            message(id: "msg_assistant", role: "assistant", text: "", sessionID: "ses_test"),
+        ], forSessionID: "ses_test")
+        XCTAssertTrue(store.enqueuePendingTranscriptEventIfAvailable(event, in: syncState))
+        XCTAssertTrue(store.hasPendingTranscriptEvents)
+    }
+
+    @MainActor
+    func testChatStoreClearsPendingTranscriptWhenSelectingAnotherSession() {
+        let store = ChatStore()
+        store.beginSelectingSession(sessionID: "ses_old", cachedMessages: [])
+        store.enqueuePendingTranscriptEvent(pendingDelta(sessionID: "ses_old", delta: "old"))
+
+        store.beginSelectingSession(sessionID: "ses_new", cachedMessages: [])
+
+        XCTAssertFalse(store.hasPendingTranscriptEvents)
     }
 
     @MainActor
@@ -2197,9 +2272,22 @@ This appended section simulates more streamed text arriving after some chunks ha
         )
     }
 
-    private func message(id: String, role: String, text: String, sessionID: String = "ses_test") -> OpenCodeMessageEnvelope {
+    private func message(
+        id: String,
+        role: String,
+        text: String,
+        sessionID: String = "ses_test",
+        created: Double? = nil
+    ) -> OpenCodeMessageEnvelope {
         OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: id, role: role, sessionID: sessionID, time: nil, agent: nil, model: nil),
+            info: OpenCodeMessage(
+                id: id,
+                role: role,
+                sessionID: sessionID,
+                time: created.map { OpenCodeMessageTime(created: $0) },
+                agent: nil,
+                model: nil
+            ),
             parts: [
                 OpenCodePart(id: "part_\(id)", messageID: id, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: text),
             ]

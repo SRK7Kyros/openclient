@@ -97,6 +97,8 @@ enum MessageBubbleDisplayIdentity {
 }
 
 struct MessageBubble: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     let message: OpenCodeMessageEnvelope
     let detailedMessage: OpenCodeMessageEnvelope?
     let currentSessionID: String?
@@ -109,6 +111,7 @@ struct MessageBubble: View {
     let expandedReasoningPartIDs: Set<String>
     let expandedContextGroupIDs: Set<String>
     let showsAllActivity: Bool
+    var tableMaximumWidth: CGFloat? = nil
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
     let onOpenTaskSession: (String) -> Void
@@ -146,6 +149,14 @@ struct MessageBubble: View {
 
     private var bubbleShape: MessageBubbleShape {
         MessageBubbleShape(isOutgoing: isUser, cornerRadius: isUser ? 22 : 18)
+    }
+
+    private var userBubbleMaximumWidth: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        520
+        #else
+        horizontalSizeClass == .regular ? 500 : 320
+        #endif
     }
 
     private var fullDisplayEntries: [DisplayEntry] {
@@ -519,7 +530,8 @@ struct MessageBubble: View {
                     style: textStyle(for: part),
                     isStreaming: isStreamingText,
                     animatesStreamingText: animatesStreamingText,
-                    streamingAnimationID: "\(effectiveMessage.id):\(part.id ?? "part-\(index)")"
+                    streamingAnimationID: "\(effectiveMessage.id):\(part.id ?? "part-\(index)")",
+                    tableMaximumWidth: tableMaximumWidth
                 )
                 let urls = isStreamingText ? [] : MessageLinkExtractor.urls(in: text)
 
@@ -671,7 +683,7 @@ struct MessageBubble: View {
             .background {
                 bubbleShape.fill(bubbleColor)
             }
-            .frame(maxWidth: 320, alignment: .trailing)
+            .frame(maxWidth: userBubbleMaximumWidth, alignment: .trailing)
     }
 
     private func renderableText(for part: OpenCodePart) -> String? {
@@ -1466,15 +1478,17 @@ private struct ReasoningBlockEntryModifier: ViewModifier {
 }
 
 struct StreamingTurnBottomGradient: View {
+    @Environment(\.colorScheme) private var colorScheme
     private let height: CGFloat = 52
     private let visualWidth: CGFloat = 4096
 
     var body: some View {
+        let background = OpenCodePlatformColor.chatCanvasBackground(for: colorScheme)
         LinearGradient(
             stops: [
-                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0), location: 0),
-                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.78), location: 0.48),
-                .init(color: OpenCodePlatformColor.groupedBackground.opacity(0.98), location: 1)
+                .init(color: background.opacity(0), location: 0),
+                .init(color: background.opacity(0.78), location: 0.48),
+                .init(color: background.opacity(0.98), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom

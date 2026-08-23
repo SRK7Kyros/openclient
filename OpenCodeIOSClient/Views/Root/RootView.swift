@@ -180,6 +180,9 @@ struct RootView<ChatDestination: View>: View {
                         showProjectContentOrDetail()
                     }
                 }
+                #if targetEnvironment(macCatalyst)
+                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 380)
+                #endif
             }
         } content: {
             offlineBannerColumn(.content) {

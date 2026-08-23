@@ -38,6 +38,7 @@ struct MarkdownMessageText: View {
     var animatesStreamingText = true
     var streamingAnimationID: String? = nil
     var onStreamingRevealCompleted: (() -> Void)? = nil
+    var tableMaximumWidth: CGFloat? = nil
 
     var body: some View {
         switch style {
@@ -183,10 +184,11 @@ struct MarkdownMessageText: View {
         .padding(.vertical, listItemVerticalPadding)
     }
 
+    @ViewBuilder
     private func styledTable(headers: [String], rows: [[String]]) -> some View {
         let minimumHeight = estimatedTableHeight(headers: headers, rows: rows)
 
-        return ScrollView(.horizontal, showsIndicators: false) {
+        let table = ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 tableRow(headers, isHeader: true)
 
@@ -207,8 +209,58 @@ struct MarkdownMessageText: View {
             .padding(.horizontal, tableHorizontalScrollBleed)
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, -tableHorizontalScrollBleed)
-        .padding(.vertical, tableOuterPadding)
+
+        if let viewportWidth = tableViewportWidth(headers: headers, rows: rows) {
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: minimumHeight)
+                .overlay {
+                    table
+                        .frame(width: viewportWidth)
+                }
+                .padding(.vertical, tableOuterPadding)
+        } else {
+            table
+                .padding(.horizontal, -tableHorizontalScrollBleed)
+                .padding(.vertical, tableOuterPadding)
+        }
+    }
+
+    private func tableViewportWidth(headers: [String], rows: [[String]]) -> CGFloat? {
+        guard let tableMaximumWidth else { return nil }
+        let preferredTextColumnWidth: CGFloat = 688
+        let naturalWidth = estimatedTableContentWidth(headers: headers, rows: rows)
+            + tableHorizontalScrollBleed * 2
+        return min(tableMaximumWidth, max(preferredTextColumnWidth, naturalWidth))
+    }
+
+    private func estimatedTableContentWidth(headers: [String], rows: [[String]]) -> CGFloat {
+        guard !headers.isEmpty else { return 0 }
+
+        let columnWidths = headers.indices.map { columnIndex in
+            let bodyWidth = rows.compactMap { row -> CGFloat? in
+                guard row.indices.contains(columnIndex) else { return nil }
+                return estimatedTableCellWidth(for: row[columnIndex], isHeader: false)
+            }.max() ?? 0
+            return max(
+                estimatedTableCellWidth(for: headers[columnIndex], isHeader: true),
+                bodyWidth
+            )
+        }
+        return columnWidths.reduce(0, +) + CGFloat(max(0, headers.count - 1))
+    }
+
+    private func estimatedTableCellWidth(for value: String, isHeader: Bool) -> CGFloat {
+        let lines = value.split(separator: "\n", omittingEmptySubsequences: false)
+#if canImport(UIKit)
+        let font = estimatedTableUIFont(isHeader: isHeader)
+        let textWidth = lines.map { line in
+            ceil((String(line) as NSString).size(withAttributes: [.font: font]).width)
+        }.max() ?? 0
+#else
+        let textWidth = CGFloat(lines.map(\.count).max() ?? 0) * (style == .standard ? 8 : 7)
+#endif
+        return min(tableCellMaxWidth + 20, max(tableCellMinWidth + 20, textWidth + 20))
     }
 
     private func tableRow(_ cells: [String], isHeader: Bool) -> some View {

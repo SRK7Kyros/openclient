@@ -848,26 +848,12 @@ extension AppViewModel {
         }
 
         do {
-            let messagesAreFresh = areLocalChatMessagesFresh(sessionID: session.id)
             let todosAreFresh = areLocalChatTodosFresh(sessionID: session.id)
             async let statuses: Void = reloadSessionStatuses()
             async let permissions: Void = loadAllPermissions(for: session)
             async let questions: Void = loadAllQuestions(for: session)
-            if messagesAreFresh {
-                _ = try await (statuses, permissions, questions)
-                guard isSessionNavigationCurrent(
-                    sessionID: session.id,
-                    generation: navigationGeneration,
-                    directoryKey: navigationDirectoryKey
-                ) else { return }
-                if !todosAreFresh {
-                    await loadTodos(for: session)
-                }
-                chatStore.finishLoadingSelectedSession()
-            } else {
-                async let messages: Void = loadMessages(for: session)
-                _ = try await (messages, statuses, permissions, questions)
-            }
+            async let messages: Void = loadMessages(for: session, refreshTodos: !todosAreFresh)
+            _ = try await (messages, statuses, permissions, questions)
             guard isSessionNavigationCurrent(
                 sessionID: session.id,
                 generation: navigationGeneration,
@@ -1032,19 +1018,16 @@ extension AppViewModel {
     }
 
     @discardableResult
-    func stopCurrentSession() async -> Bool {
+    func stopSession(_ session: OpenCodeSession) async -> Bool {
         if isUsingAppleIntelligence {
             appleIntelligenceResponseTask?.cancel()
-            if let selectedSession {
-                sessionStatuses[selectedSession.id] = "idle"
-            }
+            sessionStatuses[session.id] = "idle"
             persistAppleIntelligenceMessages()
-            return false
+            return true
         }
 
-        guard let selectedSession else { return false }
         let abortSubmission = sessionCoordinator.prepareAbortSession(
-            session: selectedSession,
+            session: session,
             selectedDirectory: effectiveSelectedDirectory,
             currentProjectID: currentProject?.id
         )
@@ -1052,14 +1035,14 @@ extension AppViewModel {
         var accepted = false
         do {
             appendDebugLog(
-                "abort request session=\(debugSessionLabel(selectedSession)) directory=\(debugDirectoryLabel(abortSubmission.directory)) workspace=\(abortSubmission.workspaceID ?? "nil")"
+                "abort request session=\(debugSessionLabel(session)) directory=\(debugDirectoryLabel(abortSubmission.directory)) workspace=\(abortSubmission.workspaceID ?? "nil")"
             )
             try await sessionCoordinator.submitAbort(
                 client: client,
                 submission: abortSubmission
             )
-            sessionStatuses[selectedSession.id] = "idle"
-            appendDebugLog("abort accepted session=\(debugSessionLabel(selectedSession))")
+            sessionStatuses[session.id] = "idle"
+            appendDebugLog("abort accepted session=\(debugSessionLabel(session))")
             accepted = true
         } catch {
             appendDebugLog("abort error: \(error.localizedDescription)")
@@ -1068,7 +1051,7 @@ extension AppViewModel {
 
         do {
             try await reloadSessionStatuses()
-            try await loadMessages(for: selectedSession)
+            try await loadMessages(for: session)
         } catch {
             appendDebugLog("post-abort refresh error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
@@ -1472,10 +1455,17 @@ extension AppViewModel {
     ) async throws {
         let targetStore = directoryStoreRegistry.ownerStore(forSessionID: session.id) ?? directoryStore
         let targetGeneration = directoryStoreRegistry.generation
-        let loadedMessages = try await client.listMessages(sessionID: session.id, directory: session.directory)
+        #if targetEnvironment(macCatalyst)
+        let messageLimit = 200
+        #else
+        let messageLimit = 20
+        #endif
+        let loadedPage = try await client.listMessages(sessionID: session.id, limit: messageLimit, directory: session.directory)
         guard directoryStoreRegistry.generation == targetGeneration,
               directoryStoreRegistry.key(for: targetStore) != nil else { return }
-        refreshSessionPreview(for: session.id, messages: loadedMessages)
+        let existingMessages = targetStore.syncState.messageEnvelopes(forSessionID: session.id)
+        let loadedMessages = ChatStore.mergingCanonicalMessagePage(loadedPage, into: existingMessages)
+        refreshSessionPreview(for: session.id, messages: loadedPage)
         let isActiveSession = selectedSession?.id == session.id
         targetStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id)
         chatStore.applyCanonicalMessages(loadedMessages, forSessionID: session.id, isActiveSession: isActiveSession)
@@ -2016,7 +2006,7 @@ extension AppViewModel {
 
         let parentMessages = toolMessageDetails.values
             .filter { $0.info.sessionID == parentID }
-            .sorted { $0.info.id < $1.info.id }
+            .sorted { OpenCodeMessage.isOrderedBefore($0.info, $1.info) }
 
         for message in parentMessages.reversed() {
             for part in message.parts.reversed() where part.tool == "task" {

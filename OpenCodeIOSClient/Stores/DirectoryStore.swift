@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 
+struct OpenClientSessionSwitcherPresentation: Equatable {
+    let sessions: [OpenCodeSession]
+    let selectedSessionID: String
+}
+
 struct DirectorySessionSnapshot {
     let session: OpenCodeSession?
     let status: String?
@@ -187,17 +192,28 @@ final class DirectorySyncStore: ObservableObject {
 final class DirectoryStore: ObservableObject {
     private static let immediateTranscriptRoundLimit = 1
     private static let immediateTranscriptMessageLimit = 12
+    private static let openedSessionHistoryLimit = 12
 
     @Published var isLoadingSessions: Bool
     @Published var sessions: [OpenCodeSession]
     @Published var sessionTotal: Int
     @Published var sessionLimit: Int
-    @Published var selectedSession: OpenCodeSession?
+    @Published var selectedSession: OpenCodeSession? {
+        didSet {
+            if let selectedSession {
+                recordOpenedSession(selectedSession)
+            }
+        }
+    }
+    @Published private(set) var openedSessionHistory: [OpenCodeSession]
+    @Published private(set) var sessionSwitcherPresentation: OpenClientSessionSwitcherPresentation?
     @Published var commands: [OpenCodeCommand]
     @Published var sessionStatuses: [String: String]
     let syncStore: DirectorySyncStore
     private(set) var permissionRevision: UInt = 0
     private(set) var questionRevision: UInt = 0
+    private var sessionSwitcherCandidates: [OpenCodeSession] = []
+    private var sessionSwitcherSelectedSessionID: String?
 
     var syncState: OpenCodeDirectorySyncState {
         get { syncStore.state }
@@ -219,6 +235,8 @@ final class DirectoryStore: ObservableObject {
         self.sessionTotal = sessionTotal
         self.sessionLimit = sessionLimit
         self.selectedSession = selectedSession
+        self.openedSessionHistory = selectedSession.map { [$0] } ?? []
+        self.sessionSwitcherPresentation = nil
         self.commands = commands
         self.sessionStatuses = sessionStatuses
         self.syncStore = DirectorySyncStore(state: syncState)
@@ -230,11 +248,76 @@ final class DirectoryStore: ObservableObject {
         sessionTotal = 0
         sessionLimit = 100
         selectedSession = nil
+        openedSessionHistory = []
+        sessionSwitcherPresentation = nil
+        sessionSwitcherCandidates = []
+        sessionSwitcherSelectedSessionID = nil
         commands = []
         sessionStatuses = [:]
         syncStore.state = OpenCodeDirectorySyncState()
         permissionRevision = 0
         questionRevision = 0
+    }
+
+    func previouslyOpenedSession(excluding sessionID: String) -> OpenCodeSession? {
+        let availableSessionIDs = Set(sessions.map(\.id))
+        return openedSessionHistory.first { session in
+            session.id != sessionID && availableSessionIDs.contains(session.id)
+        }
+    }
+
+    func advanceSessionSwitcher(from sessionID: String) -> OpenCodeSession? {
+        let candidates: [OpenCodeSession]
+        let selectedSessionID: String
+        if !sessionSwitcherCandidates.isEmpty, let sessionSwitcherSelectedSessionID {
+            candidates = sessionSwitcherCandidates
+            selectedSessionID = sessionSwitcherSelectedSessionID
+        } else {
+            let availableSessionIDs = Set(sessions.map(\.id))
+            candidates = Array(openedSessionHistory.filter { availableSessionIDs.contains($0.id) }.prefix(6))
+            selectedSessionID = sessionID
+            sessionSwitcherCandidates = candidates
+        }
+
+        guard candidates.count > 1 else { return nil }
+        let currentIndex = candidates.firstIndex { $0.id == selectedSessionID }
+            ?? candidates.firstIndex { $0.id == sessionID }
+            ?? 0
+        let target = candidates[(currentIndex + 1) % candidates.count]
+        sessionSwitcherSelectedSessionID = target.id
+        if sessionSwitcherPresentation != nil {
+            sessionSwitcherPresentation = OpenClientSessionSwitcherPresentation(
+                sessions: candidates,
+                selectedSessionID: target.id
+            )
+        }
+        return target
+    }
+
+    func revealSessionSwitcher() {
+        guard !sessionSwitcherCandidates.isEmpty,
+              let sessionSwitcherSelectedSessionID else { return }
+        sessionSwitcherPresentation = OpenClientSessionSwitcherPresentation(
+            sessions: sessionSwitcherCandidates,
+            selectedSessionID: sessionSwitcherSelectedSessionID
+        )
+    }
+
+    @discardableResult
+    func finishSessionSwitcher() -> OpenCodeSession? {
+        let selectedSession = sessionSwitcherCandidates.first { $0.id == sessionSwitcherSelectedSessionID }
+        sessionSwitcherPresentation = nil
+        sessionSwitcherCandidates = []
+        sessionSwitcherSelectedSessionID = nil
+        return selectedSession
+    }
+
+    private func recordOpenedSession(_ session: OpenCodeSession) {
+        openedSessionHistory.removeAll { $0.id == session.id }
+        openedSessionHistory.insert(session, at: 0)
+        if openedSessionHistory.count > Self.openedSessionHistoryLimit {
+            openedSessionHistory.removeLast(openedSessionHistory.count - Self.openedSessionHistoryLimit)
+        }
     }
 
     @discardableResult
