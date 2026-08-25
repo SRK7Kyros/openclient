@@ -102,6 +102,209 @@ struct BrowserAddressResolver {
     }
 }
 
+enum BrowserWelcomeDocument {
+    static let puns: [LocalizedStringResource] = [
+        "No site yet. We're just browsing our options.",
+        "Ready to surf? The web is already making waves.",
+        "The internet called. It left a hyperlink.",
+        "A blank page is just a site waiting to happen.",
+        "Let's address the situation.",
+        "Good URLs are worth the wait.",
+        "This browser has excellent cache flow.",
+        "Go ahead. Make a site decision.",
+        "The web is vast. No need to rush the current.",
+        "Every great web journey begins with a single tap.",
+        "Need direction? Start with an address.",
+        "We tried to tell a DNS joke, but it couldn't resolve.",
+        "Surf responsibly. Some links can be a little clickbaity.",
+        "The browser is open-minded. Every tab gets a chance.",
+        "Take a byte out of the internet.",
+        "Where we're going, we don't need bookmarks. But they help.",
+    ]
+
+    static var html: String {
+        let localizedPuns = puns.map { String(localized: $0) }
+        let encodedPuns = (try? JSONEncoder().encode(localizedPuns)) ?? Data("[]".utf8)
+        let punsJSON = String(decoding: encodedPuns, as: UTF8.self)
+        let title = htmlEscaped(String(localized: "Browser"))
+        let eyebrow = htmlEscaped(String(localized: "OpenClient Browser"))
+        let prompt = htmlEscaped(String(localized: "Type an address above and let the good sites roll."))
+
+        return """
+        <!doctype html>
+        <html lang="\(htmlEscaped(Locale.current.identifier))">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+          <meta name="color-scheme" content="light dark">
+          <title>\(title)</title>
+          <style>
+            :root {
+              color-scheme: light dark;
+              --ink: rgba(24, 22, 34, 0.92);
+              --muted: rgba(42, 38, 56, 0.60);
+              --base: #f2f2f7;
+            }
+
+            * { box-sizing: border-box; }
+
+            html, body {
+              width: 100%;
+              min-height: 100%;
+              margin: 0;
+              overflow: hidden;
+            }
+
+            body {
+              display: grid;
+              place-items: center;
+              padding: clamp(24px, 7vw, 72px);
+              color: var(--ink);
+              background:
+                radial-gradient(circle at 18% 16%, rgba(175, 82, 222, 0.34), transparent 38%),
+                radial-gradient(circle at 82% 76%, rgba(50, 173, 230, 0.30), transparent 40%),
+                radial-gradient(circle at 72% 10%, rgba(255, 149, 0, 0.20), transparent 30%),
+                linear-gradient(135deg, rgba(88, 86, 214, 0.30), rgba(175, 82, 222, 0.18) 38%, rgba(50, 173, 230, 0.14) 70%, var(--base));
+              font-family: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+            }
+
+            body::before,
+            body::after {
+              content: "";
+              position: fixed;
+              width: min(56vw, 560px);
+              aspect-ratio: 1;
+              border-radius: 50%;
+              filter: blur(28px);
+              opacity: 0.54;
+              pointer-events: none;
+              animation: drift 14s ease-in-out infinite alternate;
+            }
+
+            body::before {
+              top: -24%;
+              right: -18%;
+              background: radial-gradient(circle, rgba(175, 82, 222, 0.45), transparent 68%);
+            }
+
+            body::after {
+              bottom: -32%;
+              left: -16%;
+              background: radial-gradient(circle, rgba(50, 173, 230, 0.42), transparent 68%);
+              animation-direction: alternate-reverse;
+            }
+
+            main {
+              position: relative;
+              z-index: 1;
+              width: min(100%, 780px);
+              min-height: min(54vh, 420px);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              padding: clamp(28px, 7vw, 68px);
+            }
+
+            .eyebrow {
+              margin: 0 0 20px;
+              color: var(--muted);
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0.18em;
+              text-transform: uppercase;
+            }
+
+            #pun {
+              max-width: 18ch;
+              min-height: 3.1em;
+              margin: 0;
+              font-size: clamp(32px, 6.4vw, 72px);
+              font-weight: 500;
+              line-height: 1.02;
+              letter-spacing: -0.035em;
+              text-wrap: balance;
+              transition: opacity 320ms ease, transform 320ms ease;
+            }
+
+            #pun.changing {
+              opacity: 0;
+              transform: translateY(8px);
+            }
+
+            .prompt {
+              margin: 28px 0 0;
+              color: var(--muted);
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+              font-size: clamp(13px, 2vw, 17px);
+              line-height: 1.45;
+            }
+
+            @keyframes drift {
+              from { transform: translate3d(-3%, -2%, 0) scale(0.94); }
+              to { transform: translate3d(6%, 7%, 0) scale(1.08); }
+            }
+
+            @media (prefers-color-scheme: dark) {
+              :root {
+                --ink: rgba(255, 255, 255, 0.92);
+                --muted: rgba(235, 230, 247, 0.62);
+                --base: #111016;
+              }
+            }
+
+            @media (max-height: 520px) {
+              body { padding: 18px 28px; }
+              main { min-height: 0; padding: 26px 34px; }
+              .eyebrow { margin-bottom: 12px; }
+              #pun { min-height: 2.2em; font-size: clamp(28px, 5.2vw, 52px); }
+              .prompt { margin-top: 16px; }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              body::before, body::after { animation: none; }
+              #pun { transition: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <main>
+            <p class="eyebrow">\(eyebrow)</p>
+            <h1 id="pun"></h1>
+            <p class="prompt">\(prompt)</p>
+          </main>
+          <script>
+            const puns = \(punsJSON);
+            const label = document.getElementById('pun');
+            let index = Math.floor(Math.random() * puns.length);
+
+            function showPun(animated) {
+              if (!puns.length) return;
+              if (animated) label.classList.add('changing');
+              window.setTimeout(() => {
+                label.textContent = puns[index];
+                label.classList.remove('changing');
+                index = (index + 1) % puns.length;
+              }, animated ? 320 : 0);
+            }
+
+            showPun(false);
+            window.setInterval(() => showPun(true), 6500);
+          </script>
+        </body>
+        </html>
+        """
+    }
+
+    private static func htmlEscaped(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+}
+
 @MainActor
 final class BrowserStore: ObservableObject {
     @Published private(set) var activeProjectID: String?
@@ -361,6 +564,8 @@ private final class BrowserSession: NSObject, ObservableObject {
         #if canImport(UIKit)
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         #endif
+
+        webView.loadHTMLString(BrowserWelcomeDocument.html, baseURL: nil)
     }
 
     private var isActive: Bool {
@@ -710,8 +915,12 @@ private final class BrowserSession: NSObject, ObservableObject {
     """
 
     private func synchronizeMetadata() {
-        currentURL = webView.url
-        pageTitle = webView.title ?? currentURL?.host ?? String(localized: "Browser")
+        let loadedURL = webView.url
+        let isWelcomeDocument = loadedURL?.scheme == "about"
+        currentURL = isWelcomeDocument ? nil : loadedURL
+        pageTitle = isWelcomeDocument
+            ? String(localized: "Browser")
+            : webView.title ?? currentURL?.host ?? String(localized: "Browser")
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
         isLoading = webView.isLoading

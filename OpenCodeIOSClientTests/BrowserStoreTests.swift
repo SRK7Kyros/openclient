@@ -5,6 +5,12 @@ import WebKit
 
 @MainActor
 final class BrowserStoreTests: XCTestCase {
+    func testWelcomeDocumentContainsRotatingBrowserPuns() {
+        XCTAssertEqual(BrowserWelcomeDocument.puns.count, 16)
+        XCTAssertTrue(BrowserWelcomeDocument.html.contains("font-family: ui-serif"))
+        XCTAssertTrue(BrowserWelcomeDocument.html.contains("window.setInterval"))
+    }
+
     func testAddressResolverPreservesExplicitWebURL() {
         XCTAssertEqual(
             BrowserAddressResolver.resolve("https://opencode.ai/docs")?.absoluteString,

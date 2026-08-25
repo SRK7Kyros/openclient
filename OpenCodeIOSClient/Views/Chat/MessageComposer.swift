@@ -416,13 +416,38 @@ private extension View {
 }
 #endif
 
+private extension View {
+    @ViewBuilder
+    func composerAccessoryTransitionSource(in namespace: Namespace.ID) -> some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *) {
+            matchedTransitionSource(id: "composer-accessory-popover", in: namespace)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func composerAccessoryTransitionDestination(in namespace: Namespace.ID) -> some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *) {
+            navigationTransition(.zoom(sourceID: "composer-accessory-popover", in: namespace))
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 struct MessageComposer: View {
     private enum AccessoryDestination: Hashable {
         case fork
         case mcp
-#if canImport(UIKit) && canImport(WebKit)
-        case sketch
-#endif
     }
 
     private enum ProminentAction {
@@ -487,9 +512,10 @@ struct MessageComposer: View {
 #endif
 
     @State private var selectedCommandName: String?
-    @State private var accessorySheetDetent: PresentationDetent = .height(315)
+    @State private var accessoryPopoverHeight: CGFloat = 315
     @State private var accessoryNavigationPath: [AccessoryDestination] = []
     @Namespace private var accessoryGlassNamespace
+    @Namespace private var accessoryPresentationNamespace
 #if canImport(AVFoundation) && canImport(Speech) && canImport(UIKit)
     @StateObject private var dictationController = MessageComposerDictationController()
     @State private var dictationErrorMessage: String?
@@ -502,6 +528,9 @@ struct MessageComposer: View {
     @State private var isShowingFileImporter = false
     @State private var isImportingAttachments = false
     @State private var attachmentImportError: String?
+#if canImport(WebKit)
+    @State private var isShowingSketchSheet = false
+#endif
 #endif
 
     private var text: String {
@@ -583,6 +612,16 @@ struct MessageComposer: View {
 
     private var catalystControlHitTargetSize: CGFloat {
         44
+    }
+
+    private var usesCatalystComposerLayout: Bool {
+        #if targetEnvironment(macCatalyst)
+        true
+        #elseif os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        false
+        #endif
     }
 
     private var composerGlassMergeSpacing: CGFloat {
@@ -775,7 +814,7 @@ struct MessageComposer: View {
             }
             .onChange(of: isAccessoryMenuOpen) { _, isOpen in
                 if isOpen {
-                    accessorySheetDetent = isComposerActionsScreenshotScene ? .height(expandedAccessorySheetDetentHeight) : .height(315)
+                    accessoryPopoverHeight = isComposerActionsScreenshotScene ? expandedAccessorySheetDetentHeight : 315
                     accessoryNavigationPath = []
                 }
             }
@@ -940,11 +979,11 @@ struct MessageComposer: View {
 
     private var iosComposer: some View {
         Group {
-            #if targetEnvironment(macCatalyst)
-            catalystComposer
-            #else
-            mobileComposer
-            #endif
+            if usesCatalystComposerLayout {
+                catalystComposer
+            } else {
+                mobileComposer
+            }
         }
         .shadow(color: .black.opacity(0.12), radius: 16, y: 5)
         .animation(opencodeSelectionAnimation, value: isBusy)
@@ -953,43 +992,17 @@ struct MessageComposer: View {
         .animation(streamStopButtonAnimation, value: isBusy)
         .animation(.snappy(duration: 0.12), value: dictationInputLevel)
         .animation(opencodeSelectionAnimation, value: isAccessoryMenuOpen)
-        .sheet(isPresented: $isAccessoryMenuOpen) {
-            NavigationStack(path: $accessoryNavigationPath) {
-                accessorySheetContent
-                    .navigationTitle("Message Tools")
-                    .opencodeInlineNavigationTitle()
-                    .navigationDestination(for: AccessoryDestination.self) { destination in
-                        switch destination {
-                        case .fork:
-                            ComposerForkListView(
-                                messages: forkableMessages,
-                                onForkMessage: { messageID in
-                                    isAccessoryMenuOpen = false
-                                    onForkMessage(messageID)
-                                }
-                            )
-                        case .mcp:
-                            ComposerMCPListView(
-                                servers: mcpServers,
-                                connectedCount: connectedMCPServerCount,
-                                isLoading: isLoadingMCP,
-                                togglingServerNames: togglingMCPServerNames,
-                                errorMessage: mcpErrorMessage,
-                                onLoad: onLoadMCP,
-                                onToggle: onToggleMCP
-                            )
 #if canImport(UIKit) && canImport(WebKit)
-                        case .sketch:
-                            ExcalidrawDrawingSheet { attachment in
-                                onAddAttachments([attachment])
-                                isAccessoryMenuOpen = false
-                            }
-#endif
-                        }
-                    }
+        .sheet(isPresented: $isShowingSketchSheet) {
+            NavigationStack {
+                ExcalidrawDrawingSheet { attachment in
+                    onAddAttachments([attachment])
+                    isShowingSketchSheet = false
+                }
             }
-            .presentationDetents([.height(315), .height(expandedAccessorySheetDetentHeight), .large], selection: $accessorySheetDetent)
+            .presentationDetents([.large])
         }
+#endif
     }
 
     private var mobileComposer: some View {
@@ -1015,16 +1028,16 @@ struct MessageComposer: View {
         }
     }
 
-    #if targetEnvironment(macCatalyst)
+    #if os(iOS)
     private var catalystComposer: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             composerTextFieldContent
                 .frame(maxWidth: .infinity)
 
             catalystComposerControlBar
-                .padding(.bottom, 8)
         }
-        .padding(.top, 6)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.clear)
@@ -1036,10 +1049,10 @@ struct MessageComposer: View {
     }
 
     private var catalystComposerControlBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             catalystAccessoryButton
 
-            catalystSelectorMenus
+            catalystSelectorMenuRow
 
             Spacer()
 
@@ -1058,23 +1071,12 @@ struct MessageComposer: View {
 
             catalystPrimaryActionSlot
         }
-        .padding(6)
-        .frame(minHeight: 44)
-    }
-
-    @ViewBuilder
-    private var catalystSelectorMenus: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 6) {
-                catalystSelectorMenuRow
-            }
-        } else {
-            catalystSelectorMenuRow
-        }
+        .padding(.horizontal, 8)
+        .frame(height: catalystControlHitTargetSize)
     }
 
     private var catalystSelectorMenuRow: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             if !agentTitle.isEmpty, let onSelectAgent {
                 StablePickerMenu(
                     elements: selectableAgents.map { agent in
@@ -1155,6 +1157,14 @@ struct MessageComposer: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Open composer menu")
         .accessibilityIdentifier("chat.composer.menu")
+        .composerAccessoryTransitionSource(in: accessoryPresentationNamespace)
+        .popover(
+            isPresented: $isAccessoryMenuOpen,
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .bottom
+        ) {
+            accessoryPopoverContent
+        }
     }
 
     private var catalystPrimaryActionSlot: some View {
@@ -1239,15 +1249,8 @@ struct MessageComposer: View {
             .font(.footnote.weight(.medium))
             .foregroundStyle(.primary)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(height: 32)
-            .contentShape(Capsule())
-            .opencodeConcentricGlassSurface(
-                isInteractive: true,
-                minimumCornerRadius: 16,
-                in: Capsule()
-            )
-            .frame(minHeight: catalystControlHitTargetSize)
+            .padding(.horizontal, 6)
+            .frame(height: catalystControlHitTargetSize)
             .contentShape(Rectangle())
     }
 
@@ -1394,7 +1397,7 @@ struct MessageComposer: View {
             onSubmit: onSend,
             onFocusChange: onFocusChange
         )
-        .frame(minHeight: ComposerTextViewMetrics.minimumHeight)
+        .frame(minHeight: usesCatalystComposerLayout ? ComposerTextViewMetrics.compactMinimumHeight : ComposerTextViewMetrics.minimumHeight)
         .accessibilityIdentifier("chat.input")
         #else
         TextField("Message", text: textBinding, axis: .vertical)
@@ -1576,6 +1579,14 @@ struct MessageComposer: View {
         .contentShape(Circle())
         .opencodeToolbarGlassID("composer-plus-menu", in: accessoryGlassNamespace)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 4)
+        .composerAccessoryTransitionSource(in: accessoryPresentationNamespace)
+        .popover(
+            isPresented: $isAccessoryMenuOpen,
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .bottom
+        ) {
+            accessoryPopoverContent
+        }
     }
 
     private func presentAccessoryMenu() {
@@ -1661,8 +1672,10 @@ struct MessageComposer: View {
                     isDisabled: isBusy,
                     accessibilityIdentifier: "chat.composer.sketch",
                     action: {
-                        accessorySheetDetent = .large
-                        accessoryNavigationPath.append(.sketch)
+                        isAccessoryMenuOpen = false
+                        DispatchQueue.main.async {
+                            isShowingSketchSheet = true
+                        }
                     }
                 )
 #endif
@@ -1754,6 +1767,7 @@ struct MessageComposer: View {
             .padding(.top, 20)
             .padding(.bottom, 28)
         }
+        .opencodeSoftScrollEdgeEffect()
     }
 
 #if canImport(PhotosUI) && canImport(UIKit)
@@ -1804,9 +1818,42 @@ struct MessageComposer: View {
         expandedAccessoryMenu
     }
 
+    private var accessoryPopoverContent: some View {
+        NavigationStack(path: $accessoryNavigationPath) {
+            accessorySheetContent
+                .navigationTitle("Message Tools")
+                .opencodeInlineNavigationTitle()
+                .navigationDestination(for: AccessoryDestination.self) { destination in
+                    switch destination {
+                    case .fork:
+                        ComposerForkListView(
+                            messages: forkableMessages,
+                            onForkMessage: { messageID in
+                                isAccessoryMenuOpen = false
+                                onForkMessage(messageID)
+                            }
+                        )
+                    case .mcp:
+                        ComposerMCPListView(
+                            servers: mcpServers,
+                            connectedCount: connectedMCPServerCount,
+                            isLoading: isLoadingMCP,
+                            togglingServerNames: togglingMCPServerNames,
+                            errorMessage: mcpErrorMessage,
+                            onLoad: onLoadMCP,
+                            onToggle: onToggleMCP
+                        )
+                    }
+                }
+        }
+        .frame(width: usesCatalystComposerLayout ? 400 : 350, height: accessoryPopoverHeight)
+        .presentationCompactAdaptation(.popover)
+        .composerAccessoryTransitionDestination(in: accessoryPresentationNamespace)
+    }
+
     private func expandAccessorySheetForNestedContentIfNeeded() {
-        if accessorySheetDetent == .height(315) {
-            accessorySheetDetent = .height(expandedAccessorySheetDetentHeight)
+        if accessoryPopoverHeight == 315 {
+            accessoryPopoverHeight = expandedAccessorySheetDetentHeight
         }
     }
 
@@ -2338,6 +2385,7 @@ private enum ComposerTextViewMetrics {
     static let horizontalInset: CGFloat = 14
     static let verticalInset: CGFloat = 11
     static let initialContainerHeight: CGFloat = 48
+    static let compactMinimumHeight: CGFloat = 40
     static let maxLines = 6
 
     static var minimumHeight: CGFloat {
@@ -3053,6 +3101,7 @@ private struct ComposerForkListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .opencodeSoftScrollEdgeEffect()
         .navigationTitle("Fork Session")
         .opencodeInlineNavigationTitle()
         .searchable(text: $searchText, prompt: "Search messages")
@@ -3170,6 +3219,7 @@ private struct ComposerMCPListView: View {
             }
         }
         .opencodeGroupedListStyle()
+        .opencodeSoftScrollEdgeEffect()
         .searchable(text: $searchText, prompt: "Search MCP servers")
         .navigationTitle("MCP")
         .opencodeInlineNavigationTitle()

@@ -17,6 +17,13 @@ final class ActivityFacadeTests: XCTestCase {
         XCTAssertEqual(ActivityRecentBucket.bucket(for: nil, now: now, calendar: calendar), .older)
     }
 
+    func testOnlyRecentBucketUsesFullContextCards() {
+        XCTAssertEqual(ActivityRecentBucket.recent.rowPresentation, .fullContext)
+        XCTAssertEqual(ActivityRecentBucket.yesterday.rowPresentation, .summary)
+        XCTAssertEqual(ActivityRecentBucket.lastWeek.rowPresentation, .summary)
+        XCTAssertEqual(ActivityRecentBucket.older.rowPresentation, .summary)
+    }
+
     func testActivityToolAppearanceMatchesChatMapping() {
         XCTAssertEqual(OpenCodeToolActivityAppearance.resolve("bash").icon, "terminal.fill")
         XCTAssertEqual(OpenCodeToolActivityAppearance.resolve("bash").tint, .green)

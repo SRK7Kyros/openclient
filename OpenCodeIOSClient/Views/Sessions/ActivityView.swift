@@ -254,18 +254,29 @@ private struct ActivityContent: View, Equatable {
                 .listRowSeparator(.hidden)
             } else {
                 if !needsInputRows.isEmpty {
-                    activitySection(title: "Needs Input", systemImage: "hand.raised.fill", rows: needsInputRows)
+                    activitySection(
+                        title: "Needs Input",
+                        systemImage: "hand.raised.fill",
+                        rows: needsInputRows,
+                        presentation: .fullContext
+                    )
                 }
 
                 if !workingRows.isEmpty {
-                    activitySection(title: "Working", systemImage: "bolt.fill", rows: workingRows)
+                    activitySection(
+                        title: "Working",
+                        systemImage: "bolt.fill",
+                        rows: workingRows,
+                        presentation: .fullContext
+                    )
                 }
 
                 ForEach(recentSections) { section in
                     activitySection(
                         title: section.bucket.title,
                         systemImage: section.bucket.systemImage,
-                        rows: section.rows
+                        rows: section.rows,
+                        presentation: section.bucket.rowPresentation
                     )
                 }
             }
@@ -321,7 +332,8 @@ private struct ActivityContent: View, Equatable {
     private func activitySection(
         title: LocalizedStringKey,
         systemImage: String,
-        rows: [ActivityFacade.RowSnapshot]
+        rows: [ActivityFacade.RowSnapshot],
+        presentation: ActivitySessionRowPresentation
     ) -> some View {
         Section {
             ForEach(rows) { row in
@@ -335,7 +347,8 @@ private struct ActivityContent: View, Equatable {
                     ActivitySessionRow(
                         row: row,
                         showsLastUserMessage: showsLastUserMessage,
-                        isSelected: snapshot.selectedSessionID == row.recent.session.id
+                        isSelected: snapshot.selectedSessionID == row.recent.session.id,
+                        presentation: presentation
                     )
                 }
                 .buttonStyle(.plain)
@@ -345,6 +358,7 @@ private struct ActivityContent: View, Equatable {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .accessibilityIdentifier("activity.session.\(row.recent.session.id)")
                 .task(id: row.hydrationGeneration) {
+                    guard presentation == .fullContext else { return }
                     await facade.hydrateIfNeeded(row)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -377,6 +391,11 @@ private struct ActivityContent: View, Equatable {
     }
 }
 
+enum ActivitySessionRowPresentation: Equatable {
+    case fullContext
+    case summary
+}
+
 enum ActivityRecentBucket: Int, CaseIterable, Identifiable {
     case recent
     case yesterday
@@ -384,6 +403,10 @@ enum ActivityRecentBucket: Int, CaseIterable, Identifiable {
     case older
 
     var id: Int { rawValue }
+
+    var rowPresentation: ActivitySessionRowPresentation {
+        self == .recent ? .fullContext : .summary
+    }
 
     var title: LocalizedStringKey {
         switch self {
@@ -426,20 +449,34 @@ struct ActivitySessionRow: View {
     let row: ActivityFacade.RowSnapshot
     let showsLastUserMessage: Bool
     var isSelected = false
+    var presentation: ActivitySessionRowPresentation = .fullContext
 
     private static let regularLayoutMinimumWidth: CGFloat = 200
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            rowContent(isCompact: false)
-                .frame(
-                    minWidth: Self.regularLayoutMinimumWidth,
-                    idealWidth: Self.regularLayoutMinimumWidth,
-                    maxWidth: .infinity,
-                    alignment: .leading
-                )
+        Group {
+            switch presentation {
+            case .fullContext:
+                ViewThatFits(in: .horizontal) {
+                    rowContent(isCompact: false)
+                        .frame(
+                            minWidth: Self.regularLayoutMinimumWidth,
+                            idealWidth: Self.regularLayoutMinimumWidth,
+                            maxWidth: .infinity,
+                            alignment: .leading
+                        )
 
-            rowContent(isCompact: true)
+                    rowContent(isCompact: true)
+                }
+            case .summary:
+                ActivitySessionSummaryContent(
+                    title: title,
+                    projectTitle: row.recent.projectTitle,
+                    projectIcon: row.projectIcon,
+                    usesGlobalProjectAvatar: row.usesGlobalProjectAvatar,
+                    updatedAt: row.updatedAt
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(15)
@@ -600,6 +637,45 @@ struct ActivitySessionRow: View {
         return row.isWorking ? "Now" : "Latest"
     }
 
+}
+
+private struct ActivitySessionSummaryContent: View {
+    let title: String
+    let projectTitle: String
+    let projectIcon: OpenCodeProject.Icon?
+    let usesGlobalProjectAvatar: Bool
+    let updatedAt: Date?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ActivityAvatarStack(
+                sessionTitle: title,
+                projectTitle: projectTitle,
+                projectIcon: projectIcon,
+                usesGlobalProjectAvatar: usesGlobalProjectAvatar,
+                isCompact: true
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(projectTitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if let updatedAt {
+                SessionRelativeTimeText(date: updatedAt)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 struct SessionRelativeTimeText: View {

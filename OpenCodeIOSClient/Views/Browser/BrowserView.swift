@@ -68,6 +68,10 @@ struct BrowserInspectorContainer<Content: View>: View {
     let isEnabled: Bool
     private let content: Content
     @State private var inspectorWidth: CGFloat = 420
+    @State private var inspectorHeight: CGFloat = 420
+    @State private var isComposerFocused = false
+    @State private var isKeyboardVisible = false
+    @State private var usesVerticalLayoutWhileKeyboardIsVisible = true
 
     init(
         browser: BrowserStore,
@@ -85,21 +89,76 @@ struct BrowserInspectorContainer<Content: View>: View {
            browser.activeProjectID != nil,
            browser.presentation == .expanded {
             GeometryReader { proxy in
+                let inferredVerticalLayout = proxy.size.height > proxy.size.width
+                let usesVerticalLayout = isKeyboardVisible
+                    ? usesVerticalLayoutWhileKeyboardIsVisible
+                    : inferredVerticalLayout
                 let maximumWidth = max(280, proxy.size.width - 220)
                 let resolvedWidth = min(inspectorWidth, maximumWidth)
+                let maximumHeight = max(280, proxy.size.height - 260)
+                let resolvedHeight = min(inspectorHeight, maximumHeight)
+                let hidesBrowser = usesVerticalLayout && isComposerFocused && isKeyboardVisible
+                let visibleBrowserHeight: CGFloat = hidesBrowser ? 0 : resolvedHeight
+                let contentWidth = usesVerticalLayout
+                    ? proxy.size.width
+                    : max(0, proxy.size.width - resolvedWidth)
+                let contentHeight = usesVerticalLayout
+                    ? max(0, proxy.size.height - visibleBrowserHeight)
+                    : proxy.size.height
 
-                HStack(spacing: 0) {
+                ZStack(alignment: .topLeading) {
                     content
-                        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: contentWidth, height: contentHeight)
+                        .position(
+                            x: usesVerticalLayout ? proxy.size.width / 2 : contentWidth / 2,
+                            y: usesVerticalLayout
+                                ? visibleBrowserHeight + contentHeight / 2
+                                : proxy.size.height / 2
+                        )
 
                     BrowserInspector(
                         browser: browser,
-                        inspectorWidth: $inspectorWidth
+                        inspectorWidth: $inspectorWidth,
+                        inspectorHeight: $inspectorHeight,
+                        usesVerticalLayout: usesVerticalLayout
                     )
-                    .frame(width: resolvedWidth)
+                    .frame(
+                        width: usesVerticalLayout ? proxy.size.width : resolvedWidth,
+                        height: usesVerticalLayout ? resolvedHeight : proxy.size.height
+                    )
+                    .position(
+                        x: usesVerticalLayout
+                            ? proxy.size.width / 2
+                            : proxy.size.width - resolvedWidth / 2,
+                        y: usesVerticalLayout
+                            ? (hidesBrowser ? -resolvedHeight / 2 : resolvedHeight / 2)
+                            : proxy.size.height / 2
+                    )
+                    .opacity(hidesBrowser ? 0 : 1)
+                    .allowsHitTesting(!hidesBrowser)
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .animation(.snappy(duration: 0.28, extraBounce: 0.02), value: hidesBrowser)
+                .onAppear {
+                    usesVerticalLayoutWhileKeyboardIsVisible = inferredVerticalLayout
+                }
+                .onChange(of: proxy.size) { _, size in
+                    guard !isKeyboardVisible else { return }
+                    usesVerticalLayoutWhileKeyboardIsVisible = size.height > size.width
+                }
             }
+            .onPreferenceChange(ChatComposerFocusPreferenceKey.self) { isFocused in
+                isComposerFocused = isFocused
+            }
+#if canImport(UIKit)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                isKeyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                isKeyboardVisible = false
+            }
+#endif
         } else {
             content
         }
@@ -109,12 +168,17 @@ struct BrowserInspectorContainer<Content: View>: View {
 private struct BrowserInspector: View {
     @ObservedObject var browser: BrowserStore
     @Binding var inspectorWidth: CGFloat
+    @Binding var inspectorHeight: CGFloat
+    let usesVerticalLayout: Bool
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
 
         VStack(spacing: 0) {
-            BrowserInspectorHeader(browser: browser)
+            BrowserInspectorHeader(
+                browser: browser,
+                usesVerticalLayout: usesVerticalLayout
+            )
 
             BrowserPage(browser: browser)
         }
@@ -142,13 +206,27 @@ private struct BrowserInspector: View {
         .shadow(color: .black.opacity(0.14), radius: 18, y: 6)
         .padding(12)
         .overlay(alignment: .leading) {
-            GeometryReader { proxy in
-                BrowserInspectorResizeHandle(
-                    inspectorWidth: $inspectorWidth,
-                    renderedWidth: proxy.size.width
-                )
-                .frame(width: 24)
-                .frame(maxHeight: .infinity)
+            if !usesVerticalLayout {
+                GeometryReader { proxy in
+                    BrowserInspectorHorizontalResizeHandle(
+                        inspectorWidth: $inspectorWidth,
+                        renderedWidth: proxy.size.width
+                    )
+                    .frame(width: 24)
+                    .frame(maxHeight: .infinity)
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if usesVerticalLayout {
+                GeometryReader { proxy in
+                    BrowserInspectorVerticalResizeHandle(
+                        inspectorHeight: $inspectorHeight,
+                        renderedHeight: proxy.size.height
+                    )
+                    .frame(height: 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
             }
         }
     }
@@ -156,13 +234,14 @@ private struct BrowserInspector: View {
 
 private struct BrowserInspectorHeader: View {
     @ObservedObject var browser: BrowserStore
+    let usesVerticalLayout: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             Button {
                 browser.collapse()
             } label: {
-                Image(systemName: "chevron.forward")
+                Image(systemName: usesVerticalLayout ? "chevron.up" : "chevron.forward")
             }
             .opencodeActionGlass(clear: true, size: 36, in: Circle())
             .accessibilityLabel("Collapse browser")
@@ -182,7 +261,7 @@ private struct BrowserInspectorHeader: View {
     }
 }
 
-private struct BrowserInspectorResizeHandle: View {
+private struct BrowserInspectorHorizontalResizeHandle: View {
     @Binding var inspectorWidth: CGFloat
     let renderedWidth: CGFloat
     @Environment(\.layoutDirection) private var layoutDirection
@@ -234,6 +313,59 @@ private struct BrowserInspectorResizeHandle: View {
 
     private func clamped(_ width: CGFloat) -> CGFloat {
         min(max(width, minimumWidth), maximumWidth)
+    }
+}
+
+private struct BrowserInspectorVerticalResizeHandle: View {
+    @Binding var inspectorHeight: CGFloat
+    let renderedHeight: CGFloat
+    @State private var dragOriginHeight: CGFloat?
+
+    private let minimumHeight: CGFloat = 280
+    private let maximumHeight: CGFloat = 640
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .overlay {
+                Capsule()
+                    .fill(.secondary.opacity(0.45))
+                    .frame(width: 48, height: 4)
+                    .allowsHitTesting(false)
+            }
+            .gesture(resizeGesture)
+            .accessibilityElement()
+            .accessibilityLabel("Browser")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    inspectorHeight = clamped(renderedHeight + 40)
+                case .decrement:
+                    inspectorHeight = clamped(renderedHeight - 40)
+                @unknown default:
+                    break
+                }
+            }
+            .accessibilityIdentifier("browser.inspector.resize")
+    }
+
+    private var resizeGesture: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                let origin = dragOriginHeight ?? renderedHeight
+                if dragOriginHeight == nil {
+                    dragOriginHeight = origin
+                }
+                inspectorHeight = clamped(origin + value.translation.height)
+            }
+            .onEnded { _ in
+                dragOriginHeight = nil
+            }
+    }
+
+    private func clamped(_ height: CGFloat) -> CGFloat {
+        min(max(height, minimumHeight), maximumHeight)
     }
 }
 

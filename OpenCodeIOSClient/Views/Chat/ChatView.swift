@@ -15,6 +15,14 @@ private extension ContinuousClock.Instant {
     }
 }
 
+struct ChatComposerFocusPreferenceKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 private func chatMeasureMS<T>(_ work: () -> T) -> (T, Double) {
     let start = ContinuousClock.now
     let value = work()
@@ -2259,6 +2267,16 @@ struct ChatView: View {
 #endif
     }
 
+    private var usesCatalystComposerLayout: Bool {
+#if targetEnvironment(macCatalyst)
+        true
+#elseif os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+#else
+        false
+#endif
+    }
+
     var body: some View {
         ZStack {
             OpenCodePlatformColor.groupedBackground
@@ -2378,6 +2396,10 @@ struct ChatView: View {
         }
         .navigationTitle("")
         .opencodeInlineNavigationTitle()
+        .preference(
+            key: ChatComposerFocusPreferenceKey.self,
+            value: isComposerInputFocused
+        )
         .modifier(
             ChatFocusedActionsModifier(
                 stopAction: isComposerBusy ? { stopComposerAction() } : nil,
@@ -2924,7 +2946,7 @@ struct ChatView: View {
         #if targetEnvironment(macCatalyst)
         8
         #else
-        isComposerInputFocused ? 8 : 0
+        usesCatalystComposerLayout || isComposerInputFocused ? 8 : 0
         #endif
     }
 
@@ -4289,40 +4311,42 @@ struct ChatView: View {
             #endif
 
             #if !targetEnvironment(macCatalyst)
-            if toolbarSnapshot.showsAgentMenu {
+            if !usesCatalystComposerLayout {
+                if toolbarSnapshot.showsAgentMenu {
+                    ToolbarItem(placement: .opencodeTrailing) {
+                        AgentToolbarMenu(
+                            title: toolbarSnapshot.agentTitle,
+                            agents: toolbarSnapshot.selectableAgents,
+                            glassNamespace: toolbarGlassNamespace,
+                            onSelectAgent: { chatFacade.selectAgent(named: $0, for: liveSession) }
+                        )
+                    }
+                }
+
+                #if !os(macOS)
+                if #available(iOS 26.0, *) {
+                    ToolbarSpacer(.flexible, placement: .topBarTrailing)
+                }
+                #endif
+
                 ToolbarItem(placement: .opencodeTrailing) {
-                    AgentToolbarMenu(
-                        title: toolbarSnapshot.agentTitle,
-                        agents: toolbarSnapshot.selectableAgents,
+                    SessionContextUsageToolbarButton(metrics: contextMetrics) {
+                        showingContextMetrics = true
+                    }
+                    .opencodeToolbarGlassID("context-usage-toolbar", in: toolbarGlassNamespace)
+                }
+
+                ToolbarItem(placement: .opencodeTrailing) {
+                    ModelToolbarMenu(
+                        modelTitle: toolbarSnapshot.modelTitle,
+                        providerGroups: toolbarSnapshot.providerGroups,
+                        reasoningVariants: toolbarSnapshot.reasoningVariants,
+                        reasoningTitle: toolbarSnapshot.reasoningTitle,
                         glassNamespace: toolbarGlassNamespace,
-                        onSelectAgent: { chatFacade.selectAgent(named: $0, for: liveSession) }
+                        onSelectModel: { chatFacade.selectModel($0, for: liveSession) },
+                        onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
                     )
                 }
-            }
-
-            #if !os(macOS)
-            if #available(iOS 26.0, *) {
-                ToolbarSpacer(.flexible, placement: .topBarTrailing)
-            }
-            #endif
-
-            ToolbarItem(placement: .opencodeTrailing) {
-                SessionContextUsageToolbarButton(metrics: contextMetrics) {
-                    showingContextMetrics = true
-                }
-                .opencodeToolbarGlassID("context-usage-toolbar", in: toolbarGlassNamespace)
-            }
-
-            ToolbarItem(placement: .opencodeTrailing) {
-                ModelToolbarMenu(
-                    modelTitle: toolbarSnapshot.modelTitle,
-                    providerGroups: toolbarSnapshot.providerGroups,
-                    reasoningVariants: toolbarSnapshot.reasoningVariants,
-                    reasoningTitle: toolbarSnapshot.reasoningTitle,
-                    glassNamespace: toolbarGlassNamespace,
-                    onSelectModel: { chatFacade.selectModel($0, for: liveSession) },
-                    onSelectReasoningVariant: { chatFacade.selectReasoningVariant($0, for: liveSession) }
-                )
             }
             #endif
 

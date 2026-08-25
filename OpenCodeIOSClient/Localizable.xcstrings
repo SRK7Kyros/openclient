@@ -18407,6 +18407,294 @@
         }
       }
     },
+    "A blank page is just a site waiting to happen.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma página em branco é só um site esperando para ganhar vida."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una pagina vuota è solo un sito che aspetta di prendere vita."
+          }
+        }
+      }
+    },
+    "Every great web journey begins with a single tap.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda grande jornada pela web começa com um único toque."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni grande viaggio nel web inizia con un solo tocco."
+          }
+        }
+      }
+    },
+    "Go ahead. Make a site decision.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pode ir. Está na hora de tomar uma decisão de site."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avanti. È il momento di prendere una decisione... sul sito."
+          }
+        }
+      }
+    },
+    "Good URLs are worth the wait.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boas URLs valem a espera."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I buoni URL valgono l'attesa."
+          }
+        }
+      }
+    },
+    "Let's address the situation.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vamos resolver essa situação pelo endereço."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affrontiamo la situazione partendo dall'indirizzo."
+          }
+        }
+      }
+    },
+    "Need direction? Start with an address.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Precisa de direção? Comece com um endereço."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerchi la direzione? Inizia da un indirizzo."
+          }
+        }
+      }
+    },
+    "No site yet. We're just browsing our options.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum site ainda. Só estamos navegando pelas opções."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora nessun sito. Stiamo solo navigando tra le opzioni."
+          }
+        }
+      }
+    },
+    "OpenClient Browser": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegador do OpenClient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browser OpenClient"
+          }
+        }
+      }
+    },
+    "Ready to surf? The web is already making waves.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pronto para surfar? A web já está fazendo ondas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pronto a surfare? Il web sta già facendo onde."
+          }
+        }
+      }
+    },
+    "Surf responsibly. Some links can be a little clickbaity.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surfe com responsabilidade. Alguns links podem ser um pouco caça-cliques."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naviga responsabilmente. Alcuni link possono essere un po' acchiappaclic."
+          }
+        }
+      }
+    },
+    "Take a byte out of the internet.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dê uma mordida na internet, um byte de cada vez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dai un morso a Internet, un byte alla volta."
+          }
+        }
+      }
+    },
+    "The browser is open-minded. Every tab gets a chance.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O navegador tem a mente aberta. Toda aba tem sua chance."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il browser è di larghe vedute. Ogni scheda ha la sua occasione."
+          }
+        }
+      }
+    },
+    "The internet called. It left a hyperlink.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A internet ligou. Deixou um hiperlink."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Internet ha chiamato. Ha lasciato un collegamento."
+          }
+        }
+      }
+    },
+    "The web is vast. No need to rush the current.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A web é imensa. Não precisa correr contra a corrente."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il web è vasto. Non serve correre controcorrente."
+          }
+        }
+      }
+    },
+    "This browser has excellent cache flow.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este navegador tem um excelente fluxo de cache."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo browser ha un ottimo flusso di cache."
+          }
+        }
+      }
+    },
+    "Type an address above and let the good sites roll.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite um endereço acima e deixe os bons sites rolarem."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digita un indirizzo qui sopra e lascia scorrere i bei siti."
+          }
+        }
+      }
+    },
+    "We tried to tell a DNS joke, but it couldn't resolve.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tentamos contar uma piada sobre DNS, mas ela não resolveu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbiamo provato a raccontare una battuta sul DNS, ma non si è risolta."
+          }
+        }
+      }
+    },
+    "Where we're going, we don't need bookmarks. But they help.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aonde vamos, não precisamos de favoritos. Mas eles ajudam."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dove andiamo non servono segnalibri. Ma aiutano."
+          }
+        }
+      }
+    },
     "•": {
       "localizations": {
         "pt-BR": {
