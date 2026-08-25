@@ -12,9 +12,6 @@
       "description": "Use for OpenClient cloud relay architecture, AWS services, pairing, StoreKit validation, APNs, and Live Activities."
     }
   },
-  "plugin": [
-    "@openclient-ios/opencode-plugin@0.2.0"
-  ],
   "mcp": {
     "xcode-tools": {
       "enabled": true

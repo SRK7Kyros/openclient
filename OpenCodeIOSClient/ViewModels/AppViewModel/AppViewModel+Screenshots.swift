@@ -247,7 +247,7 @@ extension AppViewModel {
     }
 
     private static func screenshotBrowser() -> AppViewModel {
-        screenshotSessions()
+        screenshotChat()
     }
 
     private static func screenshotTerminal() -> AppViewModel {

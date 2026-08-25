@@ -9,19 +9,29 @@ import AppKit
 
 struct BrowserRootContainer<Content: View>: View {
     @ObservedObject var browser: BrowserStore
+    let usesInspectorPresentation: Bool
     private let content: Content
 
-    init(browser: BrowserStore, @ViewBuilder content: () -> Content) {
+    init(
+        browser: BrowserStore,
+        usesInspectorPresentation: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
         self.browser = browser
+        self.usesInspectorPresentation = usesInspectorPresentation
         self.content = content()
     }
 
     var body: some View {
         content
             .sheet(isPresented: Binding(
-                get: { browser.presentation == .expanded },
+                get: {
+                    browser.presentation == .expanded && !usesInspectorPresentation
+                },
                 set: { isPresented in
-                    if !isPresented, browser.presentation == .expanded {
+                    if !isPresented,
+                       !usesInspectorPresentation,
+                       browser.presentation == .expanded {
                         browser.collapse()
                     }
                 }
@@ -39,21 +49,205 @@ private struct BrowserSheet: View {
             BrowserPage(browser: browser)
                 .navigationTitle(browser.displayTitle)
                 .opencodeInlineNavigationTitle()
-                .toolbar { browserToolbar }
+                .toolbar {
+                    BrowserPresentationToolbar(
+                        browser: browser,
+                        collapseSystemImage: "chevron.down"
+                    )
+                }
         }
         .browserToolbarVisibility(true)
         .presentationDetents([.large])
         .presentationContentInteraction(.resizes)
         .presentationDragIndicator(.visible)
     }
+}
+
+struct BrowserInspectorContainer<Content: View>: View {
+    @ObservedObject var browser: BrowserStore
+    let isEnabled: Bool
+    private let content: Content
+    @State private var inspectorWidth: CGFloat = 420
+
+    init(
+        browser: BrowserStore,
+        isEnabled: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.browser = browser
+        self.isEnabled = isEnabled
+        self.content = content()
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if isEnabled,
+           browser.activeProjectID != nil,
+           browser.presentation == .expanded {
+            GeometryReader { proxy in
+                let maximumWidth = max(280, proxy.size.width - 220)
+                let resolvedWidth = min(inspectorWidth, maximumWidth)
+
+                HStack(spacing: 0) {
+                    content
+                        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+
+                    BrowserInspector(
+                        browser: browser,
+                        inspectorWidth: $inspectorWidth
+                    )
+                    .frame(width: resolvedWidth)
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct BrowserInspector: View {
+    @ObservedObject var browser: BrowserStore
+    @Binding var inspectorWidth: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+
+        VStack(spacing: 0) {
+            BrowserInspectorHeader(browser: browser)
+
+            BrowserPage(browser: browser)
+        }
+        .clipShape(shape)
+        .opencodeConcentricGlassSurface(
+            minimumCornerRadius: 26,
+            in: shape
+        )
+        .overlay {
+            shape
+                .strokeBorder(.primary.opacity(0.1), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                browser.close()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .opencodeActionGlass(clear: true, size: 36, in: Circle())
+            .padding(10)
+            .accessibilityLabel("Close browser")
+            .accessibilityIdentifier("browser.close")
+        }
+        .shadow(color: .black.opacity(0.14), radius: 18, y: 6)
+        .padding(12)
+        .overlay(alignment: .leading) {
+            GeometryReader { proxy in
+                BrowserInspectorResizeHandle(
+                    inspectorWidth: $inspectorWidth,
+                    renderedWidth: proxy.size.width
+                )
+                .frame(width: 24)
+                .frame(maxHeight: .infinity)
+            }
+        }
+    }
+}
+
+private struct BrowserInspectorHeader: View {
+    @ObservedObject var browser: BrowserStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                browser.collapse()
+            } label: {
+                Image(systemName: "chevron.forward")
+            }
+            .opencodeActionGlass(clear: true, size: 36, in: Circle())
+            .accessibilityLabel("Collapse browser")
+            .accessibilityIdentifier("browser.collapse")
+
+            Text(browser.displayTitle)
+                .font(.headline)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Color.clear
+                .frame(width: 36, height: 36)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct BrowserInspectorResizeHandle: View {
+    @Binding var inspectorWidth: CGFloat
+    let renderedWidth: CGFloat
+    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var dragOriginWidth: CGFloat?
+
+    private let minimumWidth: CGFloat = 320
+    private let maximumWidth: CGFloat = 560
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .overlay {
+                Capsule()
+                    .fill(.secondary.opacity(0.45))
+                    .frame(width: 4, height: 48)
+                    .allowsHitTesting(false)
+            }
+            .gesture(resizeGesture)
+            .accessibilityElement()
+            .accessibilityLabel("Browser")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    inspectorWidth = clamped(renderedWidth + 40)
+                case .decrement:
+                    inspectorWidth = clamped(renderedWidth - 40)
+                @unknown default:
+                    break
+                }
+            }
+            .accessibilityIdentifier("browser.inspector.resize")
+    }
+
+    private var resizeGesture: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                let origin = dragOriginWidth ?? renderedWidth
+                if dragOriginWidth == nil {
+                    dragOriginWidth = origin
+                }
+                let direction: CGFloat = layoutDirection == .leftToRight ? -1 : 1
+                inspectorWidth = clamped(origin + value.translation.width * direction)
+            }
+            .onEnded { _ in
+                dragOriginWidth = nil
+            }
+    }
+
+    private func clamped(_ width: CGFloat) -> CGFloat {
+        min(max(width, minimumWidth), maximumWidth)
+    }
+}
+
+private struct BrowserPresentationToolbar: ToolbarContent {
+    let browser: BrowserStore
+    let collapseSystemImage: String
 
     @ToolbarContentBuilder
-    private var browserToolbar: some ToolbarContent {
+    var body: some ToolbarContent {
         ToolbarItem(placement: .opencodeLeading) {
             Button {
                 browser.collapse()
             } label: {
-                Image(systemName: "chevron.down")
+                Image(systemName: collapseSystemImage)
             }
             .accessibilityLabel("Collapse browser")
             .accessibilityIdentifier("browser.collapse")
@@ -618,9 +812,20 @@ private struct BrowserErrorView: View {
 
 extension View {
     @ViewBuilder
-    func opencodeProjectBrowserAccessory(browser: BrowserStore) -> some View {
+    func opencodeProjectBrowserAccessory(
+        browser: BrowserStore,
+        isEnabled: Bool = true
+    ) -> some View {
         #if targetEnvironment(macCatalyst)
-        if #available(macCatalyst 26.0, *) {
+        if #available(macCatalyst 26.1, *) {
+            self.tabViewBottomAccessory(isEnabled: isEnabled && browser.presentation == .collapsed) {
+                BrowserAccessoryRow(
+                    browser: browser,
+                    accessibilityIdentifier: "browser.projectAccessory"
+                )
+            }
+            .animation(.snappy(duration: 0.3, extraBounce: 0.02), value: browser.presentation)
+        } else if #available(macCatalyst 26.0, *) {
             self.tabViewBottomAccessory {
                 if browser.presentation == .collapsed {
                     BrowserAccessoryRow(
@@ -635,7 +840,15 @@ extension View {
             self
         }
         #elseif os(iOS)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.1, *) {
+            self.tabViewBottomAccessory(isEnabled: isEnabled && browser.presentation == .collapsed) {
+                BrowserAccessoryRow(
+                    browser: browser,
+                    accessibilityIdentifier: "browser.projectAccessory"
+                )
+            }
+            .animation(.snappy(duration: 0.3, extraBounce: 0.02), value: browser.presentation)
+        } else if #available(iOS 26.0, *) {
             self.tabViewBottomAccessory {
                 if browser.presentation == .collapsed {
                     BrowserAccessoryRow(

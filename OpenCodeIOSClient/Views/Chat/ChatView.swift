@@ -2251,6 +2251,14 @@ struct ChatView: View {
 #endif
     }
 
+    private var showsIPadBrowserToolbarButton: Bool {
+#if os(iOS) && !targetEnvironment(macCatalyst)
+        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
+#else
+        false
+#endif
+    }
+
     var body: some View {
         ZStack {
             OpenCodePlatformColor.groupedBackground
@@ -2890,13 +2898,7 @@ struct ChatView: View {
             onAddAttachments: { attachments in
                 chatFacade.addDraftAttachments(attachments)
             },
-            onOpenBrowser: {
-                if browser.presentation == .closed {
-                    browser.openAddressBar()
-                } else {
-                    browser.expand()
-                }
-            },
+            onOpenBrowser: presentBrowser,
             glassNamespace: composerGlassNamespace,
             agentTitle: toolbarSnapshot.agentTitle,
             selectableAgents: toolbarSnapshot.selectableAgents,
@@ -2924,6 +2926,14 @@ struct ChatView: View {
         #else
         isComposerInputFocused ? 8 : 0
         #endif
+    }
+
+    private func presentBrowser() {
+        if browser.presentation == .closed {
+            browser.openAddressBar()
+        } else {
+            browser.expand()
+        }
     }
 
     private var questionPanelBottomPadding: CGFloat {
@@ -4317,24 +4327,36 @@ struct ChatView: View {
             #endif
 
             #if os(iOS)
-            if supportsMultipleWindows && !isDedicatedWindow {
+            if showsIPadBrowserToolbarButton || (supportsMultipleWindows && !isDedicatedWindow) {
                 if #available(iOS 26.0, *) {
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        openWindow(
-                            id: OpenClientChatWindowRoute.sceneID,
-                            value: chatFacade.windowRoute(for: liveSession)
-                        )
-                    } label: {
-                        Image(systemName: "macwindow.badge.plus")
-                            .frame(minWidth: 44, minHeight: 44)
-                            .opencodeToolbarGlassID("open-chat-window-toolbar", in: toolbarGlassNamespace)
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if showsIPadBrowserToolbarButton {
+                        Button(action: presentBrowser) {
+                            Image(systemName: "globe")
+                                .frame(minWidth: 44, minHeight: 44)
+                                .opencodeToolbarGlassID("open-browser-toolbar", in: toolbarGlassNamespace)
+                        }
+                        .accessibilityLabel("Open Browser")
+                        .accessibilityIdentifier("browser.open.chatToolbar")
                     }
-                    .accessibilityLabel("Open Chat in New Window")
-                    .accessibilityIdentifier("chat.toolbar.openWindow")
+
+                    if supportsMultipleWindows && !isDedicatedWindow {
+                        Button {
+                            openWindow(
+                                id: OpenClientChatWindowRoute.sceneID,
+                                value: chatFacade.windowRoute(for: liveSession)
+                            )
+                        } label: {
+                            Image(systemName: "macwindow.badge.plus")
+                                .frame(minWidth: 44, minHeight: 44)
+                                .opencodeToolbarGlassID("open-chat-window-toolbar", in: toolbarGlassNamespace)
+                        }
+                        .accessibilityLabel("Open Chat in New Window")
+                        .accessibilityIdentifier("chat.toolbar.openWindow")
+                    }
                 }
             }
             #endif

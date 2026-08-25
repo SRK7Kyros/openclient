@@ -137,7 +137,9 @@ private struct SessionListContent: View, Equatable {
                         .listRowSeparator(.hidden)
                     }
                 } header: {
-                    SessionSectionHeader(title: "Sessions", systemImage: "bubble.left.and.bubble.right")
+                    if !snapshot.pinnedRows.isEmpty {
+                        SessionSectionHeader(title: "Sessions", systemImage: "bubble.left.and.bubble.right")
+                    }
                 }
             }
 

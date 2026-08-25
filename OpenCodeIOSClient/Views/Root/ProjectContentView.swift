@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct ProjectContentView: View {
     @ObservedObject var shell: AppShellFacade
@@ -77,7 +80,19 @@ struct ProjectContentView: View {
 
     @ViewBuilder
     private var rootContent: some View {
-        if usesSystemTabView {
+        if usesIPadGlassTabSwitcher {
+            content
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    ProjectContentModeMenu(
+                        selection: selectedTab,
+                        tabs: snapshot.availableTabs
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+                }
+        } else if usesSystemTabView {
             tabContent
         } else {
             VStack(spacing: 0) {
@@ -95,13 +110,21 @@ struct ProjectContentView: View {
         return horizontalSizeClass == .compact
     }
 
+    private var usesIPadGlassTabSwitcher: Bool {
+#if os(iOS) && !targetEnvironment(macCatalyst)
+        UIDevice.current.userInterfaceIdiom == .pad
+#else
+        false
+#endif
+    }
+
     private var usesNativeSearchRoleComposeTab: Bool {
 #if targetEnvironment(macCatalyst)
         return false
 #else
 #if os(iOS)
         if #available(iOS 18.0, *) {
-            return horizontalSizeClass == .compact
+            return horizontalSizeClass == .compact && !usesIPadGlassTabSwitcher
         }
 #endif
 
@@ -210,7 +233,10 @@ struct ProjectContentView: View {
             }
         }
         .opencodeSearchTabSelectionActivation(isEnabled: usesNativeSearchRoleComposeTab)
-        .opencodeProjectBrowserAccessory(browser: shell.browser)
+        .opencodeProjectBrowserAccessory(
+            browser: shell.browser,
+            isEnabled: !usesIPadGlassTabSwitcher
+        )
     }
 
     @available(iOS 18.0, *)
@@ -323,6 +349,51 @@ struct ProjectContentTabSelector: View {
 
     private func systemImage(for tab: OpenClientProjectContentTab) -> String {
         tab.systemImage
+    }
+}
+
+private struct ProjectContentModeMenu: View {
+    @Binding var selection: OpenClientProjectContentTab
+    let tabs: [OpenClientProjectContentTab]
+
+    var body: some View {
+        Menu {
+            ForEach(tabs.filter { $0 != selection }, id: \.self) { tab in
+                Button {
+                    selection = tab
+                } label: {
+                    Label(projectTabTitle(tab), systemImage: tab.systemImage)
+                }
+                .accessibilityIdentifier("project.tab.\(tab.rawValue)")
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: selection.systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+
+                Text(projectTabTitle(selection))
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+            .contentShape(Capsule())
+            .opencodeConcentricGlassSurface(
+                isInteractive: true,
+                minimumCornerRadius: 18,
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(projectTabTitle(selection)))
+        .accessibilityIdentifier("project.mode.menu")
     }
 }
 

@@ -286,6 +286,44 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testChatModelPickerSelectsModelAndReasoning() {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "chat"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["screenshot.scene.chat"].waitForExistence(timeout: 10))
+        let modelTrigger = app.buttons["chat.toolbar.model"]
+        XCTAssertTrue(modelTrigger.waitForExistence(timeout: 10))
+
+        modelTrigger.tap()
+        let modelMenu = app.collectionViews.buttons["Model"]
+        XCTAssertTrue(modelMenu.waitForExistence(timeout: 10))
+        modelMenu.tap()
+        let providerMenu = app.buttons["Anthropic"]
+        XCTAssertTrue(providerMenu.waitForExistence(timeout: 10))
+        providerMenu.tap()
+        let model = app.buttons["Claude Sonnet 4.5"]
+        XCTAssertTrue(model.waitForExistence(timeout: 10))
+        model.tap()
+        XCTAssertTrue(
+            waitForAccessibilityValue(of: modelTrigger, equalTo: "Claude Sonnet 4.5, Default"),
+            "Expected selecting Claude to update the chat model"
+        )
+
+        modelTrigger.tap()
+        let reasoningMenu = app.collectionViews.buttons["Reasoning"].firstMatch
+        XCTAssertTrue(reasoningMenu.waitForExistence(timeout: 10))
+        reasoningMenu.tap()
+        let reasoning = app.buttons["Balanced"]
+        XCTAssertTrue(reasoning.waitForExistence(timeout: 10))
+        reasoning.tap()
+        XCTAssertTrue(
+            waitForAccessibilityValue(of: modelTrigger, equalTo: "Claude Sonnet 4.5, Balanced"),
+            "Expected selecting Balanced to update the reasoning level"
+        )
+    }
+
+    @MainActor
     func testTerminalScrollsAndDismissesKeyboard() {
         let app = XCUIApplication()
         app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = "terminal"

@@ -13,7 +13,7 @@ struct ModelToolbarMenu: View {
         StablePickerMenu(
             elements: menuElements,
             accessibilityLabel: String(localized: "Model"),
-            accessibilityValue: modelTitle,
+            accessibilityValue: accessibilityValue,
             accessibilityIdentifier: "chat.toolbar.model",
             onSelect: select
         ) {
@@ -43,6 +43,11 @@ struct ModelToolbarMenu: View {
     private var reasoningSubtitle: String? {
         guard !reasoningVariants.isEmpty else { return nil }
         return reasoningTitle
+    }
+
+    private var accessibilityValue: String {
+        guard let reasoningSubtitle else { return modelTitle }
+        return "\(modelTitle), \(reasoningSubtitle)"
     }
 
     private var menuElements: [StablePickerMenuElement] {

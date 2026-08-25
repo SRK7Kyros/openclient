@@ -1673,9 +1673,18 @@ extension AppViewModel {
         let permissionRevision = targetStore.permissionRevision
         do {
             let permissions = try await client.listPermissions(directory: directory, workspaceID: workspaceID)
+            let interactionSessions = await OpenCodeBootstrap.loadMissingSessions(
+                sessionIDs: permissions.map(\.sessionID),
+                knownSessions: targetStore.sessions,
+                client: client,
+                directory: directory,
+                workspaceID: workspaceID
+            )
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            if targetStore.applyPermissions(permissions, ifUnchangedSince: permissionRevision) {
+            let warmedSessions = targetStore.upsertSessions(interactionSessions)
+            let appliedPermissions = targetStore.applyPermissions(permissions, ifUnchangedSince: permissionRevision)
+            if warmedSessions || appliedPermissions {
                 objectWillChange.send()
                 if directoryStoreRegistry.activeStore === targetStore,
                    let selectedSessionID = targetStore.selectedSession?.id {
@@ -1703,9 +1712,18 @@ extension AppViewModel {
         let questionRevision = targetStore.questionRevision
         do {
             let questions = try await client.listQuestions(directory: directory, workspaceID: workspaceID)
+            let interactionSessions = await OpenCodeBootstrap.loadMissingSessions(
+                sessionIDs: questions.map(\.sessionID),
+                knownSessions: targetStore.sessions,
+                client: client,
+                directory: directory,
+                workspaceID: workspaceID
+            )
             guard directoryStoreRegistry.generation == targetGeneration,
                   directoryStoreRegistry.contains(targetStore, forKey: targetKey) else { return }
-            if targetStore.applyQuestions(questions, ifUnchangedSince: questionRevision) {
+            let warmedSessions = targetStore.upsertSessions(interactionSessions)
+            let appliedQuestions = targetStore.applyQuestions(questions, ifUnchangedSince: questionRevision)
+            if warmedSessions || appliedQuestions {
                 objectWillChange.send()
                 if directoryStoreRegistry.activeStore === targetStore,
                    let selectedSessionID = targetStore.selectedSession?.id {

@@ -2,12 +2,10 @@ import SwiftUI
 
 struct MCPListView: View {
     @ObservedObject var facade: MCPFacade
-    @State private var searchText = ""
 
     var body: some View {
         MCPListContent(
             snapshot: facade.snapshot,
-            searchText: $searchText,
             onLoad: {
                 await facade.loadIfNeeded()
             },
@@ -20,17 +18,8 @@ struct MCPListView: View {
 
 private struct MCPListContent: View {
     let snapshot: MCPFacade.Snapshot
-    @Binding var searchText: String
     let onLoad: () async -> Void
     let onToggle: (String) async -> Void
-
-    private var filteredServers: [OpenCodeMCPServer] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return snapshot.servers }
-        return snapshot.servers.filter { server in
-            server.name.localizedCaseInsensitiveContains(query) || server.status.displayStatus.localizedCaseInsensitiveContains(query)
-        }
-    }
 
     var body: some View {
         List {
@@ -71,11 +60,11 @@ private struct MCPListContent: View {
             Section("Servers") {
                 if snapshot.isLoading && snapshot.servers.isEmpty {
                     ProgressView("Loading MCP servers")
-                } else if filteredServers.isEmpty {
-                    Text(snapshot.servers.isEmpty ? LocalizedStringResource("No configured MCP servers.") : LocalizedStringResource("No MCP servers match your search."))
+                } else if snapshot.servers.isEmpty {
+                    Text("No configured MCP servers.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(filteredServers) { server in
+                    ForEach(snapshot.servers) { server in
                         MCPServerRow(
                             server: server,
                             isToggling: snapshot.togglingServerNames.contains(server.name),
@@ -90,7 +79,6 @@ private struct MCPListContent: View {
             }
         }
         .opencodeGroupedListStyle()
-        .searchable(text: $searchText, prompt: "Search MCP servers")
         .task {
             await onLoad()
         }

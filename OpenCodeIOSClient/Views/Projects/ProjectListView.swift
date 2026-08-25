@@ -50,6 +50,7 @@ struct ProjectListView: View {
                     query: snapshot.searchQuery,
                     results: snapshot.searchResults,
                     isLoading: snapshot.isSearching,
+                    rowInsets: projectListRowInsets,
                     onSelect: openProjectSession
                 )
             } else {
@@ -81,6 +82,7 @@ struct ProjectListView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("projects.activity")
+                    .listRowInsets(projectListRowInsets)
                 }
 
                 Section {
@@ -88,6 +90,7 @@ struct ProjectListView: View {
                         Text("No projects are visible. Use the project settings button to show projects.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .listRowInsets(projectListRowInsets)
                     }
 
                     ForEach(displayedProjects) { project in
@@ -159,11 +162,14 @@ struct ProjectListView: View {
                             }
                         }
                         .disabled(facade.isPreparingSelection(project))
+                        .listRowInsets(projectListRowInsets)
                     }
                     .onMove(perform: facade.moveProjects)
                 } header: {
                     ProjectListSectionHeader(
                         isEditingProjects: isEditingProjects,
+                        allowsProjectCreation: !facade.isReadOnly,
+                        onCreateProject: facade.presentCreateProject,
                         onToggleEditing: toggleProjectEditing
                     )
                     .textCase(nil)
@@ -182,6 +188,7 @@ struct ProjectListView: View {
                         .onTapGesture {
                             games.presentFindPlaceModelSheet()
                         }
+                        .listRowInsets(projectListRowInsets)
 
                         ProjectRow(
                             title: String(localized: "Find the Bug"),
@@ -194,6 +201,7 @@ struct ProjectListView: View {
                         .onTapGesture {
                             games.presentFindBugLanguageSheet()
                         }
+                        .listRowInsets(projectListRowInsets)
                     } header: {
                         Label("Fun & Games", systemImage: "gamecontroller.fill")
                             .font(.headline)
@@ -203,6 +211,16 @@ struct ProjectListView: View {
                 }
             }
 
+            Section {
+                Button {
+                    connection.disconnect()
+                } label: {
+                    Label("Disconnect", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .tint(.red)
+                .accessibilityIdentifier("projects.disconnect")
+                .listRowInsets(projectListRowInsets)
+            }
         }
         .listStyle(.sidebar)
         .environment(\.editMode, projectEditMode)
@@ -242,16 +260,6 @@ struct ProjectListView: View {
         }
         .navigationTitle("Projects")
         .toolbar {
-            ToolbarItem(placement: .opencodeLeading) {
-                Button {
-                    connection.disconnect()
-                } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                }
-                .accessibilityLabel("Disconnect")
-                .accessibilityIdentifier("projects.disconnect")
-            }
-
             if let bridge, !facade.isReadOnly {
                 ToolbarItem(placement: .opencodeTrailing) {
                     OpenClientBridgeToolbarButton(bridge: bridge) {
@@ -269,16 +277,6 @@ struct ProjectListView: View {
                     }
                     .accessibilityLabel("Configurations")
                     .accessibilityIdentifier("projects.configurations")
-                }
-
-                ToolbarItem(placement: .opencodeTrailing) {
-                    Button {
-                        facade.presentCreateProject()
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Create Project")
-                    .accessibilityIdentifier("projects.create")
                 }
             }
         }
@@ -343,6 +341,14 @@ struct ProjectListView: View {
         #endif
     }
 
+    private var projectListRowInsets: EdgeInsets? {
+        #if os(iOS) && !targetEnvironment(macCatalyst)
+        UIDevice.current.userInterfaceIdiom == .pad ? EdgeInsets() : nil
+        #else
+        nil
+        #endif
+    }
+
     private var projectListBottomBarBottomPadding: CGFloat {
         #if targetEnvironment(macCatalyst)
         16
@@ -390,6 +396,7 @@ private struct ProjectSessionSearchSection: View {
     let query: String
     let results: [RecentProjectSession]
     let isLoading: Bool
+    let rowInsets: EdgeInsets?
     let onSelect: (RecentProjectSession) -> Void
 
     var body: some View {
@@ -403,11 +410,13 @@ private struct ProjectSessionSearchSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
+                .listRowInsets(rowInsets)
             } else if results.isEmpty {
                 Text("No chats match \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\".")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
+                    .listRowInsets(rowInsets)
             } else {
                 ForEach(results) { recent in
                     Button {
@@ -416,6 +425,7 @@ private struct ProjectSessionSearchSection: View {
                         ProjectSessionSearchRow(recent: recent)
                     }
                     .buttonStyle(.plain)
+                    .listRowInsets(rowInsets)
                 }
             }
         } header: {
@@ -1535,6 +1545,8 @@ private struct NewChatInputBar: View {
 
 private struct ProjectListSectionHeader: View {
     let isEditingProjects: Bool
+    let allowsProjectCreation: Bool
+    let onCreateProject: () -> Void
     let onToggleEditing: () -> Void
 
     var body: some View {
@@ -1543,6 +1555,19 @@ private struct ProjectListSectionHeader: View {
                 .font(.headline)
 
             Spacer(minLength: 8)
+
+            if allowsProjectCreation {
+                Button(action: onCreateProject) {
+                    Image(systemName: "plus")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                }
+                .opencodeGlassButton(clear: false)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel("Create Project")
+                .accessibilityIdentifier("projects.create")
+            }
 
             Button(action: onToggleEditing) {
                 Image(systemName: isEditingProjects ? "checkmark" : "ellipsis")

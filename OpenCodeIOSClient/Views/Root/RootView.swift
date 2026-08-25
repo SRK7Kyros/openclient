@@ -150,9 +150,20 @@ struct RootView<ChatDestination: View>: View {
 
     @ViewBuilder
     private var appShell: some View {
-        BrowserRootContainer(browser: shell.browser) {
+        BrowserRootContainer(
+            browser: shell.browser,
+            usesInspectorPresentation: usesBrowserInspector
+        ) {
             splitShell
         }
+    }
+
+    private var usesBrowserInspector: Bool {
+        #if os(iOS) && !targetEnvironment(macCatalyst)
+        horizontalSizeClass == .regular
+        #else
+        false
+        #endif
     }
 
     private var splitShell: some View {
@@ -206,27 +217,32 @@ struct RootView<ChatDestination: View>: View {
                 }
             }
         } detail: {
-            offlineBannerColumn(.detail) {
-                switch shell.detailRoute(isCompact: horizontalSizeClass == .compact) {
-                case .gitDiff:
-                    GitDiffView(facade: shell.projectFiles)
-                case .gitFile:
-                    ProjectFileContentView(facade: shell.projectFiles)
-                case .mcp:
-                    ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
-                case let .terminal(id):
-                    TerminalDetailView(facade: shell.terminal, terminalID: id)
-                        .id(id)
-                case .selectTerminal:
-                    ContentUnavailableView("Select a Terminal", systemImage: "terminal", description: Text("Choose a terminal session from the list."))
-                case let .loadingChat(sessionID):
-                    CompactRouteLoadingView(title: "Loading chat...")
-                        .id(sessionID)
-                case let .chat(route):
-                    ChatRouteView(route: route, destination: chatDestination)
-                        .equatable()
-                case .selectSession:
-                    ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
+            BrowserInspectorContainer(
+                browser: shell.browser,
+                isEnabled: usesBrowserInspector
+            ) {
+                offlineBannerColumn(.detail) {
+                    switch shell.detailRoute(isCompact: horizontalSizeClass == .compact) {
+                    case .gitDiff:
+                        GitDiffView(facade: shell.projectFiles)
+                    case .gitFile:
+                        ProjectFileContentView(facade: shell.projectFiles)
+                    case .mcp:
+                        ContentUnavailableView("MCP Servers", systemImage: "server.rack", description: Text("Toggle servers from the MCP tab."))
+                    case let .terminal(id):
+                        TerminalDetailView(facade: shell.terminal, terminalID: id)
+                            .id(id)
+                    case .selectTerminal:
+                        ContentUnavailableView("Select a Terminal", systemImage: "terminal", description: Text("Choose a terminal session from the list."))
+                    case let .loadingChat(sessionID):
+                        CompactRouteLoadingView(title: "Loading chat...")
+                            .id(sessionID)
+                    case let .chat(route):
+                        ChatRouteView(route: route, destination: chatDestination)
+                            .equatable()
+                    case .selectSession:
+                        ContentUnavailableView("Select a Session", systemImage: "bubble.left.and.bubble.right")
+                    }
                 }
             }
         }

@@ -211,13 +211,9 @@ struct MarkdownMessageText: View {
         .fixedSize(horizontal: false, vertical: true)
 
         if let viewportWidth = tableViewportWidth(headers: headers, rows: rows) {
-            Color.clear
+            table
+                .frame(width: viewportWidth)
                 .frame(maxWidth: .infinity)
-                .frame(height: minimumHeight)
-                .overlay {
-                    table
-                        .frame(width: viewportWidth)
-                }
                 .padding(.vertical, tableOuterPadding)
         } else {
             table

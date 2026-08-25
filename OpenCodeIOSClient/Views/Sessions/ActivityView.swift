@@ -427,84 +427,19 @@ struct ActivitySessionRow: View {
     let showsLastUserMessage: Bool
     var isSelected = false
 
+    private static let regularLayoutMinimumWidth: CGFloat = 200
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 11) {
-                ActivityAvatarStack(
-                    sessionTitle: title,
-                    projectTitle: row.recent.projectTitle,
-                    projectIcon: row.projectIcon,
-                    usesGlobalProjectAvatar: row.usesGlobalProjectAvatar
+        ViewThatFits(in: .horizontal) {
+            rowContent(isCompact: false)
+                .frame(
+                    minWidth: Self.regularLayoutMinimumWidth,
+                    idealWidth: Self.regularLayoutMinimumWidth,
+                    maxWidth: .infinity,
+                    alignment: .leading
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    Text(row.recent.projectTitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    ActivityStatusPill(
-                        title: row.isHydrating && !row.needsInput ? Text("Updating") : Text(row.statusTitle),
-                        isWorking: row.isWorking,
-                        isHydrating: row.isHydrating,
-                        needsInput: row.needsInput
-                    )
-                    if let updatedAt = row.updatedAt {
-                        SessionRelativeTimeText(date: updatedAt)
-                    }
-                }
-            }
-
-            if showsLastUserMessage, let userText = row.latestUserText {
-                ActivityTranscriptLine(label: "You", text: userText, tint: .secondary)
-                    .accessibilityIdentifier("activity.session.\(row.recent.session.id).latest-user")
-            }
-
-            if let tool = row.runningTools.first {
-                ActivityInlineToolLine(
-                    label: latestLabel,
-                    tool: tool
-                )
-            } else if let assistantText = row.latestAssistantText {
-                ActivityTranscriptLine(
-                    label: latestLabel,
-                    text: assistantText,
-                    tint: row.isWorking ? .primary : .secondary
-                )
-            } else {
-                Text("Open the session to see the conversation.")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            }
-
-            if row.pendingInteractionCount > 0 || row.todoCount > 0 || row.isLiveActivityActive {
-                HStack(spacing: 12) {
-                    if row.pendingInteractionCount > 0 {
-                        Label("\(row.pendingInteractionCount) waiting", systemImage: "hand.raised.fill")
-                            .foregroundStyle(.orange)
-                    }
-                    if row.todoCount > 0 {
-                        Label("\(row.completedTodoCount)/\(row.todoCount)", systemImage: "checklist")
-                            .foregroundStyle(.secondary)
-                    }
-                    if row.isLiveActivityActive {
-                        Label("Live", systemImage: "waveform")
-                            .foregroundStyle(.indigo)
-                            .accessibilityIdentifier("activity.session.\(row.recent.session.id).liveActivity")
-                    }
-                }
-                .font(.caption.weight(.semibold))
-            }
+            rowContent(isCompact: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(15)
@@ -515,6 +450,128 @@ struct ActivitySessionRow: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func rowContent(isCompact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isCompact {
+                identity(isCompact: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 8) {
+                    statusPill
+
+                    Spacer(minLength: 8)
+
+                    relativeTime
+                }
+            } else {
+                HStack(spacing: 11) {
+                    identity(isCompact: false)
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        statusPill
+                        relativeTime
+                    }
+                }
+            }
+
+            if showsLastUserMessage, let userText = row.latestUserText {
+                ActivityTranscriptLine(label: "You", text: userText, tint: .secondary)
+                    .accessibilityIdentifier("activity.session.\(row.recent.session.id).latest-user")
+            }
+
+            if !isCompact {
+                activityDescription
+                activityMetadata
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func identity(isCompact: Bool) -> some View {
+        HStack(spacing: 11) {
+            ActivityAvatarStack(
+                sessionTitle: title,
+                projectTitle: row.recent.projectTitle,
+                projectIcon: row.projectIcon,
+                usesGlobalProjectAvatar: row.usesGlobalProjectAvatar,
+                isCompact: isCompact
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(row.recent.projectTitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var statusPill: some View {
+        ActivityStatusPill(
+            title: row.isHydrating && !row.needsInput ? Text("Updating") : Text(row.statusTitle),
+            isWorking: row.isWorking,
+            isHydrating: row.isHydrating,
+            needsInput: row.needsInput
+        )
+    }
+
+    @ViewBuilder
+    private var relativeTime: some View {
+        if let updatedAt = row.updatedAt {
+            SessionRelativeTimeText(date: updatedAt)
+        }
+    }
+
+    @ViewBuilder
+    private var activityDescription: some View {
+        if let tool = row.runningTools.first {
+            ActivityInlineToolLine(
+                label: latestLabel,
+                tool: tool
+            )
+        } else if let assistantText = row.latestAssistantText {
+            ActivityTranscriptLine(
+                label: latestLabel,
+                text: assistantText,
+                tint: row.isWorking ? .primary : .secondary
+            )
+        } else {
+            Text("Open the session to see the conversation.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .lineLimit(2)
+        }
+    }
+
+    @ViewBuilder
+    private var activityMetadata: some View {
+        if row.pendingInteractionCount > 0 || row.todoCount > 0 || row.isLiveActivityActive {
+            HStack(spacing: 12) {
+                if row.pendingInteractionCount > 0 {
+                    Label("\(row.pendingInteractionCount) waiting", systemImage: "hand.raised.fill")
+                        .foregroundStyle(.orange)
+                }
+                if row.todoCount > 0 {
+                    Label("\(row.completedTodoCount)/\(row.todoCount)", systemImage: "checklist")
+                        .foregroundStyle(.secondary)
+                }
+                if row.isLiveActivityActive {
+                    Label("Live", systemImage: "waveform")
+                        .foregroundStyle(.indigo)
+                        .accessibilityIdentifier("activity.session.\(row.recent.session.id).liveActivity")
+                }
+            }
+            .font(.caption.weight(.semibold))
+        }
     }
 
     private var cardBackground: Color {
@@ -586,6 +643,7 @@ private struct ActivityAvatarStack: View {
     let projectTitle: String
     let projectIcon: OpenCodeProject.Icon?
     let usesGlobalProjectAvatar: Bool
+    let isCompact: Bool
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -595,17 +653,17 @@ private struct ActivityAvatarStack: View {
                 icon: projectIcon,
                 usesSystemImageFallback: usesGlobalProjectAvatar,
                 isSelected: false,
-                size: 36
+                size: isCompact ? 30 : 36
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            SessionAvatar(title: sessionTitle, size: 27)
+            SessionAvatar(title: sessionTitle, size: isCompact ? 22 : 27)
                 .overlay {
                     Circle()
-                        .stroke(OpenCodePlatformColor.secondaryGroupedBackground, lineWidth: 3)
+                        .stroke(OpenCodePlatformColor.secondaryGroupedBackground, lineWidth: isCompact ? 2 : 3)
                 }
         }
-        .frame(width: 48, height: 42)
+        .frame(width: isCompact ? 40 : 48, height: isCompact ? 35 : 42)
         .accessibilityHidden(true)
     }
 }

@@ -289,12 +289,12 @@ private struct OpenCodeSheetBackgroundDismissInstaller: UIViewRepresentable {
                 controller = presented
             }
 
+            let controllerName = NSStringFromClass(type(of: controller))
             guard controller.presentingViewController != nil,
+                  !controllerName.localizedCaseInsensitiveContains("contextmenu"),
                   !controller.isModalInPresentation,
                   let presentationController = controller.presentationController,
-                  presentationController is UISheetPresentationController
-                    || controller.modalPresentationStyle == .pageSheet
-                    || controller.modalPresentationStyle == .formSheet,
+                  presentationController is UISheetPresentationController,
                   let presentedView = presentationController.presentedView else {
                 return nil
             }

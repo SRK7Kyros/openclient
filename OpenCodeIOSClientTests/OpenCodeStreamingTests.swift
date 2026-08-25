@@ -1495,7 +1495,7 @@ final class OpenCodeStreamingTests: XCTestCase {
     @MainActor
     func testChatStoreIgnoresDeltaUntilCanonicalPartExists() {
         let store = ChatStore()
-        let event = pendingDelta(delta: "Hello")
+        let event = pendingDelta(partID: "part_msg_assistant", delta: "Hello")
 
         XCTAssertFalse(store.enqueuePendingTranscriptEventIfAvailable(event, in: OpenCodeDirectorySyncState()))
         XCTAssertFalse(store.hasPendingTranscriptEvents)
@@ -2068,6 +2068,29 @@ Closing paragraph after the table.
 
         XCTAssertEqual(MarkdownMessageText._testFirstTableRowCount(in: text), 5)
         XCTAssertGreaterThan(size.height, 280)
+    }
+
+    @MainActor
+    func testBoundedMarkdownTablePreservesFullEstimatedHeight() throws {
+        let text = """
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Table layout | Improved | This deliberately wraps across several lines at large accessibility sizes. |
+| Last row | Visible | The final row must contribute its full measured height instead of overflowing an estimated placeholder. |
+"""
+        let estimatedHeight = try XCTUnwrap(MarkdownMessageText._testFirstTableEstimatedHeight(in: text))
+        let view = MarkdownMessageText(
+            text: text,
+            isUser: false,
+            style: .standard,
+            tableMaximumWidth: 328
+        )
+        .frame(width: 360)
+        let controller = UIHostingController(rootView: view)
+
+        let size = controller.sizeThatFits(in: CGSize(width: 360, height: 10_000))
+
+        XCTAssertGreaterThanOrEqual(size.height, estimatedHeight + 10)
     }
 
     @MainActor

@@ -215,6 +215,55 @@ final class OpenCodeAPIClientTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
     }
 
+    func testDirectoryBootstrapWarmsChildSessionForPendingPermission() async throws {
+        let childRequest = expectation(description: "child session requested")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            let data: Data
+            switch request.url?.path {
+            case "/session":
+                XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                    URLQueryItem(name: "directory", value: "/tmp/project"),
+                    URLQueryItem(name: "roots", value: "true"),
+                    URLQueryItem(name: "limit", value: "100"),
+                ])
+                data = #"[{"id":"ses_parent","title":"Parent","directory":"/tmp/project","projectID":"proj_1"}]"#.data(using: .utf8)!
+            case "/permission":
+                data = #"[{"id":"perm_child","sessionID":"ses_child","permission":"bash","patterns":["xcodebuild test"]}]"#.data(using: .utf8)!
+            case "/question", "/command":
+                data = Data("[]".utf8)
+            case "/session/ses_child":
+                childRequest.fulfill()
+                data = #"{"id":"ses_child","title":"Child","directory":"/tmp/project","projectID":"proj_1","parentID":"ses_parent"}"#.data(using: .utf8)!
+            default:
+                XCTFail("Unexpected request: \(request.url?.absoluteString ?? "nil")")
+                data = Data("[]".utf8)
+            }
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let bootstrap = try await OpenCodeBootstrap.bootstrapDirectory(
+            client: client,
+            directory: "/tmp/project",
+            sessionLimit: 100
+        )
+
+        XCTAssertEqual(bootstrap.sessions.map(\.id), ["ses_parent", "ses_child"])
+        XCTAssertEqual(bootstrap.sessions.last?.parentID, "ses_parent")
+        XCTAssertEqual(bootstrap.sessionTotal, 1)
+        await fulfillment(of: [childRequest], timeout: 1)
+    }
+
     func testUpdateProjectEncodesIconPreferences() async throws {
         let expectation = expectation(description: "request captured")
         let configuration = URLSessionConfiguration.ephemeral
