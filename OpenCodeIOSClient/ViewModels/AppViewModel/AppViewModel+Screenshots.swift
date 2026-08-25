@@ -243,6 +243,14 @@ extension AppViewModel {
             ],
             forSessionID: OpenClientScreenshotData.followupSession.id
         )
+        viewModel.sessionPreviews[OpenClientScreenshotData.archivedSession.id] = SessionPreview(
+            text: "Added deterministic screenshot scenes for launch assets.",
+            date: Date().addingTimeInterval(-172_800)
+        )
+        viewModel.sessionPreviews[OpenClientScreenshotData.reviewSession.id] = SessionPreview(
+            text: "Pinned checklist for every release candidate review.",
+            date: Date().addingTimeInterval(-345_600)
+        )
         return viewModel
     }
 

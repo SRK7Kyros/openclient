@@ -45,7 +45,6 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("new-session", "05-new-session"),
             ("provider-setup", "06-provider-setup"),
             ("sessions", "07-sessions"),
-            ("chat", "08-chat"),
             ("permission", "09-permission"),
             ("question", "10-question"),
             ("fun-games", "11-fun-games"),
@@ -62,6 +61,7 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("browser", "22-browser"),
             ("visual-tools", "23-visual-tools"),
             ("terminal-showcase", "24-terminal"),
+            ("chat", "08-chat"),
         ]
 
         let requestedScenes = Set(
@@ -90,6 +90,7 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
             let app = XCUIApplication()
             setupSnapshot(app)
+            app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
             app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = scene
             if scene == "terminal-showcase" {
                 app.launchEnvironment["OPENCODE_UI_TEST_MODE"] = "1"
@@ -120,6 +121,28 @@ final class OpenCodeIOSClientUITests: XCTestCase {
                 XCTAssertTrue(app.navigationBars["New Session"].waitForExistence(timeout: 10), "Expected new session sheet to load")
                 let projectPicker = app.descendants(matching: .any)["projects.newChat.project"]
                 XCTAssertTrue(projectPicker.waitForExistence(timeout: 10), "Expected project picker in new session sheet")
+            }
+
+            if scene == "activity", capturesLandscape {
+                let historicalSession = app.buttons["activity.session.session-screenshot-review"]
+                XCTAssertTrue(
+                    revealForScreenshot(historicalSession, in: app),
+                    "Expected simplified historical Activity card"
+                )
+            }
+
+            if scene == "chat", capturesLandscape {
+                let dedicatedWindow = app.descendants(matching: .any)["chat.dedicatedWindow"]
+                if !dedicatedWindow.exists {
+                    let openWindow = app.buttons["chat.toolbar.openWindow"]
+                    XCTAssertTrue(openWindow.waitForExistence(timeout: 10), "Expected Open Chat in New Window action")
+                    openWindow.tap()
+                }
+                XCTAssertTrue(
+                    dedicatedWindow.waitForExistence(timeout: 10),
+                    "Expected dedicated chat window"
+                )
+                sleep(1)
             }
 
             if scene == "composer-actions" {
@@ -165,6 +188,20 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             snapshot(screenshotName)
             app.terminate()
         }
+    }
+
+    @MainActor
+    private func revealForScreenshot(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0 ..< 8 {
+            if element.exists,
+               element.isHittable,
+               element.frame.midY < app.frame.height * 0.78 {
+                return true
+            }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return element.exists && element.isHittable
     }
 
     @MainActor

@@ -13,10 +13,30 @@ platform :ios do
   end
 
   def screenshot_devices
-    [
+    devices = [
       "iPhone 17 Pro Max",
       "iPad Pro 13-inch (M5)"
     ]
+
+    case ENV["OPENCLIENT_SCREENSHOT_DEVICE"]&.downcase
+    when nil, "", "all"
+      devices
+    when "iphone"
+      devices.reject { |device| device.include?("iPad") }
+    when "ipad"
+      devices.select { |device| device.include?("iPad") }
+    else
+      UI.user_error!("OPENCLIENT_SCREENSHOT_DEVICE must be iphone, ipad, or all")
+    end
+  end
+
+  def screenshot_runtime_version
+    ENV.fetch("OPENCLIENT_SCREENSHOT_RUNTIME", "26.3.1")
+  end
+
+  def screenshot_runtime_identifier
+    runtime_components = screenshot_runtime_version.split(".").first(2)
+    "com.apple.CoreSimulator.SimRuntime.iOS-#{runtime_components.join("-")}"
   end
 
   def ensure_screenshot_simulator(device)
@@ -30,7 +50,7 @@ platform :ios do
     device_type = device_types[device]
     UI.user_error!("No simulator device type configured for #{device}") if device_type.nil?
 
-    sh("xcrun simctl create #{device.shellescape} #{device_type.shellescape} com.apple.CoreSimulator.SimRuntime.iOS-27-0")
+    sh("xcrun simctl create #{device.shellescape} #{device_type.shellescape} #{screenshot_runtime_identifier.shellescape}")
   end
 
   def normalize_iphone_screenshots(screenshot_output)
@@ -224,10 +244,18 @@ platform :ios do
   lane :screenshots do
     sh(xcodegen_generate_command(repo_root))
     screenshot_output = File.join(repo_root, "fastlane", "screenshots")
-    FileUtils.rm_rf(screenshot_output)
+    devices = screenshot_devices
+    if ENV["OPENCLIENT_SCREENSHOT_DEVICE"].to_s.empty? || ENV["OPENCLIENT_SCREENSHOT_DEVICE"].casecmp("all").zero?
+      FileUtils.rm_rf(screenshot_output)
+    else
+      devices.each do |device|
+        prefix = device.tr(" ", "-")
+        Dir.glob(File.join(screenshot_output, "*", "#{prefix}-*.png")).each { |path| FileUtils.rm_f(path) }
+      end
+    end
     FileUtils.mkdir_p(screenshot_output)
 
-    screenshot_devices.each do |device|
+    devices.each do |device|
       UI.message("Capturing screenshots on #{device}")
       ensure_screenshot_simulator(device)
       sh("xcrun simctl shutdown #{device.shellescape}; xcrun simctl erase #{device.shellescape}; xcrun simctl boot #{device.shellescape}; xcrun simctl bootstatus #{device.shellescape} -b")
@@ -239,7 +267,7 @@ platform :ios do
           "test",
           "-project", File.join(repo_root, "OpenCodeIOSClient.xcodeproj").shellescape,
           "-scheme", "OpenCodeIOSClientScreenshots",
-          "-destination", "platform=iOS Simulator,name=#{device},OS=27.0".shellescape,
+          "-destination", "platform=iOS Simulator,name=#{device},OS=#{screenshot_runtime_version}".shellescape,
           "-only-testing:OpenCodeIOSClientUITests/OpenCodeIOSClientUITests/testAppStoreScreenshots",
           "-parallel-testing-enabled", "NO",
           "-maximum-concurrent-test-simulator-destinations", "1",
@@ -250,6 +278,6 @@ platform :ios do
     end
 
 
-    normalize_iphone_screenshots(screenshot_output)
+    normalize_iphone_screenshots(screenshot_output) if devices.any? { |device| !device.include?("iPad") }
   end
 end

@@ -100,20 +100,16 @@ struct OpenCodeIOSClientApp: App {
         }
 
         WindowGroup(id: OpenClientChatWindowRoute.sceneID, for: OpenClientChatWindowRoute.self) { $route in
-            if let route {
-                NavigationStack {
-                    ChatView(
-                        chatFacade: composition.chat,
-                        browser: composition.appShell.browser,
-                        imageContent: composition.imageContent,
-                        videoStreams: composition.videoStreams,
-                        sessionID: route.sessionID,
-                        preferredDirectoryKey: route.directoryKey,
-                        isDedicatedWindow: true
-                    )
+            Group {
+#if DEBUG
+                if let screenshotScene, screenshotScene != .chat {
+                    ScreenshotSceneView(scene: screenshotScene, viewModel: composition.viewModel)
+                } else {
+                    dedicatedChatWindow(route: route)
                 }
-                .opencodeSoftScrollEdgeEffect()
-                .opencodeDismissesSheetsOnBackgroundTap()
+#else
+                dedicatedChatWindow(route: route)
+#endif
             }
         }
     }
@@ -132,6 +128,37 @@ struct OpenCodeIOSClientApp: App {
                 sessionID: sessionID,
                 presentationRequest: presentationRequest
             )
+        }
+    }
+
+    @ViewBuilder
+    private func dedicatedChatWindow(route: OpenClientChatWindowRoute?) -> some View {
+        if let route {
+            NavigationStack {
+                ChatView(
+                    chatFacade: composition.chat,
+                    browser: composition.appShell.browser,
+                    imageContent: composition.imageContent,
+                    videoStreams: composition.videoStreams,
+                    sessionID: route.sessionID,
+                    preferredDirectoryKey: route.directoryKey,
+                    isDedicatedWindow: true
+                )
+            }
+            .accessibilityIdentifier("chat.dedicatedWindow")
+            .overlay(alignment: .topLeading) {
+#if DEBUG
+                if screenshotScene == .chat {
+                    Text(OpenClientScreenshotScene.chat.rawValue)
+                        .font(.caption2)
+                        .foregroundStyle(.clear)
+                        .padding(1)
+                        .accessibilityIdentifier(OpenClientScreenshotScene.chat.accessibilityIdentifier)
+                }
+#endif
+            }
+            .opencodeSoftScrollEdgeEffect()
+            .opencodeDismissesSheetsOnBackgroundTap()
         }
     }
 }
