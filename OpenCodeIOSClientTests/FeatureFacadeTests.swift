@@ -8,6 +8,10 @@ import UIKit
 
 @MainActor
 final class FeatureFacadeTests: XCTestCase {
+    func testFunAndGamesDefaultsHidden() {
+        XCTAssertFalse(FunAndGamesPreferences().showsSection)
+    }
+
     func testSessionRelativeTimeNeverUsesSeconds() {
         let now = Date(timeIntervalSince1970: 10_000)
 

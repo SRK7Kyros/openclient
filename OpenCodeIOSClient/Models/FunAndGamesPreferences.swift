@@ -1,7 +1,7 @@
 import Foundation
 
 struct FunAndGamesPreferences: Codable, Equatable {
-    var showsSection = true
+    var showsSection = false
 }
 
 struct ServerScopedFunAndGamesPreferences: Codable, Equatable {

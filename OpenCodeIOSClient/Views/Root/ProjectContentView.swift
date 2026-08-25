@@ -71,7 +71,10 @@ struct ProjectContentView: View {
             get: { shell.projectContentSnapshot.isShowingSettings },
             set: { shell.setProjectSettingsPresented($0) }
         )) {
-            ProjectSettingsSheet(facade: shell.projects)
+            ProjectSettingsSheet(
+                facade: shell.projects,
+                connection: shell.connection
+            )
         }
         .onChange(of: snapshot.currentProjectID) { _, _ in
             syncProjectTabIfNeeded()

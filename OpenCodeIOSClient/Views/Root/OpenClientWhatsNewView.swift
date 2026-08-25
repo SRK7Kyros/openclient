@@ -22,6 +22,10 @@ struct OpenClientWhatsNewView: View {
                         hero: release.hero
                     )
 
+                    if release.hero == .ipad {
+                        OpenClientWhatsNewIPadTransitionNotes(connection: connection)
+                    }
+
                     if release.hero == .activity {
                         OpenClientWhatsNewActivityExamples()
                     }
@@ -221,6 +225,8 @@ private struct OpenClientWhatsNewHero: View {
                         OpenClientWhatsNewActivityMark()
                     case .internationalization:
                         OpenClientWhatsNewLanguageMark()
+                    case .ipad:
+                        OpenClientWhatsNewIPadMark()
                     }
                 }
 
@@ -245,6 +251,118 @@ private struct OpenClientWhatsNewHero: View {
         }
         .shadow(color: .black.opacity(0.14), radius: 24, y: 12)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct OpenClientWhatsNewIPadMark: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(0.12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.white.opacity(0.62), lineWidth: 2)
+                }
+
+            HStack(spacing: 5) {
+                VStack(spacing: 4) {
+                    Capsule().fill(.cyan.opacity(0.9)).frame(height: 5)
+                    Capsule().fill(.white.opacity(0.45)).frame(height: 4)
+                    Capsule().fill(.white.opacity(0.3)).frame(height: 4)
+                }
+
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(.purple.opacity(0.72))
+                    .overlay {
+                        Image(systemName: "globe")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                    }
+            }
+            .padding(9)
+        }
+        .frame(width: 90, height: 62)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OpenClientWhatsNewIPadTransitionNotes: View {
+    @ObservedObject var connection: ConnectionFacade
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("GOOD TO KNOW")
+                    .font(.caption.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+
+                Text("A couple of things moved")
+                    .font(.title2.bold())
+            }
+
+            VStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.purple)
+                            .frame(width: 46, height: 46)
+                            .background(.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Fun & Games moved")
+                                .font(.headline)
+                            Text("Fun & Games now lives in Global Settings. It is off by default, and you can turn it on here anytime.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Toggle("Show Fun & Games", isOn: Binding(
+                        get: { connection.showsFunAndGamesSection },
+                        set: { connection.setShowsFunAndGamesSection($0) }
+                    ))
+                    .font(.subheadline.weight(.semibold))
+                    .tint(.purple)
+                    .accessibilityIdentifier("new-features.show-fun-and-games")
+                }
+                .padding(16)
+                .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.purple.opacity(0.13), lineWidth: 0.5)
+                }
+
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .frame(width: 46, height: 46)
+                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Disconnect moved")
+                            .font(.headline)
+                        Text("Disconnect now sits at the bottom of the Projects list, keeping the main navigation focused.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(16)
+                .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.orange.opacity(0.13), lineWidth: 0.5)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("new-features.disconnect-moved")
+            }
+        }
     }
 }
 

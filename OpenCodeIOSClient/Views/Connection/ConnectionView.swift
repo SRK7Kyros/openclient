@@ -309,6 +309,14 @@ struct RootConfigurationsView: View {
                 Text("Shows an animated highlight at the top of a chat while the AI is active.")
             }
 
+            Section("Fun & Games") {
+                Toggle("Show Fun & Games", isOn: Binding(
+                    get: { facade.showsFunAndGamesSection },
+                    set: { facade.setShowsFunAndGamesSection($0) }
+                ))
+                .accessibilityIdentifier("configurations.show-fun-and-games")
+            }
+
             Section {
                 if facade.recentServerConfigs.isEmpty {
                     Text("No saved servers")

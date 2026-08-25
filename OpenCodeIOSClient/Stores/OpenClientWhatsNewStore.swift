@@ -6,6 +6,7 @@ struct OpenClientReleaseNotes: Identifiable, Equatable {
         case customization
         case activity
         case internationalization
+        case ipad
     }
 
     struct Feature: Identifiable, Equatable {
@@ -183,6 +184,36 @@ enum OpenClientReleaseNotesCatalog {
                     contributor: .init(name: "Lorenzo Salami", handle: "@LSalami")
                 ),
             ]
+        ),
+        OpenClientReleaseNotes(
+            version: "1.0.18",
+            title: "A bigger canvas",
+            summary: "A focused iPad experience with more room to read, browse, and move between conversations.",
+            features: [
+                OpenClientReleaseNotes.Feature(
+                    title: "Comfortable reading width",
+                    detail: "Chats stay centered in a narrower column, making long conversations easier to scan on a large display.",
+                    systemImage: "text.alignleft"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Open chats in new windows",
+                    detail: "Move a conversation into its own iPad window and keep multiple sessions close at hand.",
+                    systemImage: "macwindow.on.rectangle"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Browse beside your chat",
+                    detail: "Keep the in-app browser and your conversation visible together, with a layout that adapts between portrait and landscape.",
+                    systemImage: "rectangle.split.2x1"
+                ),
+                OpenClientReleaseNotes.Feature(
+                    title: "Activity, simplified",
+                    detail: "Working and recent sessions keep their context, while older conversations use compact cards that are easier to scan.",
+                    systemImage: "waveform.path.ecg"
+                ),
+            ],
+            hero: .ipad,
+            featureSectionTitle: "More room for the work that matters",
+            showsSetup: false
         ),
     ]
 }

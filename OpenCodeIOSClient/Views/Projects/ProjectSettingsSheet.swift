@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProjectSettingsSheet: View {
     @ObservedObject var facade: ProjectFacade
+    let connection: ConnectionFacade
     @State private var selectedActionCommandName = ""
     @State private var selectedActionIconName = "bolt.fill"
     @State private var symbolPickerContext: ProjectActionSymbolPickerContext?
@@ -11,6 +12,15 @@ struct ProjectSettingsSheet: View {
 
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink {
+                        RootConfigurationsView(facade: connection)
+                    } label: {
+                        Label("Global Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("project.settings.global-settings")
+                }
+
                 Section("Sessions") {
                     Picker("Card Style", selection: Binding(
                         get: { facade.settingsSnapshot.sessionCardStyle },

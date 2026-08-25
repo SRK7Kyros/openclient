@@ -11,7 +11,6 @@ final class ConfigurationsFacade: ObservableObject {
         Publishers.MergeMany([
             viewModel.modelConfigurationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.projectPreferencesStore.objectWillChange.eraseToAnyPublisher(),
-            viewModel.funAndGamesStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.$config.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingConfigurationsSheet.map { _ in () }.eraseToAnyPublisher(),
@@ -33,7 +32,6 @@ final class ConfigurationsFacade: ObservableObject {
     var selectableAgents: [OpenCodeAgent] { viewModel.selectableAgents }
     var newSessionDefaults: NewSessionDefaults { viewModel.newSessionDefaults }
     var errorMessage: String? { viewModel.errorMessage }
-    var funAndGamesPreferences: FunAndGamesPreferences { viewModel.funAndGamesPreferences }
     var showsRecentSessionsInProjectList: Bool { viewModel.showsRecentSessionsInProjectList }
     var pluginStore: PluginStore { viewModel.pluginStore }
 
@@ -84,7 +82,6 @@ final class ConfigurationsFacade: ObservableObject {
     func setNewSessionDefaultReasoning(_ variant: String?) { viewModel.setNewSessionDefaultReasoning(variant) }
     func newSessionDefaultModelReference() -> OpenCodeModelReference? { viewModel.newSessionDefaultModelReference() }
     func formattedVariantTitle(_ variant: String) -> String { viewModel.formattedVariantTitle(variant) }
-    func setShowsFunAndGamesSection(_ shows: Bool) { viewModel.setShowsFunAndGamesSection(shows) }
     func setShowsRecentSessionsInProjectList(_ shows: Bool) { viewModel.setShowsRecentSessionsInProjectList(shows) }
     func loadRecentProjectSessionsAcrossProjects() async { await viewModel.loadRecentProjectSessionsAcrossProjects() }
 }

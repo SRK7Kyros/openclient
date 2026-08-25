@@ -91,13 +91,6 @@ struct ConfigurationsSheet: View {
                     .accessibilityIdentifier("configurations.plugins")
                 }
 
-                Section("Fun & Games") {
-                    Toggle("Show Fun & Games", isOn: Binding(
-                        get: { viewModel.funAndGamesPreferences.showsSection },
-                        set: { viewModel.setShowsFunAndGamesSection($0) }
-                    ))
-                }
-
             }
             .navigationTitle("Configurations")
             .opencodeInlineNavigationTitle()

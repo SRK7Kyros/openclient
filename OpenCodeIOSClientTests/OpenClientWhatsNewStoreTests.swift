@@ -128,6 +128,21 @@ final class OpenClientWhatsNewStoreTests: XCTestCase {
         XCTAssertEqual(store.presentedRelease?.internationalizationAnnouncements.count, 2)
     }
 
+    func testCurrentCatalogDescribesIPadRelease() {
+        let release = OpenClientReleaseNotesCatalog.releases.first { $0.version == "1.0.18" }
+
+        XCTAssertEqual(release?.title, "A bigger canvas")
+        XCTAssertEqual(release?.hero, .ipad)
+        XCTAssertEqual(release?.featureSectionTitle, "More room for the work that matters")
+        XCTAssertFalse(release?.showsSetup == true)
+        XCTAssertEqual(release?.features.map(\.title), [
+            "Comfortable reading width",
+            "Open chats in new windows",
+            "Browse beside your chat",
+            "Activity, simplified",
+        ])
+    }
+
     private var release: OpenClientReleaseNotes {
         OpenClientReleaseNotes(
             version: "2.0",

@@ -14,6 +14,7 @@ final class ConnectionFacade: ObservableObject {
             viewModel.connectionStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.appCustomizationStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.appIconStore.objectWillChange.eraseToAnyPublisher(),
+            viewModel.funAndGamesStore.objectWillChange.eraseToAnyPublisher(),
             viewModel.$config.map { _ in () }.eraseToAnyPublisher(),
             viewModel.$isShowingConnectionOverlay.map { _ in () }.eraseToAnyPublisher(),
         ])
@@ -48,6 +49,7 @@ final class ConnectionFacade: ObservableObject {
     var showsChatActivityShimmer: Bool { viewModel.appCustomizationStore.showsChatActivityShimmer }
     var showsToolCalls: Bool { viewModel.appCustomizationStore.showsToolCalls }
     var showsReasoningBlocks: Bool { viewModel.appCustomizationStore.showsReasoningBlocks }
+    var showsFunAndGamesSection: Bool { viewModel.funAndGamesPreferences.showsSection }
     var autoConnectServerID: String? { viewModel.appCustomizationStore.autoConnectServerID }
     var autoConnectLandingDestination: AutoConnectLandingDestination {
         viewModel.appCustomizationStore.autoConnectLandingDestination
@@ -102,6 +104,10 @@ final class ConnectionFacade: ObservableObject {
 
     func setShowsReasoningBlocks(_ shows: Bool) {
         viewModel.appCustomizationStore.setShowsReasoningBlocks(shows)
+    }
+
+    func setShowsFunAndGamesSection(_ shows: Bool) {
+        viewModel.setShowsFunAndGamesSection(shows)
     }
 
     func setAutoConnectServerID(_ serverID: String?) {

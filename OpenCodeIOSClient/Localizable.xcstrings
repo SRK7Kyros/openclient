@@ -18695,6 +18695,278 @@
         }
       }
     },
+    "A bigger canvas": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma tela maior"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una tela più grande"
+          }
+        }
+      }
+    },
+    "A focused iPad experience with more room to read, browse, and move between conversations.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma experiência focada no iPad, com mais espaço para ler, navegar e alternar entre conversas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un'esperienza pensata per iPad, con più spazio per leggere, navigare e passare da una conversazione all'altra."
+          }
+        }
+      }
+    },
+    "Comfortable reading width": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largura confortável para leitura"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una larghezza comoda per leggere"
+          }
+        }
+      }
+    },
+    "Chats stay centered in a narrower column, making long conversations easier to scan on a large display.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os chats permanecem centralizados em uma coluna mais estreita, facilitando acompanhar conversas longas em uma tela grande."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chat restano centrate in una colonna più stretta, così le conversazioni lunghe sono più facili da scorrere su uno schermo grande."
+          }
+        }
+      }
+    },
+    "Open chats in new windows": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra chats em novas janelas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri le chat in nuove finestre"
+          }
+        }
+      }
+    },
+    "Move a conversation into its own iPad window and keep multiple sessions close at hand.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mova uma conversa para sua própria janela no iPad e mantenha várias sessões sempre à mão."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta una conversazione in una finestra iPad dedicata e tieni più sessioni a portata di mano."
+          }
+        }
+      }
+    },
+    "Browse beside your chat": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegue ao lado do chat"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naviga accanto alla chat"
+          }
+        }
+      }
+    },
+    "Keep the in-app browser and your conversation visible together, with a layout that adapts between portrait and landscape.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantenha o navegador do app e sua conversa visíveis ao mesmo tempo, com um layout que se adapta entre os modos retrato e paisagem."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tieni visibili insieme il browser nell'app e la conversazione, con un layout che si adatta tra orientamento verticale e orizzontale."
+          }
+        }
+      }
+    },
+    "Activity, simplified": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atividade simplificada"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attività, semplificata"
+          }
+        }
+      }
+    },
+    "Working and recent sessions keep their context, while older conversations use compact cards that are easier to scan.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessões em andamento e recentes mantêm o contexto, enquanto conversas antigas usam cartões compactos mais fáceis de consultar."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le sessioni attive e recenti mantengono il contesto, mentre le conversazioni meno recenti usano schede compatte più facili da consultare."
+          }
+        }
+      }
+    },
+    "More room for the work that matters": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais espaço para o trabalho que importa"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più spazio per il lavoro che conta"
+          }
+        }
+      }
+    },
+    "GOOD TO KNOW": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É BOM SABER"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BUONO A SAPERSI"
+          }
+        }
+      }
+    },
+    "A couple of things moved": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algumas coisas mudaram de lugar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un paio di cose si sono spostate"
+          }
+        }
+      }
+    },
+    "Fun & Games moved": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diversão e jogos mudou de lugar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Divertimento e giochi si è spostato"
+          }
+        }
+      }
+    },
+    "Fun & Games now lives in Global Settings. It is off by default, and you can turn it on here anytime.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diversão e jogos agora fica nas Configurações globais. O recurso vem desativado por padrão, e você pode ativá-lo aqui quando quiser."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Divertimento e giochi ora si trova nelle Impostazioni globali. È disattivato per impostazione predefinita e puoi attivarlo qui quando vuoi."
+          }
+        }
+      }
+    },
+    "Disconnect moved": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconectar mudou de lugar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnetti si è spostato"
+          }
+        }
+      }
+    },
+    "Disconnect now sits at the bottom of the Projects list, keeping the main navigation focused.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconectar agora fica na parte inferior da lista de Projetos, mantendo a navegação principal mais focada."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnetti ora si trova in fondo all'elenco Progetti, così la navigazione principale resta più essenziale."
+          }
+        }
+      }
+    },
     "•": {
       "localizations": {
         "pt-BR": {
