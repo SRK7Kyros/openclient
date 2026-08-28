@@ -19014,6 +19014,22 @@
           }
         }
       }
+    },
+    "Selected": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecionado"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selezionato"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

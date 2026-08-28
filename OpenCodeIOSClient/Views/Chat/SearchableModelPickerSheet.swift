@@ -63,6 +63,23 @@ struct SearchableModelPickerSheet: View {
 
     private var content: some View {
         List {
+            if !selectedModelTitle.isEmpty {
+                Section(String(localized: "Selected")) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(String(localized: "Selected: \(selectedModelTitle)"))
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                        }
+                        Spacer()
+                    }
+                    .listRowBackground(Color(.secondarySystemGroupedBackground))
+                }
+            }
+
             if !reasoningVariants.isEmpty {
                 Section(String(localized: "Reasoning")) {
                     ForEach(reasoningVariants, id: \.id) { variant in
