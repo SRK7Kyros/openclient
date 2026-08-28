@@ -36,18 +36,9 @@ struct ModelToolbarMenu: View {
 
     private var menuLabel: some View {
         HStack(spacing: 4) {
-            if let reasoningSubtitle {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(modelTitle)
-                        .font(.caption)
-                    Text(reasoningSubtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Text(modelTitle)
-                    .font(.caption)
-            }
+            Text(modelTitle)
+                .font(.caption)
+                .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
