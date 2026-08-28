@@ -39,9 +39,8 @@ struct ModelToolbarMenu: View {
             if let reasoningSubtitle {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(modelTitle)
-                        .font(.caption)
+                        .font(.caption.weight(.medium))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                     Text(reasoningSubtitle)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -49,9 +48,8 @@ struct ModelToolbarMenu: View {
                 }
             } else {
                 Text(modelTitle)
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
             Image(systemName: "chevron.down")
                 .font(.caption2.weight(.semibold))
@@ -59,7 +57,7 @@ struct ModelToolbarMenu: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .frame(minWidth: 120, minHeight: 34, alignment: .trailing)
+        .frame(minWidth: 150, minHeight: 36, alignment: .trailing)
     }
 
     private var reasoningSubtitle: String? {
