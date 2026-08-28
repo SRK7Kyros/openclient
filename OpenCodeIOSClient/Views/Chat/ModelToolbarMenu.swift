@@ -35,16 +35,31 @@ struct ModelToolbarMenu: View {
     }
 
     private var menuLabel: some View {
-        HStack(spacing: 4) {
-            Text(modelTitle)
-                .font(.caption)
-                .lineLimit(1)
+        HStack(spacing: 6) {
+            if let reasoningSubtitle {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(modelTitle)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(reasoningSubtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } else {
+                Text(modelTitle)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             Image(systemName: "chevron.down")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
+        .frame(minWidth: 72, minHeight: 32)
     }
 
     private var reasoningSubtitle: String? {
