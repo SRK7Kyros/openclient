@@ -333,12 +333,8 @@ final class OpenCodeIOSClientUITests: XCTestCase {
         XCTAssertTrue(modelTrigger.waitForExistence(timeout: 10))
 
         modelTrigger.tap()
-        let modelMenu = app.collectionViews.buttons["Model"]
-        XCTAssertTrue(modelMenu.waitForExistence(timeout: 10))
-        modelMenu.tap()
-        let providerMenu = app.buttons["Anthropic"]
-        XCTAssertTrue(providerMenu.waitForExistence(timeout: 10))
-        providerMenu.tap()
+        let searchField = app.searchFields.firstMatch
+        XCTAssertTrue(searchField.waitForExistence(timeout: 10))
         let model = app.buttons["Claude Sonnet 4.5"]
         XCTAssertTrue(model.waitForExistence(timeout: 10))
         model.tap()
@@ -348,9 +344,6 @@ final class OpenCodeIOSClientUITests: XCTestCase {
         )
 
         modelTrigger.tap()
-        let reasoningMenu = app.collectionViews.buttons["Reasoning"].firstMatch
-        XCTAssertTrue(reasoningMenu.waitForExistence(timeout: 10))
-        reasoningMenu.tap()
         let reasoning = app.buttons["Balanced"]
         XCTAssertTrue(reasoning.waitForExistence(timeout: 10))
         reasoning.tap()

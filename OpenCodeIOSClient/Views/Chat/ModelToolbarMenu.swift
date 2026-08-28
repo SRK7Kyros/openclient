@@ -9,35 +9,51 @@ struct ModelToolbarMenu: View {
     let onSelectModel: (OpenCodeModelReference) -> Void
     let onSelectReasoningVariant: (String) -> Void
 
+    @State private var showingModelPicker = false
+
     var body: some View {
-        StablePickerMenu(
-            elements: menuElements,
-            accessibilityLabel: String(localized: "Model"),
-            accessibilityValue: accessibilityValue,
-            accessibilityIdentifier: "chat.toolbar.model",
-            onSelect: select
-        ) {
-            Group {
-                if let reasoningSubtitle {
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(modelTitle)
-                            .font(.caption)
-                        Text(reasoningSubtitle)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
+        Button {
+            showingModelPicker = true
+        } label: {
+            menuLabel
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opencodeToolbarGlassID("model-toolbar", in: glassNamespace)
+        .accessibilityLabel(accessibilityValue)
+        .accessibilityIdentifier("chat.toolbar.model")
+        .sheet(isPresented: $showingModelPicker) {
+            SearchableModelPickerSheet(
+                providerGroups: providerGroups,
+                reasoningVariants: reasoningVariants,
+                selectedModelTitle: modelTitle,
+                selectedReasoningTitle: reasoningSubtitle,
+                onSelectModel: onSelectModel,
+                onSelectReasoningVariant: onSelectReasoningVariant
+            )
+        }
+    }
+
+    private var menuLabel: some View {
+        HStack(spacing: 4) {
+            if let reasoningSubtitle {
+                VStack(alignment: .trailing, spacing: 0) {
                     Text(modelTitle)
                         .font(.caption)
+                    Text(reasoningSubtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
+            } else {
+                Text(modelTitle)
+                    .font(.caption)
             }
-            .padding(.trailing, 12)
-            .frame(minWidth: 72, alignment: .trailing)
-            .opencodeToolbarGlassID("model-toolbar", in: glassNamespace)
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
-        .transaction { transaction in
-            transaction.animation = nil
-        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 
     private var reasoningSubtitle: String? {
@@ -48,67 +64,5 @@ struct ModelToolbarMenu: View {
     private var accessibilityValue: String {
         guard let reasoningSubtitle else { return modelTitle }
         return "\(modelTitle), \(reasoningSubtitle)"
-    }
-
-    private var menuElements: [StablePickerMenuElement] {
-        var elements = [StablePickerMenuElement.submenu(
-            id: "models",
-            title: String(localized: "Model"),
-            children: providerGroups.map { provider in
-                .submenu(
-                    id: "provider:\(provider.id)",
-                    title: provider.name,
-                    children: provider.models.map { model in
-                        .action(
-                            id: modelActionID(providerID: provider.id, modelID: model.id),
-                            title: model.name,
-                            systemImage: nil,
-                            isSelected: model.name == modelTitle
-                        )
-                    }
-                )
-            }
-        )]
-
-        if !reasoningVariants.isEmpty {
-            elements.append(.submenu(
-                id: "reasoning",
-                title: String(localized: "Reasoning"),
-                children: reasoningVariants.map { variant in
-                    .action(
-                        id: reasoningActionID(variant.id),
-                        title: variant.title,
-                        systemImage: nil,
-                        isSelected: variant.title == reasoningTitle
-                    )
-                }
-            ))
-        }
-        return elements
-    }
-
-    private func select(_ actionID: String) {
-        if actionID.hasPrefix("reasoning:") {
-            let variantID = String(actionID.dropFirst("reasoning:".count))
-            onSelectReasoningVariant(variantID)
-            return
-        }
-
-        for provider in providerGroups {
-            if let model = provider.models.first(where: {
-                modelActionID(providerID: provider.id, modelID: $0.id) == actionID
-            }) {
-                onSelectModel(OpenCodeModelReference(providerID: provider.id, modelID: model.id))
-                return
-            }
-        }
-    }
-
-    private func modelActionID(providerID: String, modelID: String) -> String {
-        "model:\(providerID):\(modelID)"
-    }
-
-    private func reasoningActionID(_ variantID: String) -> String {
-        "reasoning:\(variantID)"
     }
 }
