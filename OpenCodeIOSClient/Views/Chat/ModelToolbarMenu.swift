@@ -57,7 +57,7 @@ struct ModelToolbarMenu: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .frame(minWidth: 120, maxWidth: 200, minHeight: 36, alignment: .trailing)
+        .frame(minWidth: 120, maxWidth: 300, minHeight: 36, alignment: .leading)
     }
 
     private var reasoningSubtitle: String? {

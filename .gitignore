@@ -32,3 +32,6 @@ fastlane/metadata/review_information/
 
 # Local web dependencies
 ExcalidrawWeb/node_modules/
+
+# Local token-optimizer MCP wiki state
+.token-optimizer/
