@@ -19,7 +19,12 @@ jobs:
           npm run build:ios
           cd ..
 
-      - name: Build (unsigned, committed xcodeproj)
+      - name: XcodeGen (regenerate project for runner Xcode)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned, regenerated project)
         run: |
           xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj \
             -scheme OpenCodeIOSClient \
