@@ -44,3 +44,14 @@ jobs:
         with:
           name: OpenClient-ipa
           path: OpenClient.ipa
+
+      - name: Publish nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --repo "$GITHUB_REPOSITORY" || true
+          gh release create nightly OpenClient.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "OpenClient nightly IPA" \
+            --notes "Unsigned OpenClient build for sideloading (Feather/Sideloadly/AltStore)." \
+            --target "$GITHUB_SHA"

@@ -1,0 +1,28 @@
+{
+  "name": "OpenClient IPA",
+  "identifier": "com.kyros.openclient-repo",
+  "iconURL": "https://raw.githubusercontent.com/SRK7Kyros/openclient/main/OpenCodeIOSClient/Assets.xcassets/AppIcon.appiconset/ios-180.png",
+  "website": "https://github.com/SRK7Kyros/openclient",
+  "apps": [
+    {
+      "name": "OpenClient",
+      "bundleIdentifier": "com.ntoporcov.openclient",
+      "developerName": "SRK7Kyros",
+      "iconURL": "https://raw.githubusercontent.com/SRK7Kyros/openclient/main/OpenCodeIOSClient/Assets.xcassets/AppIcon.appiconset/ios-180.png",
+      "localizedDescription": "OpenClient is a native iPhone and iPad companion for your own self-hosted OpenCode server. Browse projects, resume chats, answer permission prompts, and follow active work.",
+      "subtitle": "Self-hosted OpenCode server client",
+      "tintColor": "848ef9",
+      "versions": [
+        {
+          "version": "1.0.18",
+          "date": "2026-08-28T21:00:00Z",
+          "size": 36463464,
+          "downloadURL": "https://github.com/SRK7Kyros/openclient/releases/download/nightly/OpenClient.ipa"
+        }
+      ],
+      "appPermissions": {},
+      "screenshotURLs": []
+    }
+  ],
+  "news": []
+}
