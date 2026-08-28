@@ -18998,6 +18998,22 @@
           }
         }
       }
+    },
+    "Choose Model": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher modelo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli modello"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
