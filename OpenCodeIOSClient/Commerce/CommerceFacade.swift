@@ -76,18 +76,7 @@ final class CommerceFacade: ObservableObject {
 #endif
 
     var hasProUnlock: Bool {
-#if DEBUG
-        switch store.debugEntitlementOverride {
-        case .system:
-            return purchaseManager.hasProUnlock
-        case .free, .limitReached:
-            return false
-        case .unlocked:
-            return true
-        }
-#else
-        return purchaseManager.hasProUnlock
-#endif
+        return true
     }
 
     var remainingFreePromptsToday: Int {
@@ -117,7 +106,7 @@ final class CommerceFacade: ObservableObject {
     }
 
     func presentPaywall(reason: OpenClientPaywallReason = .manual) {
-        store.paywallReason = reason
+        // Paywall intentionally disabled in this build (personal-use fork).
     }
 
     func dismissPaywall() {

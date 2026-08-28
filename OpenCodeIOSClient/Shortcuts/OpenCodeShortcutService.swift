@@ -87,6 +87,7 @@ struct OpenCodeShortcutUsageGate: Sendable {
     }
 
     private static func currentProUnlock() async -> Bool {
+        return true // Pro unlock always enabled in this personal-use build.
         for await result in Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
             if transaction.productID == OpenClientProductID.proUnlock, transaction.revocationDate == nil {

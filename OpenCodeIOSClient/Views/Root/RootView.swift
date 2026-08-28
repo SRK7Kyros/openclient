@@ -100,8 +100,8 @@ struct RootView<ChatDestination: View>: View {
             )
         }
         .sheet(item: Binding(
-            get: { shell.commerce.paywallReason },
-            set: { shell.commerce.paywallReason = $0 }
+            get: { nil }, // Paywall intentionally disabled in this personal-use build.
+            set: { _ in }
         )) { reason in
             OpenClientPaywallView(commerce: shell.commerce, reason: reason)
         }
